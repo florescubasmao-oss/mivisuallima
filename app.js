@@ -1,6 +1,6 @@
 /**
- * MI VISUAL LIMA - Frontend V1.6
- * Login + Identidad visual + Administración + Importación + Dashboard Desempeño
+ * MI VISUAL LIMA - Frontend V1.7
+ * Login + Administración + Partidas dinámicas + Dashboard Desempeño
  */
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxD95mFsCWIdOjkDqA-iEVBlj3JQp-y29O6NI6sfc5YcU4LzJi2IW8E1DUkAjRmsPuG/exec';
@@ -376,7 +376,6 @@ $('peopleTabButton').addEventListener('click', () => setAdminTab('users'));
 $('usersTabButton').addEventListener('click', () => setAdminTab('users'));
 $('crewsTabButton').addEventListener('click', () => setAdminTab('crews'));
 $('dataTabButton').addEventListener('click', () => setAdminTab('data'));
-$('dataUpdateButton').addEventListener('click', () => setAdminTab('data'));
 
 function setUsersBusy(busy) {
   const button = $('searchUsersButton');
@@ -933,63 +932,79 @@ $('processPerformanceFileButton').addEventListener('click', async () => {
     `¿Actualizar los indicadores del periodo ${performanceImportState.period} con ${performanceImportState.records.length} filas válidas?`
   )) return;
 
+  await sendPerformanceImport();
+});
+
+async function sendPerformanceImport() {
   const button = $('processPerformanceFileButton');
   const loading = $('importLoading');
   const progress = $('importProgressText');
 
   button.disabled = true;
   loading.classList.remove('hidden');
+  $('missingCatalogPanel').classList.add('hidden');
   setMessage('performanceImportMessage');
+  setMessage('catalogSaveMessage');
 
   try {
-    const start = await api('adminImportStart', {
-      token: token(),
-      fileName: performanceImportState.file.name,
-      totalRows: performanceImportState.records.length
-    });
-
-    if (!start.ok) throw new Error(start.error || 'No se pudo iniciar la actualización.');
-
-    const chunkSize = 150;
-    const total = performanceImportState.records.length;
-
-    for (let i = 0; i < total; i += chunkSize) {
-      const chunk = performanceImportState.records.slice(i, i + chunkSize);
-
-      progress.textContent = `Enviando ${Math.min(i + chunk.length, total)} de ${total}…`;
-
-      const result = await api('adminImportChunk', {
+    // Si todavía no existe importId, enviar el Excel por bloques.
+    if (!performanceImportState.importId) {
+      const start = await api('adminImportStart', {
         token: token(),
-        importId: start.importId,
-        chunk: JSON.stringify(chunk)
+        fileName: performanceImportState.file.name,
+        totalRows: performanceImportState.records.length
       });
 
-      if (!result.ok) throw new Error(result.error || 'Falló un bloque de datos.');
+      if (!start.ok) throw new Error(start.error || 'No se pudo iniciar la actualización.');
+
+      performanceImportState.importId = start.importId;
+
+      const chunkSize = 150;
+      const total = performanceImportState.records.length;
+
+      for (let i = 0; i < total; i += chunkSize) {
+        const chunk = performanceImportState.records.slice(i, i + chunkSize);
+
+        progress.textContent = `Enviando ${Math.min(i + chunk.length, total)} de ${total}…`;
+
+        const result = await api('adminImportChunk', {
+          token: token(),
+          importId: performanceImportState.importId,
+          chunk: JSON.stringify(chunk)
+        });
+
+        if (!result.ok) throw new Error(result.error || 'Falló un bloque de datos.');
+      }
     }
 
     progress.textContent = 'Validando catálogo y cuadrillas…';
 
     const finish = await api('adminImportFinish', {
       token: token(),
-      importId: start.importId,
+      importId: performanceImportState.importId,
       fileName: performanceImportState.file.name
     });
 
     if (!finish.ok) {
+      performanceImportState.importId = '';
       throw new Error(finish.error || 'No se pudo actualizar la base.');
     }
 
-    setMessage(
-      'performanceImportMessage',
-      `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} registros procesados.`,
-      'success'
-    );
+    if (finish.needsCatalog) {
+      performanceImportState.missingCatalog = finish.missingCatalog || [];
+      performanceImportState.period = finish.period || performanceImportState.period;
 
-    performanceImportState = null;
-    $('performanceImportFile').value = '';
-    $('performanceImportPreview').classList.add('hidden');
+      await showMissingCatalog(finish);
 
-    await loadDataStatus();
+      setMessage(
+        'performanceImportMessage',
+        `${finish.message} Completa los datos de las partidas y luego continúa.`,
+        'success'
+      );
+      return;
+    }
+
+    completePerformanceImportSuccess(finish);
   } catch (err) {
     setMessage(
       'performanceImportMessage',
@@ -1000,7 +1015,212 @@ $('processPerformanceFileButton').addEventListener('click', async () => {
     loading.classList.add('hidden');
     progress.textContent = 'Procesando…';
   }
+}
+
+async function showMissingCatalog(result) {
+  const missing = result.missingCatalog || [];
+  if (!missing.length) return;
+
+  let meta = { platforms: ['POSVENTA', 'VISITA TECNICA', 'INSTALACION'], groups: [] };
+
+  try {
+    const response = await api('adminCatalogMeta', { token: token() });
+    if (response.ok) meta = response;
+  } catch (_) {}
+
+  const platforms = (meta.platforms || []).length
+    ? meta.platforms
+    : ['POSVENTA', 'VISITA TECNICA', 'INSTALACION'];
+
+  $('catalogGroupOptions').innerHTML = (meta.groups || [])
+    .map(g => `<option value="${escapeHtml(g)}"></option>`)
+    .join('');
+
+  $('missingCatalogSummary').textContent =
+    `Se detectaron ${missing.length} partida(s) FINALIZADA(s) no configurada(s). ` +
+    `No se han modificado los indicadores.`;
+
+  $('missingCatalogList').innerHTML = missing.map((item, index) => `
+    <article class="missing-catalog-item" data-catalog-index="${index}">
+      <div class="missing-catalog-title">
+        <div>
+          <strong>${escapeHtml(item.typePartida || '')}</strong>
+          <small>${Number(item.occurrences || 0)} orden(es) FINALIZADA(s) detectada(s)</small>
+        </div>
+        <span class="catalog-item-number">${index + 1}</span>
+      </div>
+
+      <input type="hidden" data-field="typePartida" value="${escapeHtml(item.typePartida || '')}">
+
+      <div class="catalog-form-grid">
+        <label>
+          Código referencial
+          <input data-field="code" placeholder="Ej. TRMESH3" autocomplete="off">
+        </label>
+
+        <label>
+          Plataforma de la orden
+          <select data-field="platform">
+            <option value="">Seleccionar</option>
+            ${platforms.map(p =>
+              `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`
+            ).join('')}
+          </select>
+        </label>
+
+        <label>
+          Puntaje
+          <input data-field="points" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+
+        <label>
+          Grupo
+          <input data-field="group" list="catalogGroupOptions" placeholder="Ej. TRASLADO">
+        </label>
+
+        <label>
+          Monto interno (S/)
+          <input data-field="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+
+        <label class="catalog-check">
+          <input data-field="isRecable" type="checkbox">
+          <span>Cuenta como recableado para LOS ROJO</span>
+        </label>
+      </div>
+
+      <label class="catalog-observation">
+        Observación
+        <input data-field="observation" placeholder="Opcional">
+      </label>
+    </article>
+  `).join('');
+
+  $('missingCatalogPanel').classList.remove('hidden');
+  $('missingCatalogPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function collectMissingCatalogItems() {
+  const cards = [...document.querySelectorAll('.missing-catalog-item')];
+
+  return cards.map((card, index) => {
+    const get = field => card.querySelector(`[data-field="${field}"]`);
+
+    const typePartida = get('typePartida').value.trim();
+    const code = get('code').value.trim();
+    const platform = get('platform').value.trim();
+    const points = Number(get('points').value);
+    const group = get('group').value.trim();
+    const amountRaw = get('amount').value.trim();
+    const amount = Number(amountRaw);
+    const isRecable = get('isRecable').checked;
+    const observation = get('observation').value.trim();
+
+    if (!code) throw new Error(`Partida ${index + 1}: ingresa el Código referencial.`);
+    if (!platform) throw new Error(`Partida ${index + 1}: selecciona la Plataforma.`);
+    if (!Number.isFinite(points) || points <= 0) {
+      throw new Error(`Partida ${index + 1}: ingresa un Puntaje válido mayor a 0.`);
+    }
+    if (!group) throw new Error(`Partida ${index + 1}: ingresa el Grupo.`);
+    if (amountRaw === '' || !Number.isFinite(amount) || amount < 0) {
+      throw new Error(`Partida ${index + 1}: ingresa el Monto interno.`);
+    }
+
+    return {
+      typePartida,
+      code,
+      platform,
+      points,
+      group,
+      amount,
+      isRecable,
+      observation
+    };
+  });
+}
+
+$('saveCatalogAndContinueButton').addEventListener('click', async () => {
+  if (!performanceImportState?.importId) {
+    setMessage('catalogSaveMessage', 'La carga temporal ya no está disponible. Vuelve a leer el Excel.');
+    return;
+  }
+
+  let items;
+  try {
+    items = collectMissingCatalogItems();
+  } catch (err) {
+    setMessage('catalogSaveMessage', err.message || 'Completa las partidas.');
+    return;
+  }
+
+  if (!confirm(
+    `¿Guardar ${items.length} partida(s) nueva(s) en CATALOGO_ORDENES y continuar con la actualización?`
+  )) return;
+
+  const button = $('saveCatalogAndContinueButton');
+  const loading = $('catalogSaveLoading');
+  const progress = $('catalogSaveProgressText');
+
+  button.disabled = true;
+  loading.classList.remove('hidden');
+  progress.textContent = 'Guardando catálogo…';
+  setMessage('catalogSaveMessage');
+
+  try {
+    const created = await api('adminCatalogCreateBatch', {
+      token: token(),
+      items: JSON.stringify(items)
+    });
+
+    if (!created.ok) {
+      throw new Error(created.error || 'No se pudieron registrar las partidas.');
+    }
+
+    setMessage('catalogSaveMessage', created.message, 'success');
+    progress.textContent = 'Reprocesando el mismo Excel…';
+
+    const finish = await api('adminImportFinish', {
+      token: token(),
+      importId: performanceImportState.importId,
+      fileName: performanceImportState.file.name
+    });
+
+    if (!finish.ok) {
+      performanceImportState.importId = '';
+      throw new Error(finish.error || 'Las partidas se guardaron, pero no se pudo terminar la actualización.');
+    }
+
+    if (finish.needsCatalog) {
+      performanceImportState.missingCatalog = finish.missingCatalog || [];
+      await showMissingCatalog(finish);
+      throw new Error('Todavía existen partidas sin configurar.');
+    }
+
+    $('missingCatalogPanel').classList.add('hidden');
+    completePerformanceImportSuccess(finish);
+  } catch (err) {
+    setMessage('catalogSaveMessage', err.message || 'No se pudo continuar.');
+  } finally {
+    button.disabled = false;
+    loading.classList.add('hidden');
+    progress.textContent = 'Guardando catálogo…';
+  }
 });
+
+function completePerformanceImportSuccess(finish) {
+  setMessage(
+    'performanceImportMessage',
+    `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} registros procesados.`,
+    'success'
+  );
+
+  performanceImportState = null;
+  $('performanceImportFile').value = '';
+  $('performanceImportPreview').classList.add('hidden');
+  $('missingCatalogPanel').classList.add('hidden');
+  loadDataStatus();
+}
+
 
 /* =========================
    EDITAR USUARIO
@@ -1449,14 +1669,37 @@ function isSupervisorSession() {
   return currentProfileNorm() === 'SUPERVISOR';
 }
 
-function crewDisplayFrontend(c) {
-  const text = [
-    c?.code || c?.crewCode || '',
-    c?.platform || '',
-    c?.name ? `— ${c.name}` : ''
-  ].filter(Boolean).join(' ');
+function compactCrewDisplay(c) {
+  const code = String(c?.code || c?.crewCode || '').trim();
+  const platform = String(c?.platform || '').trim();
+  const name = String(c?.name || c?.crewName || '').trim();
 
-  return text.toUpperCase();
+  const normalizeKey = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase();
+
+  if (name) {
+    const nameKey = normalizeKey(name);
+    const codeKey = normalizeKey(code);
+    const platformKey = normalizeKey(platform);
+
+    if (
+      (!codeKey || nameKey.includes(codeKey)) &&
+      (!platformKey || nameKey.includes(platformKey))
+    ) {
+      return name.toUpperCase();
+    }
+
+    return `${[code, platform].filter(Boolean).join(' ')} — ${name}`.trim().toUpperCase();
+  }
+
+  return [code, platform].filter(Boolean).join(' ').toUpperCase();
+}
+
+function crewDisplayFrontend(c) {
+  return compactCrewDisplay(c);
 }
 
 async function openPerformance() {
@@ -1622,7 +1865,7 @@ async function loadPerformanceDashboard(resetFilters = false) {
     $('dashboardSite').value = 'LIMA';
     $('dashboardSupervisor').value = '';
     $('dashboardCrew').value = '';
-    $('dashboardIndicator').value = 'PRODUCCION';
+    $('dashboardIndicator').value = 'ALL';
   }
 
   try {
@@ -1698,9 +1941,12 @@ function renderDashboardRanking(data) {
   const meta = data.indicator || {};
   const rows = data.rows || [];
 
-  $('dashboardRankingTitle').textContent = `Ranking de ${meta.label || 'Indicador'}`;
-  $('dashboardRankingHelp').textContent = meta.help || '';
+  $('dashboardRankingTitle').textContent =
+    meta.key === 'ALL'
+      ? 'Resumen por cuadrilla'
+      : `Ranking de ${meta.label || 'Indicador'}`;
 
+  $('dashboardRankingHelp').textContent = meta.help || '';
   $('dashboardConstruction').classList.toggle('hidden', !meta.construction);
 
   if (meta.construction) {
@@ -1713,6 +1959,40 @@ function renderDashboardRanking(data) {
   if (!rows.length) {
     $('dashboardRankingList').innerHTML =
       '<p class="empty">No hay cuadrillas con esos filtros.</p>';
+    return;
+  }
+
+  if (meta.key === 'ALL') {
+    $('dashboardRankingList').innerHTML = rows.map(r => {
+      const eff = r.effectiveness == null
+        ? '—'
+        : `${(Number(r.effectiveness) * 100).toFixed(1)}%`;
+
+      const rec = r.recablePercent == null
+        ? '—'
+        : `${(Number(r.recablePercent) * 100).toFixed(1)}%`;
+
+      return `
+        <button type="button" class="dashboard-all-card" data-dashboard-crew="${escapeHtml(r.crewId)}">
+          <div class="dashboard-all-head">
+            <div>
+              <strong>${escapeHtml(r.crewDisplay || '')}</strong>
+              <small>${escapeHtml(r.supervisor || '')}</small>
+            </div>
+            <span class="module-arrow">›</span>
+          </div>
+
+          <div class="dashboard-kpi-mini-grid">
+            <div><span>Producción</span><b>${Number(r.points || 0).toFixed(2)} pts</b></div>
+            <div><span>Efectividad</span><b>${eff}</b></div>
+            <div><span>% Recableado</span><b>${rec}</b></div>
+            <div class="kpi-building"><span>VTR / GAR</span><b>En construcción</b></div>
+            <div class="kpi-building"><span>SLA</span><b>En construcción</b></div>
+            <div class="kpi-building"><span>Observaciones</span><b>En construcción</b></div>
+          </div>
+        </button>
+      `;
+    }).join('');
     return;
   }
 
@@ -1730,14 +2010,14 @@ function renderDashboardRanking(data) {
     }
 
     return `
-      <article class="dashboard-rank-row">
+      <button type="button" class="dashboard-rank-row dashboard-rank-button" data-dashboard-crew="${escapeHtml(r.crewId)}">
         <div class="dashboard-rank-position">${rank}</div>
         <div class="dashboard-rank-copy">
           <strong>${escapeHtml(r.crewDisplay || '')}</strong>
           <small>${escapeHtml(r.supervisor || '')}${detail ? ' · ' + escapeHtml(detail) : ''}</small>
         </div>
         <div class="dashboard-rank-value">${escapeHtml(value)}</div>
-      </article>
+      </button>
     `;
   }).join('');
 }
@@ -1787,6 +2067,26 @@ async function loadDashboardCrewDetail(crewId) {
 
   $('dashboardCrewDetail').classList.remove('hidden');
 }
+
+$('dashboardRankingList').addEventListener('click', async (e) => {
+  const row = e.target.closest('[data-dashboard-crew]');
+  if (!row) return;
+
+  const crewId = row.dataset.dashboardCrew;
+  if (!crewId) return;
+
+  if ([...$('dashboardCrew').options].some(o => o.value === crewId)) {
+    $('dashboardCrew').value = crewId;
+  }
+
+  showLoader('Cargando detalle de cuadrilla…');
+  try {
+    await loadDashboardCrewDetail(crewId);
+    $('dashboardCrewDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } finally {
+    hideLoader();
+  }
+});
 
 $('dashboardSupervisor').addEventListener('change', () => {
   $('dashboardCrew').value = '';

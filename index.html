@@ -220,6 +220,7 @@
           <label class="filter-field">
             Indicador
             <select id="dashboardIndicator">
+              <option value="ALL">Todos los indicadores</option>
               <option value="PRODUCCION">Producción</option>
               <option value="EFECTIVIDAD">Efectividad</option>
               <option value="RECABLEADO">% Recableado</option>
@@ -318,31 +319,27 @@
         </div>
       </div>
 
-      <div class="admin-create-grid">
-        <button type="button" class="create-action" id="newCrewButton">
-          <span class="create-icon">＋</span>
-          <span><strong>Nueva cuadrilla</strong><small>1 o 2 técnicos</small></span>
-        </button>
-        <button type="button" class="create-action" id="newSupervisorButton">
-          <span class="create-icon">＋</span>
-          <span><strong>Nuevo supervisor</strong><small>Usuario independiente</small></span>
-        </button>
-        <button type="button" class="create-action" id="newStaffButton">
-          <span class="create-icon">＋</span>
-          <span><strong>Nuevo personal</strong><small>Back, jefaturas, gerencia</small></span>
-        </button>
-        <button type="button" class="create-action" id="dataUpdateButton">
-          <span class="create-icon">↻</span>
-          <span><strong>Gestión de datos</strong><small>Catálogos y producción</small></span>
-        </button>
-      </div>
-
       <div class="admin-tabs admin-main-tabs" role="tablist">
         <button type="button" class="admin-tab active" id="peopleTabButton">Gestión de usuarios</button>
         <button type="button" class="admin-tab" id="dataTabButton">Gestión de datos</button>
       </div>
 
       <div id="peoplePanel">
+        <div class="admin-create-grid people-actions">
+          <button type="button" class="create-action" id="newCrewButton">
+            <span class="create-icon">＋</span>
+            <span><strong>Nueva cuadrilla</strong><small>1 o 2 técnicos</small></span>
+          </button>
+          <button type="button" class="create-action" id="newSupervisorButton">
+            <span class="create-icon">＋</span>
+            <span><strong>Nuevo supervisor</strong><small>Usuario independiente</small></span>
+          </button>
+          <button type="button" class="create-action" id="newStaffButton">
+            <span class="create-icon">＋</span>
+            <span><strong>Nuevo personal</strong><small>Back, jefaturas, gerencia</small></span>
+          </button>
+        </div>
+
         <div class="admin-subtabs" role="tablist">
           <button type="button" class="admin-subtab active" id="usersTabButton">Usuarios</button>
           <button type="button" class="admin-subtab" id="crewsTabButton">Cuadrillas</button>
@@ -481,6 +478,33 @@
           </div>
 
           <p class="message" id="performanceImportMessage"></p>
+
+          <div id="missingCatalogPanel" class="missing-catalog-panel hidden">
+            <div class="missing-catalog-head">
+              <div>
+                <p class="eyebrow">PARTIDAS NUEVAS DETECTADAS</p>
+                <h3>Completar catálogo antes de continuar</h3>
+                <p class="muted" id="missingCatalogSummary"></p>
+              </div>
+              <span class="status-pill warning">Requiere configuración</span>
+            </div>
+
+            <div id="missingCatalogList" class="missing-catalog-list"></div>
+
+            <div class="import-actions">
+              <button type="button" class="primary" id="saveCatalogAndContinueButton">
+                Guardar partidas y continuar actualización
+              </button>
+              <span class="inline-loading hidden" id="catalogSaveLoading">
+                <span class="tiny-spinner"></span>
+                <span id="catalogSaveProgressText">Guardando catálogo…</span>
+              </span>
+            </div>
+
+            <p class="message" id="catalogSaveMessage"></p>
+          </div>
+
+          <datalist id="catalogGroupOptions"></datalist>
         </article>
 
         <article class="data-update-card">

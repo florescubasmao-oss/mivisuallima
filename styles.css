@@ -1430,3 +1430,244 @@ body.login-mode #loginView {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================
+   V1.7 - PARTIDAS DINÁMICAS / TODOS LOS INDICADORES
+   ========================================================== */
+
+.people-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 2px 0 14px;
+}
+
+.missing-catalog-panel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #f2c56f;
+  border-radius: 16px;
+  background: #fffaf0;
+}
+
+.missing-catalog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+
+.missing-catalog-head h3 {
+  margin: 3px 0 4px;
+}
+
+.status-pill.warning {
+  color: #8a5300;
+  background: #fff1c7;
+  border-color: #f2c56f;
+}
+
+.missing-catalog-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.missing-catalog-item {
+  padding: 13px;
+  border: 1px solid #ead8b0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.missing-catalog-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.missing-catalog-title strong {
+  display: block;
+  color: var(--brand-navy);
+  font-size: .82rem;
+  line-height: 1.42;
+}
+
+.missing-catalog-title small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.catalog-item-number {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: #8a5300;
+  background: #fff2cf;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.catalog-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 9px;
+}
+
+.catalog-form-grid label,
+.catalog-observation {
+  display: grid;
+  gap: 5px;
+  color: #4c6079;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.catalog-form-grid input,
+.catalog-form-grid select,
+.catalog-observation input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #cddbeb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.catalog-check {
+  grid-template-columns: auto 1fr !important;
+  align-items: center;
+  align-self: end;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid #d9e4ef;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.catalog-check input {
+  width: auto;
+}
+
+.catalog-observation {
+  margin-top: 9px;
+}
+
+.dashboard-all-card {
+  width: 100%;
+  display: block;
+  padding: 13px;
+  text-align: left;
+  border: 1px solid #dfe8f3;
+  border-radius: 16px;
+  background: #fff;
+  color: inherit;
+}
+
+.dashboard-all-card:hover,
+.dashboard-rank-button:hover {
+  border-color: #9dbde2;
+  box-shadow: 0 6px 18px rgba(7,88,183,.08);
+}
+
+.dashboard-all-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.dashboard-all-head strong {
+  display: block;
+  color: var(--brand-navy);
+  font-size: .82rem;
+  line-height: 1.4;
+}
+
+.dashboard-all-head small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.dashboard-kpi-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.dashboard-kpi-mini-grid > div {
+  padding: 8px;
+  border: 1px solid #e0e9f4;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.dashboard-kpi-mini-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 800;
+}
+
+.dashboard-kpi-mini-grid b {
+  display: block;
+  margin-top: 3px;
+  color: var(--brand-navy);
+  font-size: .76rem;
+}
+
+.dashboard-kpi-mini-grid .kpi-building {
+  background: #f7f7f8;
+}
+
+.dashboard-kpi-mini-grid .kpi-building b {
+  color: #7a8594;
+  font-size: .65rem;
+}
+
+.dashboard-rank-button {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .people-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-kpi-mini-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .missing-catalog-head {
+    flex-direction: column;
+  }
+
+  .catalog-form-grid,
+  .dashboard-kpi-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .missing-catalog-item {
+    padding: 11px;
+  }
+}
