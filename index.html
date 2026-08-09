@@ -9,7 +9,9 @@
 </head>
 <body>
   <main class="shell">
-    <section class="card" id="loginView">
+
+    <!-- LOGIN -->
+    <section class="card auth-card" id="loginView">
       <div class="brand">
         <div class="brand-mark">MV</div>
         <div>
@@ -37,7 +39,8 @@
       </form>
     </section>
 
-    <section class="card hidden" id="changePasswordView">
+    <!-- CAMBIO CLAVE -->
+    <section class="card auth-card hidden" id="changePasswordView">
       <h2>Cambiar contraseña</h2>
       <p class="muted">Debes crear una contraseña nueva antes de continuar.</p>
 
@@ -60,7 +63,8 @@
       </form>
     </section>
 
-    <section class="card hidden" id="homeView">
+    <!-- HOME -->
+    <section class="card app-card hidden" id="homeView">
       <div class="topbar">
         <div>
           <p class="eyebrow">MI VISUAL LIMA</p>
@@ -76,22 +80,179 @@
           <strong id="scopeType">—</strong>
         </div>
         <div class="metric">
-          <span>Cuadrillas visibles</span>
+          <span>Cuadrillas en alcance</span>
           <strong id="crewCount">0</strong>
         </div>
       </div>
 
-      <div class="section-title">
-        <h3>Cuadrillas</h3>
-        <span id="ggInfo" class="badge hidden">Incluye GG</span>
+      <div class="notice hidden" id="ggNotice">
+        El alcance incluye cuadrillas de supervisión directa de Gerencia (GG).
       </div>
-      <div id="crewList" class="crew-list"></div>
 
       <div class="section-title">
-        <h3>Módulos habilitados</h3>
+        <div>
+          <h3>Módulos</h3>
+          <p class="section-subtitle">Se muestran según tu perfil y permisos.</p>
+        </div>
       </div>
-      <div id="moduleList" class="module-list"></div>
+      <div id="moduleList" class="module-grid"></div>
     </section>
+
+    <!-- ADMINISTRACIÓN -->
+    <section class="card app-card hidden" id="adminView">
+      <div class="topbar">
+        <div>
+          <button type="button" class="back-link" id="backHomeButton">← Inicio</button>
+          <p class="eyebrow">ADMINISTRACIÓN</p>
+          <h2>Usuarios</h2>
+          <p class="muted">Gestión de accesos de MI VISUAL LIMA</p>
+        </div>
+        <button class="primary compact" id="newUserButton">+ Nuevo usuario</button>
+      </div>
+
+      <div class="admin-stats" id="adminStats">
+        <div class="mini-metric"><span>Total</span><strong id="statTotal">0</strong></div>
+        <div class="mini-metric"><span>Activos</span><strong id="statActive">0</strong></div>
+        <div class="mini-metric"><span>Sin acceso</span><strong id="statNoAccess">0</strong></div>
+      </div>
+
+      <div class="filters">
+        <input id="userSearch" type="search" placeholder="Buscar nombre, DNI, usuario o ID">
+        <select id="profileFilter">
+          <option value="">Todos los perfiles</option>
+        </select>
+        <select id="statusFilter">
+          <option value="">Todos los estados</option>
+          <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Inactivos</option>
+        </select>
+      </div>
+
+      <div class="toolbar-line">
+        <span class="muted small-text" id="userResultCount">0 usuarios</span>
+        <button type="button" class="ghost compact" id="refreshUsersButton">Actualizar</button>
+      </div>
+
+      <p class="message" id="adminMessage"></p>
+      <div id="usersList" class="users-list"></div>
+    </section>
+
+    <!-- MODAL USUARIO -->
+    <div class="modal hidden" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">ADMINISTRACIÓN</p>
+            <h2 id="userModalTitle">Nuevo usuario</h2>
+          </div>
+          <button type="button" class="icon-button" id="closeUserModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="userForm" class="form form-grid">
+          <input type="hidden" id="editUserId">
+
+          <label class="span-2">
+            Nombre completo *
+            <input id="fNombreCompleto" required maxlength="120">
+          </label>
+
+          <label>
+            DNI
+            <input id="fDni" inputmode="numeric" maxlength="12">
+          </label>
+
+          <label>
+            Perfil *
+            <select id="fPerfil" required></select>
+          </label>
+
+          <label>
+            Celular
+            <input id="fCelular" inputmode="tel" maxlength="20">
+          </label>
+
+          <label>
+            Correo
+            <input id="fCorreo" type="email" maxlength="120">
+          </label>
+
+          <label>
+            Usuario
+            <input id="fUsuario" maxlength="50" autocomplete="off">
+          </label>
+
+          <label>
+            Código operativo
+            <input id="fCodigoOperativo" maxlength="40">
+          </label>
+
+          <label>
+            Estado *
+            <select id="fEstado" required>
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+            </select>
+          </label>
+
+          <label class="span-2">
+            Observación
+            <textarea id="fObservacion" rows="3" maxlength="300"></textarea>
+          </label>
+
+          <div class="span-2 info-box">
+            <strong>Asignación de cuadrilla</strong>
+            <p>La cuadrilla no se edita aquí. Se mantiene en la hoja CUADRILLAS para evitar duplicar relaciones.</p>
+          </div>
+
+          <p class="message span-2" id="userFormMessage"></p>
+
+          <div class="modal-actions span-2">
+            <button type="button" class="ghost" id="cancelUserButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveUserButton">Guardar usuario</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL CLAVE TEMPORAL -->
+    <div class="modal hidden" id="passwordModal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+      <div class="modal-card small-modal">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">ACCESO</p>
+            <h2 id="passwordModalTitle">Restablecer clave</h2>
+          </div>
+          <button type="button" class="icon-button" id="closePasswordModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="passwordResetForm" class="form">
+          <input type="hidden" id="passwordUserId">
+          <p class="muted" id="passwordUserName"></p>
+
+          <label>
+            Nueva clave temporal *
+            <input id="temporaryPassword" type="password" minlength="6" required autocomplete="new-password">
+          </label>
+
+          <label>
+            Repetir clave *
+            <input id="temporaryPasswordRepeat" type="password" minlength="6" required autocomplete="new-password">
+          </label>
+
+          <p class="muted small-text">
+            El usuario deberá cambiar esta clave en su siguiente ingreso.
+          </p>
+
+          <p class="message" id="passwordResetMessage"></p>
+
+          <div class="modal-actions">
+            <button type="button" class="ghost" id="cancelPasswordButton">Cancelar</button>
+            <button type="submit" class="primary">Guardar clave temporal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </main>
 
   <script src="./app.js"></script>
