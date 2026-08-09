@@ -113,67 +113,125 @@
         <div>
           <button type="button" class="back-link" id="backHomeButton">← Inicio</button>
           <p class="eyebrow">ADMINISTRACIÓN</p>
-          <h2>Usuarios</h2>
-          <p class="muted">Gestión de accesos de MI VISUAL LIMA</p>
-        </div>
-        <button class="primary compact" id="newUserButton">+ Nuevo usuario</button>
-      </div>
-
-      <div class="admin-stats" id="adminStats">
-        <div class="mini-metric"><span>Total</span><strong id="statTotal">0</strong></div>
-        <div class="mini-metric"><span>Activos</span><strong id="statActive">0</strong></div>
-        <div class="mini-metric"><span>Sin acceso</span><strong id="statNoAccess">0</strong></div>
-      </div>
-
-      <div class="filters admin-filters">
-        <label class="filter-field">
-          Buscar
-          <input id="userSearch" type="search" placeholder="Nombre, usuario o ID">
-        </label>
-
-        <label class="filter-field">
-          DNI
-          <input id="dniFilter" inputmode="numeric" placeholder="DNI">
-        </label>
-
-        <label class="filter-field">
-          Perfil
-          <select id="profileFilter">
-            <option value="">Todos los perfiles</option>
-          </select>
-        </label>
-
-        <label class="filter-field">
-          Estado
-          <select id="statusFilter">
-            <option value="">Todos los estados</option>
-            <option value="ACTIVO">Activos</option>
-            <option value="INACTIVO">Inactivos</option>
-          </select>
-        </label>
-
-        <div class="filter-actions">
-          <button type="button" class="primary compact" id="searchUsersButton">Buscar</button>
-          <button type="button" class="ghost compact" id="clearUsersButton">Limpiar</button>
+          <h2>Gestión de personal</h2>
+          <p class="muted">Usuarios, cuadrillas y accesos de MI VISUAL LIMA</p>
         </div>
       </div>
 
-      <div class="toolbar-line">
-        <span class="muted small-text" id="userResultCount">0 usuarios</span>
-        <button type="button" class="ghost compact" id="refreshUsersButton">Actualizar</button>
+      <div class="admin-create-grid">
+        <button type="button" class="create-action" id="newCrewButton">
+          <span class="create-icon">＋</span>
+          <span><strong>Nueva cuadrilla</strong><small>1 o 2 técnicos</small></span>
+        </button>
+        <button type="button" class="create-action" id="newSupervisorButton">
+          <span class="create-icon">＋</span>
+          <span><strong>Nuevo supervisor</strong><small>Usuario independiente</small></span>
+        </button>
+        <button type="button" class="create-action" id="newStaffButton">
+          <span class="create-icon">＋</span>
+          <span><strong>Nuevo personal</strong><small>Back, jefaturas, gerencia</small></span>
+        </button>
       </div>
 
-      <p class="message" id="adminMessage"></p>
-      <div id="usersList" class="users-list"></div>
+      <div class="admin-tabs" role="tablist">
+        <button type="button" class="admin-tab active" id="usersTabButton">Usuarios</button>
+        <button type="button" class="admin-tab" id="crewsTabButton">Cuadrillas</button>
+      </div>
+
+      <!-- TAB USUARIOS -->
+      <div id="usersPanel">
+        <div class="admin-stats" id="adminStats">
+          <div class="mini-metric"><span>Total</span><strong id="statTotal">0</strong></div>
+          <div class="mini-metric"><span>Activos</span><strong id="statActive">0</strong></div>
+          <div class="mini-metric"><span>Sin acceso</span><strong id="statNoAccess">0</strong></div>
+        </div>
+
+        <div class="filters admin-filters">
+          <label class="filter-field">
+            Buscar
+            <input id="userSearch" type="search" placeholder="Nombre, usuario o ID">
+          </label>
+
+          <label class="filter-field">
+            DNI
+            <input id="dniFilter" inputmode="numeric" placeholder="DNI">
+          </label>
+
+          <label class="filter-field">
+            Perfil
+            <select id="profileFilter">
+              <option value="">Todos los perfiles</option>
+            </select>
+          </label>
+
+          <label class="filter-field">
+            Estado
+            <select id="statusFilter">
+              <option value="">Todos los estados</option>
+              <option value="ACTIVO">Activos</option>
+              <option value="INACTIVO">Inactivos</option>
+            </select>
+          </label>
+
+          <div class="filter-actions">
+            <button type="button" class="primary compact" id="searchUsersButton">Buscar</button>
+            <button type="button" class="ghost compact" id="clearUsersButton">Limpiar</button>
+          </div>
+        </div>
+
+        <div class="toolbar-line">
+          <div class="toolbar-status">
+            <span class="muted small-text" id="userResultCount">0 usuarios</span>
+            <span class="inline-loading hidden" id="usersLoading"><span class="tiny-spinner"></span> Buscando…</span>
+          </div>
+          <button type="button" class="ghost compact" id="refreshUsersButton">Actualizar</button>
+        </div>
+
+        <p class="message" id="adminMessage"></p>
+        <div id="usersList" class="users-list"></div>
+      </div>
+
+      <!-- TAB CUADRILLAS -->
+      <div id="crewsPanel" class="hidden">
+        <div class="crew-toolbar">
+          <label class="filter-field">
+            Buscar cuadrilla
+            <input id="crewSearch" type="search" placeholder="Código, nombre, técnico o supervisor">
+          </label>
+          <label class="filter-field">
+            Plataforma
+            <select id="crewPlatformFilter">
+              <option value="">Todas</option>
+              <option value="SGI">SGI</option>
+              <option value="SGA">SGA</option>
+              <option value="TRASLADO">TRASLADO</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            Supervisión
+            <select id="crewSupervisorFilter">
+              <option value="">Todas</option>
+              <option value="GG">GG</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="toolbar-line">
+          <span class="muted small-text" id="crewResultCount">0 cuadrillas</span>
+          <button type="button" class="ghost compact" id="refreshCrewsButton">Actualizar</button>
+        </div>
+
+        <div id="crewsList" class="crews-list"></div>
+      </div>
     </section>
 
-    <!-- MODAL USUARIO -->
+    <!-- MODAL EDITAR USUARIO -->
     <div class="modal hidden" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
       <div class="modal-card">
         <div class="modal-head">
           <div>
             <p class="eyebrow">ADMINISTRACIÓN</p>
-            <h2 id="userModalTitle">Nuevo usuario</h2>
+            <h2 id="userModalTitle">Editar usuario</h2>
           </div>
           <button type="button" class="icon-button" id="closeUserModal" aria-label="Cerrar">×</button>
         </div>
@@ -196,27 +254,6 @@
             <select id="fPerfil" required></select>
           </label>
 
-          <div class="span-2 technician-assignment hidden" id="technicianAssignmentBlock">
-            <div class="assignment-grid">
-              <label>
-                Supervisor
-                <select id="fSupervisor">
-                  <option value="">Seleccionar supervisor</option>
-                </select>
-              </label>
-
-              <label>
-                Cuadrilla
-                <select id="fCrew">
-                  <option value="">Sin cuadrilla asignada</option>
-                </select>
-              </label>
-            </div>
-            <p class="assignment-help">
-              El supervisor sirve para filtrar las cuadrillas. La relación real se guarda en CUADRILLAS, no se duplica en USUARIOS.
-            </p>
-          </div>
-
           <label>
             Celular
             <input id="fCelular" inputmode="tel" maxlength="20">
@@ -233,11 +270,6 @@
           </label>
 
           <label>
-            Código operativo
-            <input id="fCodigoOperativo" maxlength="40">
-          </label>
-
-          <label>
             Estado *
             <select id="fEstado" required>
               <option value="ACTIVO">ACTIVO</option>
@@ -251,15 +283,255 @@
           </label>
 
           <div class="span-2 info-box">
-            <strong>Relaciones operativas</strong>
-            <p>Para Técnico, la asignación se registra directamente en CUADRILLAS. Para los demás perfiles no se duplican relaciones dentro de USUARIOS.</p>
+            <strong>Asignaciones</strong>
+            <p>Las relaciones de Técnico ↔ Cuadrilla y Supervisor ↔ Cuadrillas se administran desde la pestaña <b>Cuadrillas</b>.</p>
           </div>
 
           <p class="message span-2" id="userFormMessage"></p>
 
           <div class="modal-actions span-2">
             <button type="button" class="ghost" id="cancelUserButton">Cancelar</button>
-            <button type="submit" class="primary" id="saveUserButton">Guardar usuario</button>
+            <button type="submit" class="primary" id="saveUserButton">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL NUEVA CUADRILLA -->
+    <div class="modal hidden" id="crewCreateModal" role="dialog" aria-modal="true" aria-labelledby="crewCreateTitle">
+      <div class="modal-card wide-modal">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">NUEVO REGISTRO</p>
+            <h2 id="crewCreateTitle">Nueva cuadrilla</h2>
+            <p class="muted">La cuadrilla y sus técnicos se crean juntos.</p>
+          </div>
+          <button type="button" class="icon-button" id="closeCrewCreateModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="crewCreateForm" class="form">
+          <div class="form-grid">
+            <label>
+              Código de cuadrilla *
+              <input id="ncCodigo" placeholder="Ej. K5" required maxlength="20">
+            </label>
+
+            <label>
+              Plataforma *
+              <select id="ncPlataforma" required>
+                <option value="">Seleccionar</option>
+                <option value="SGI">SGI</option>
+                <option value="SGA">SGA</option>
+                <option value="TRASLADO">TRASLADO</option>
+              </select>
+            </label>
+
+            <label class="span-2">
+              Nombre de cuadrilla *
+              <input id="ncNombre" required maxlength="180" placeholder="Nombre operativo de la cuadrilla">
+            </label>
+
+            <label>
+              Supervisor *
+              <select id="ncSupervisor" required></select>
+            </label>
+
+            <label>
+              Cantidad de técnicos *
+              <select id="ncComposicion" required>
+                <option value="SOLO">1 técnico</option>
+                <option value="DOBLE">2 técnicos</option>
+              </select>
+            </label>
+
+            <label class="span-2">
+              Tipo de trabajo prioritario
+              <input id="ncTipoTrabajo" maxlength="80" placeholder="Opcional">
+            </label>
+          </div>
+
+          <div class="person-block">
+            <div class="person-block-head">
+              <strong>Técnico 1</strong>
+              <span class="tag">Obligatorio</span>
+            </div>
+            <div class="form-grid">
+              <label class="span-2">Nombre completo *<input id="ncT1Nombre" required maxlength="120"></label>
+              <label>DNI<input id="ncT1Dni" inputmode="numeric" maxlength="12"></label>
+              <label>Celular<input id="ncT1Celular" inputmode="tel" maxlength="20"></label>
+              <label>Correo<input id="ncT1Correo" type="email" maxlength="120"></label>
+              <label>Usuario<input id="ncT1Usuario" maxlength="50"></label>
+              <label>Contraseña temporal<input id="ncT1Clave" type="password" minlength="6" maxlength="80"></label>
+              <label class="span-2">Observación<textarea id="ncT1Observacion" rows="2" maxlength="250"></textarea></label>
+            </div>
+          </div>
+
+          <div class="person-block hidden" id="crewTech2Block">
+            <div class="person-block-head">
+              <strong>Técnico 2</strong>
+              <span class="tag">Segundo técnico</span>
+            </div>
+            <div class="form-grid">
+              <label class="span-2">Nombre completo *<input id="ncT2Nombre" maxlength="120"></label>
+              <label>DNI<input id="ncT2Dni" inputmode="numeric" maxlength="12"></label>
+              <label>Celular<input id="ncT2Celular" inputmode="tel" maxlength="20"></label>
+              <label>Correo<input id="ncT2Correo" type="email" maxlength="120"></label>
+              <label>Usuario<input id="ncT2Usuario" maxlength="50"></label>
+              <label>Contraseña temporal<input id="ncT2Clave" type="password" minlength="6" maxlength="80"></label>
+              <label class="span-2">Observación<textarea id="ncT2Observacion" rows="2" maxlength="250"></textarea></label>
+            </div>
+          </div>
+
+          <p class="message" id="crewCreateMessage"></p>
+          <div class="modal-actions">
+            <button type="button" class="ghost" id="cancelCrewCreateButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveCrewCreateButton">Crear cuadrilla</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL NUEVO SUPERVISOR -->
+    <div class="modal hidden" id="supervisorCreateModal" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">NUEVO REGISTRO</p>
+            <h2>Nuevo supervisor</h2>
+          </div>
+          <button type="button" class="icon-button" id="closeSupervisorCreateModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="supervisorCreateForm" class="form form-grid">
+          <label class="span-2">Nombre completo *<input id="nsNombre" required maxlength="120"></label>
+          <label>DNI<input id="nsDni" inputmode="numeric" maxlength="12"></label>
+          <label>Código supervisor<input id="nsCodigo" maxlength="30" placeholder="Ej. S5"></label>
+          <label>Celular<input id="nsCelular" inputmode="tel" maxlength="20"></label>
+          <label>Correo<input id="nsCorreo" type="email" maxlength="120"></label>
+          <label>Usuario *<input id="nsUsuario" required maxlength="50"></label>
+          <label>Contraseña temporal *<input id="nsClave" type="password" required minlength="6" maxlength="80"></label>
+          <label class="span-2">Observación<textarea id="nsObservacion" rows="3" maxlength="300"></textarea></label>
+          <p class="message span-2" id="supervisorCreateMessage"></p>
+          <div class="modal-actions span-2">
+            <button type="button" class="ghost" id="cancelSupervisorCreateButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveSupervisorCreateButton">Crear supervisor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL NUEVO PERSONAL -->
+    <div class="modal hidden" id="staffCreateModal" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">NUEVO REGISTRO</p>
+            <h2>Nuevo personal</h2>
+            <p class="muted">Back, jefaturas, gerencia o administrador.</p>
+          </div>
+          <button type="button" class="icon-button" id="closeStaffCreateModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="staffCreateForm" class="form form-grid">
+          <label class="span-2">Nombre completo *<input id="npNombre" required maxlength="120"></label>
+          <label>DNI<input id="npDni" inputmode="numeric" maxlength="12"></label>
+          <label>Perfil *<select id="npPerfil" required></select></label>
+          <label>Celular<input id="npCelular" inputmode="tel" maxlength="20"></label>
+          <label>Correo<input id="npCorreo" type="email" maxlength="120"></label>
+          <label>Usuario *<input id="npUsuario" required maxlength="50"></label>
+          <label>Contraseña temporal *<input id="npClave" type="password" required minlength="6" maxlength="80"></label>
+          <label class="span-2">Observación<textarea id="npObservacion" rows="3" maxlength="300"></textarea></label>
+          <p class="message span-2" id="staffCreateMessage"></p>
+          <div class="modal-actions span-2">
+            <button type="button" class="ghost" id="cancelStaffCreateButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveStaffCreateButton">Crear personal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL EDITAR CUADRILLA -->
+    <div class="modal hidden" id="crewEditModal" role="dialog" aria-modal="true">
+      <div class="modal-card wide-modal">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">CUADRILLA</p>
+            <h2 id="crewEditTitle">Editar cuadrilla</h2>
+          </div>
+          <button type="button" class="icon-button" id="closeCrewEditModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="crewEditForm" class="form">
+          <input type="hidden" id="ecId">
+
+          <div class="form-grid">
+            <label>Código *<input id="ecCodigo" required maxlength="20"></label>
+            <label>Plataforma *<select id="ecPlataforma" required>
+              <option value="SGI">SGI</option>
+              <option value="SGA">SGA</option>
+              <option value="TRASLADO">TRASLADO</option>
+            </select></label>
+            <label class="span-2">Nombre de cuadrilla *<input id="ecNombre" required maxlength="180"></label>
+            <label>Supervisor *<select id="ecSupervisor" required></select></label>
+            <label>Estado *<select id="ecEstado" required>
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+            </select></label>
+            <label class="span-2">Tipo de trabajo prioritario<input id="ecTipoTrabajo" maxlength="80"></label>
+          </div>
+
+          <div class="crew-tech-slots">
+            <div class="crew-tech-slot">
+              <span>Técnico 1</span>
+              <strong id="ecTech1">—</strong>
+              <button type="button" class="ghost compact" id="replaceTech1Button">Reemplazar</button>
+            </div>
+            <div class="crew-tech-slot">
+              <span>Técnico 2</span>
+              <strong id="ecTech2">—</strong>
+              <button type="button" class="ghost compact" id="replaceTech2Button">Agregar / Reemplazar</button>
+            </div>
+          </div>
+
+          <p class="message" id="crewEditMessage"></p>
+          <div class="modal-actions">
+            <button type="button" class="ghost" id="cancelCrewEditButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveCrewEditButton">Guardar cuadrilla</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL REEMPLAZAR TÉCNICO -->
+    <div class="modal hidden" id="replaceTechModal" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">CUADRILLA</p>
+            <h2 id="replaceTechTitle">Reemplazar técnico</h2>
+            <p class="muted" id="replaceTechCurrent"></p>
+          </div>
+          <button type="button" class="icon-button" id="closeReplaceTechModal" aria-label="Cerrar">×</button>
+        </div>
+
+        <form id="replaceTechForm" class="form form-grid">
+          <input type="hidden" id="rtCrewId">
+          <input type="hidden" id="rtSlot">
+          <label class="span-2">Nombre completo *<input id="rtNombre" required maxlength="120"></label>
+          <label>DNI<input id="rtDni" inputmode="numeric" maxlength="12"></label>
+          <label>Celular<input id="rtCelular" inputmode="tel" maxlength="20"></label>
+          <label>Correo<input id="rtCorreo" type="email" maxlength="120"></label>
+          <label>Usuario<input id="rtUsuario" maxlength="50"></label>
+          <label>Contraseña temporal<input id="rtClave" type="password" minlength="6" maxlength="80"></label>
+          <label class="span-2">Observación<textarea id="rtObservacion" rows="3" maxlength="250"></textarea></label>
+          <label class="span-2 checkbox-line" id="deactivateOutgoingWrap">
+            <input id="rtDeactivateOutgoing" type="checkbox" checked>
+            <span>Dar de baja al técnico saliente si ya no está asignado a otra cuadrilla.</span>
+          </label>
+          <p class="message span-2" id="replaceTechMessage"></p>
+          <div class="modal-actions span-2">
+            <button type="button" class="ghost" id="cancelReplaceTechButton">Cancelar</button>
+            <button type="submit" class="primary" id="saveReplaceTechButton">Guardar reemplazo</button>
           </div>
         </form>
       </div>

@@ -580,3 +580,247 @@ select option:disabled {
   .topbar { align-items: flex-start; }
   .topbar .primary.compact { white-space: nowrap; }
 }
+
+
+/* =========================
+   V1.3 GESTIÓN DE PERSONAL
+   ========================= */
+
+.admin-create-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin: 18px 0 16px;
+}
+
+.create-action {
+  border: 1px solid var(--brand-border);
+  background: #fff;
+  min-height: 76px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  color: var(--text);
+  box-shadow: 0 5px 16px rgba(7,88,183,.06);
+}
+
+.create-action:hover {
+  border-color: var(--brand-blue);
+}
+
+.create-action small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: .72rem;
+}
+
+.create-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand-blue);
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.admin-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  background: #edf3fb;
+  border-radius: 13px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.admin-tab {
+  padding: 10px 12px;
+  background: transparent;
+  color: #52657d;
+  font-weight: 800;
+}
+
+.admin-tab.active {
+  background: #fff;
+  color: var(--brand-blue);
+  box-shadow: 0 2px 8px rgba(15,23,42,.08);
+}
+
+.toolbar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inline-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand-blue);
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.tiny-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #cfe0f6;
+  border-top-color: var(--brand-blue);
+  border-radius: 50%;
+  animation: mvl-spin .65s linear infinite;
+}
+
+.person-name {
+  font-size: .94rem;
+}
+
+.assignment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.assignment-strong {
+  font-weight: 850;
+  font-size: .82rem;
+  color: var(--brand-navy);
+}
+
+.supervision-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: .68rem;
+  font-weight: 900;
+  background: #edf3fb;
+  color: #3e5b79;
+  white-space: nowrap;
+}
+
+.supervision-pill.gg {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.crew-toolbar {
+  display: grid;
+  grid-template-columns: 1.5fr .7fr .7fr;
+  gap: 9px;
+  margin: 6px 0 12px;
+}
+
+.crews-list {
+  display: grid;
+  gap: 10px;
+}
+
+.crew-admin-card {
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  padding: 14px;
+  background: #fff;
+}
+
+.crew-admin-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.crew-admin-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.crew-tech-lines {
+  display: grid;
+  gap: 5px;
+  margin-top: 11px;
+  font-size: .78rem;
+  color: #51657d;
+}
+
+.wide-modal {
+  width: min(100%, 760px);
+}
+
+.person-block {
+  border: 1px solid var(--brand-border);
+  background: #f8fbff;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.person-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 11px;
+}
+
+.crew-tech-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.crew-tech-slot {
+  border: 1px solid #e1e8f0;
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 7px;
+}
+
+.crew-tech-slot span {
+  font-size: .72rem;
+  color: var(--muted);
+}
+
+.crew-tech-slot strong {
+  font-size: .84rem;
+}
+
+.checkbox-line {
+  display: flex !important;
+  grid-template-columns: auto 1fr !important;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: .8rem;
+}
+
+.checkbox-line input {
+  width: auto;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .admin-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .crew-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .crew-tech-slots {
+    grid-template-columns: 1fr;
+  }
+
+  .assignment-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
