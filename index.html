@@ -115,75 +115,181 @@
     </section>
 
 
-    <!-- MI DESEMPEÑO -->
+    <!-- MI DESEMPEÑO / DASHBOARD DESEMPEÑO -->
     <section class="card app-card hidden" id="performanceView">
       <div class="topbar">
         <div>
           <button type="button" class="back-link" id="backHomePerformanceButton">← Inicio</button>
           <p class="eyebrow" id="performanceViewLabel">MI DESEMPEÑO</p>
           <h2 id="performanceCrewTitle">Cuadrilla</h2>
-          <p class="muted">Indicadores operativos desde agosto 2026</p>
+          <p class="muted" id="performanceSubtitle">Indicadores operativos desde agosto 2026</p>
         </div>
       </div>
 
-      <div class="performance-controls">
-        <label class="filter-field">
-          Periodo
-          <input type="month" id="performancePeriod" min="2026-08" value="2026-08">
-        </label>
+      <!-- TÉCNICO -->
+      <div id="performanceTechPanel">
+        <div class="performance-controls">
+          <label class="filter-field">
+            Periodo
+            <input type="month" id="performancePeriod" min="2026-08" value="2026-08">
+          </label>
 
-        <label class="filter-field hidden" id="performanceCrewSelectWrap">
-          Cuadrilla
-          <select id="performanceCrewSelect"></select>
-        </label>
+          <label class="filter-field hidden" id="performanceCrewSelectWrap">
+            Cuadrilla
+            <select id="performanceCrewSelect"></select>
+          </label>
 
-        <button type="button" class="primary compact" id="refreshPerformanceButton">Actualizar</button>
+          <button type="button" class="primary compact" id="refreshPerformanceButton">Actualizar</button>
+        </div>
+
+        <div class="performance-grid">
+          <article class="performance-card production-card">
+            <span class="performance-label">Producción</span>
+            <strong id="perfPoints">0.00 pts</strong>
+            <small><span id="perfFinalized">0</span> órdenes finalizadas</small>
+          </article>
+
+          <article class="performance-card" id="effectivenessCard">
+            <span class="performance-label">Efectividad</span>
+            <strong id="perfEffectiveness">—</strong>
+            <small>Meta mínima 70%</small>
+          </article>
+
+          <article class="performance-card">
+            <span class="performance-label">% Recableado</span>
+            <strong id="perfRecable">—</strong>
+            <small><span id="perfLosRojo">0</span> LOS ROJO · <span id="perfRecables">0</span> recableados</small>
+          </article>
+
+          <article class="performance-card under-construction">
+            <span class="performance-label">VTR / GAR</span>
+            <strong>En construcción</strong>
+            <small>Fuente Lima pendiente de definir</small>
+          </article>
+
+          <article class="performance-card under-construction">
+            <span class="performance-label">SLA / Tiempo de gestión</span>
+            <strong>En construcción</strong>
+            <small>Regla y timestamps pendientes</small>
+          </article>
+        </div>
+
+        <div class="performance-note hidden" id="performanceNoData">
+          Aún no hay datos procesados para este periodo.
+        </div>
+
+        <div class="section-title">
+          <div>
+            <h3>Detalle diario</h3>
+            <p class="section-subtitle">Producción y efectividad por día.</p>
+          </div>
+        </div>
+
+        <div class="daily-performance-list" id="performanceDailyList"></div>
       </div>
 
-      <div class="performance-grid">
-        <article class="performance-card production-card">
-          <span class="performance-label">Producción</span>
-          <strong id="perfPoints">0.00 pts</strong>
-          <small><span id="perfFinalized">0</span> órdenes finalizadas</small>
-        </article>
+      <!-- SUPERVISOR / JEFATURAS / GERENCIA / ADMIN -->
+      <div id="performanceDashboardPanel" class="hidden">
+        <div class="dashboard-filter-grid">
+          <label class="filter-field">
+            Periodo
+            <input type="month" id="dashboardPeriod" min="2026-08" value="2026-08">
+          </label>
 
-        <article class="performance-card" id="effectivenessCard">
-          <span class="performance-label">Efectividad</span>
-          <strong id="perfEffectiveness">—</strong>
-          <small>Meta mínima 70%</small>
-        </article>
+          <label class="filter-field hidden" id="dashboardSiteWrap">
+            Sede
+            <select id="dashboardSite">
+              <option value="LIMA">LIMA</option>
+            </select>
+          </label>
 
-        <article class="performance-card">
-          <span class="performance-label">% Recableado</span>
-          <strong id="perfRecable">—</strong>
-          <small><span id="perfLosRojo">0</span> LOS ROJO · <span id="perfRecables">0</span> recableados</small>
-        </article>
+          <label class="filter-field hidden" id="dashboardSupervisorWrap">
+            Supervisor
+            <select id="dashboardSupervisor">
+              <option value="">Todos los supervisores</option>
+            </select>
+          </label>
 
-        <article class="performance-card under-construction">
-          <span class="performance-label">BTR / GAR</span>
-          <strong>En construcción</strong>
-          <small>Fuente Lima pendiente de definir</small>
-        </article>
+          <label class="filter-field">
+            Cuadrilla
+            <select id="dashboardCrew">
+              <option value="">Todas las cuadrillas</option>
+            </select>
+          </label>
 
-        <article class="performance-card under-construction">
-          <span class="performance-label">SLA / Tiempo de gestión</span>
-          <strong>En construcción</strong>
-          <small>Regla y timestamps pendientes</small>
-        </article>
-      </div>
+          <label class="filter-field">
+            Indicador
+            <select id="dashboardIndicator">
+              <option value="PRODUCCION">Producción</option>
+              <option value="EFECTIVIDAD">Efectividad</option>
+              <option value="RECABLEADO">% Recableado</option>
+              <option value="VTR_GAR">VTR / GAR · En construcción</option>
+              <option value="SLA">SLA / Tiempo de gestión · En construcción</option>
+              <option value="OBSERVACIONES">Observaciones · En construcción</option>
+            </select>
+          </label>
 
-      <div class="performance-note hidden" id="performanceNoData">
-        Aún no hay datos procesados para este periodo.
-      </div>
+          <button type="button" class="primary compact" id="refreshDashboardButton">Aplicar</button>
+        </div>
 
-      <div class="section-title">
-        <div>
-          <h3>Detalle diario</h3>
-          <p class="section-subtitle">Producción y efectividad por día.</p>
+        <div class="ranking-head">
+          <div>
+            <h3 id="dashboardRankingTitle">Ranking de Producción</h3>
+            <p class="section-subtitle" id="dashboardRankingHelp">Mayor puntaje primero.</p>
+          </div>
+          <span class="inline-loading hidden" id="dashboardLoading"><span class="tiny-spinner"></span> Actualizando…</span>
+        </div>
+
+        <div class="performance-note hidden" id="dashboardConstruction">
+          Indicador en construcción.
+        </div>
+
+        <div id="dashboardRankingList" class="dashboard-ranking-list"></div>
+
+        <div id="dashboardCrewDetail" class="dashboard-crew-detail hidden">
+          <div class="section-title">
+            <div>
+              <h3 id="dashboardCrewDetailTitle">Detalle de cuadrilla</h3>
+              <p class="section-subtitle">Resumen completo del periodo seleccionado.</p>
+            </div>
+          </div>
+
+          <div class="performance-grid">
+            <article class="performance-card production-card">
+              <span class="performance-label">Producción</span>
+              <strong id="dashDetailPoints">0.00 pts</strong>
+              <small><span id="dashDetailFinalized">0</span> finalizadas</small>
+            </article>
+
+            <article class="performance-card" id="dashDetailEffectivenessCard">
+              <span class="performance-label">Efectividad</span>
+              <strong id="dashDetailEffectiveness">—</strong>
+              <small>Meta mínima 70%</small>
+            </article>
+
+            <article class="performance-card">
+              <span class="performance-label">% Recableado</span>
+              <strong id="dashDetailRecable">—</strong>
+              <small><span id="dashDetailLos">0</span> LOS ROJO · <span id="dashDetailRecables">0</span> recableados</small>
+            </article>
+
+            <article class="performance-card under-construction">
+              <span class="performance-label">VTR / GAR</span>
+              <strong>En construcción</strong>
+            </article>
+
+            <article class="performance-card under-construction">
+              <span class="performance-label">SLA</span>
+              <strong>En construcción</strong>
+            </article>
+
+            <article class="performance-card under-construction">
+              <span class="performance-label">Observaciones</span>
+              <strong>En construcción</strong>
+            </article>
+          </div>
         </div>
       </div>
-
-      <div class="daily-performance-list" id="performanceDailyList"></div>
 
       <div class="modal hidden" id="performanceDayModal" role="dialog" aria-modal="true">
         <div class="modal-card">
@@ -337,28 +443,59 @@
           <div class="mini-metric"><span>Órdenes procesadas</span><strong id="dataOrdersCount">0</strong></div>
         </div>
 
-        <article class="data-update-card">
-          <div>
-            <p class="eyebrow">PRODUCCIÓN</p>
-            <h3>Base de órdenes</h3>
-            <p class="muted">La estructura para Producción, Efectividad y % Recableado ya está creada.</p>
+        <article class="data-import-card">
+          <div class="data-import-head">
+            <div>
+              <p class="eyebrow">PRODUCCIÓN · EFECTIVIDAD · RECABLEADO</p>
+              <h3>Actualizar base de órdenes</h3>
+              <p class="muted">Selecciona el Excel fuente. Primero se lee y valida; recién después se actualizan los indicadores.</p>
+            </div>
+            <span class="status-pill" id="dataOrdersStatus">Pendiente de carga</span>
           </div>
-          <span class="status-pill" id="dataOrdersStatus">Pendiente de carga</span>
+
+          <div class="data-file-grid">
+            <label class="data-file-picker">
+              <span>Archivo Excel</span>
+              <input id="performanceImportFile" type="file" accept=".xlsx,.xls,.csv">
+            </label>
+            <button type="button" class="ghost" id="readPerformanceFileButton">Leer y validar</button>
+          </div>
+
+          <div id="performanceImportPreview" class="import-preview hidden">
+            <div class="import-preview-grid">
+              <div><span>Hoja detectada</span><strong id="importSheetName">—</strong></div>
+              <div><span>Filas válidas</span><strong id="importValidRows">0</strong></div>
+              <div><span>FINALIZADAS</span><strong id="importFinalizedRows">0</strong></div>
+              <div><span>Periodo detectado</span><strong id="importPeriod">—</strong></div>
+            </div>
+
+            <div class="import-required">
+              <strong>Campos usados</strong>
+              <p id="importColumnsDetected">—</p>
+            </div>
+
+            <div class="import-actions">
+              <button type="button" class="primary" id="processPerformanceFileButton">Actualizar datos</button>
+              <span class="inline-loading hidden" id="importLoading"><span class="tiny-spinner"></span> <span id="importProgressText">Procesando…</span></span>
+            </div>
+          </div>
+
+          <p class="message" id="performanceImportMessage"></p>
         </article>
 
         <article class="data-update-card">
           <div>
             <p class="eyebrow">ÚLTIMA ACTUALIZACIÓN</p>
             <h3 id="dataLastLoad">Sin cargas registradas</h3>
-            <p class="muted" id="dataLastLoadDetail">La carga Excel se conectará al confirmar el archivo fuente de órdenes de Lima.</p>
+            <p class="muted" id="dataLastLoadDetail">Todavía no se ha procesado una base de órdenes.</p>
           </div>
           <button type="button" class="ghost compact" id="refreshDataStatusButton">Actualizar estado</button>
         </article>
 
         <div class="info-box">
-          <strong>Reglas activas</strong>
-          <p>Producción: solo FINALIZADA · Efectividad verde desde 70% · Recableado basado en LOS ROJO.</p>
-          <p>BTR/GAR y SLA permanecen en construcción. Los montos económicos no se muestran al Técnico.</p>
+          <strong>Validaciones de seguridad</strong>
+          <p>Si una cuadrilla no puede identificarse de forma única o una orden FINALIZADA no existe en CATALOGO_ORDENES, no se reemplazan los indicadores.</p>
+          <p>Producción: solo FINALIZADA · Efectividad verde desde 70% · INICIADA y EN CAMINO se excluyen de los KPI actuales · VTR/GAR, SLA y Observaciones permanecen en construcción.</p>
         </div>
       </div>
     </section>

@@ -1,6 +1,6 @@
 /**
- * MI VISUAL LIMA - Frontend V1.5
- * Login + Identidad visual + Administración + Desempeño
+ * MI VISUAL LIMA - Frontend V1.6
+ * Login + Identidad visual + Administración + Importación + Dashboard Desempeño
  */
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxD95mFsCWIdOjkDqA-iEVBlj3JQp-y29O6NI6sfc5YcU4LzJi2IW8E1DUkAjRmsPuG/exec';
@@ -614,8 +614,11 @@ $('crewsList').addEventListener('click', (e) => {
 
 
 /* =========================
-   ADMIN - ACTUALIZACIÓN DE DATOS
+   ADMIN - GESTIÓN DE DATOS / IMPORTACIÓN
    ========================= */
+
+let performanceImportState = null;
+let xlsxLoadPromise = null;
 
 async function loadDataStatus() {
   try {
@@ -636,8 +639,7 @@ async function loadDataStatus() {
         `${data.lastLoad.file || 'Carga registrada'} · ${data.lastLoad.validRows || 0} filas válidas`;
     } else {
       $('dataLastLoad').textContent = 'Sin cargas registradas';
-      $('dataLastLoadDetail').textContent =
-        'La carga Excel se conectará al confirmar el archivo fuente de órdenes de Lima.';
+      $('dataLastLoadDetail').textContent = 'Todavía no se ha procesado una base de órdenes.';
     }
   } catch (err) {
     $('dataLastLoad').textContent = 'No se pudo consultar';
@@ -646,6 +648,359 @@ async function loadDataStatus() {
 }
 
 $('refreshDataStatusButton').addEventListener('click', loadDataStatus);
+
+function loadXlsxReader() {
+  if (window.XLSX?.read) return Promise.resolve(window.XLSX);
+  if (xlsxLoadPromise) return xlsxLoadPromise;
+
+  xlsxLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    script.async = true;
+
+    script.onload = () => {
+      if (window.XLSX?.read) resolve(window.XLSX);
+      else reject(new Error('No se pudo iniciar el lector de Excel.'));
+    };
+
+    script.onerror = () => reject(new Error('No se pudo cargar el lector de Excel. Revisa tu conexión.'));
+
+    document.head.appendChild(script);
+  }).finally(() => {
+    if (!window.XLSX?.read) xlsxLoadPromise = null;
+  });
+
+  return xlsxLoadPromise;
+}
+
+function importNorm(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function importDateIso(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return [
+      value.getFullYear(),
+      String(value.getMonth() + 1).padStart(2, '0'),
+      String(value.getDate()).padStart(2, '0')
+    ].join('-');
+  }
+
+  if (typeof value === 'number' && window.XLSX?.SSF) {
+    const d = window.XLSX.SSF.parse_date_code(value);
+    if (d) {
+      return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+    }
+  }
+
+  const text = String(value ?? '').trim();
+
+  let m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+
+  m = text.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+
+  return '';
+}
+
+function importWorksheetMatrix(ws) {
+  if (!ws?.['!ref']) return [];
+
+  const range = window.XLSX.utils.decode_range(ws['!ref']);
+  const rows = [];
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const row = [];
+
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[window.XLSX.utils.encode_cell({ r, c })];
+      row.push(cell?.v ?? cell?.w ?? '');
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+const IMPORT_ALIASES = {
+  crew: ['CUADRILLA', 'CUADRILLA EJECUTORA'],
+  date: ['FECHA DE ATENCION', 'FECHA ATENCION', 'FECHA'],
+  state: ['ESTADO'],
+  typePartida: ['TIPO DE PARTIDA', 'TIPO_PARTIDA'],
+  typeAtencion: [
+    'TIPO DE ATENCION / PAQUETE DE SERVICIO',
+    'TIPO DE ATENCION/PAQUETE DE SERVICIO',
+    'TIPO DE ATENCION',
+    'TIPO_ATENCION'
+  ],
+  clientCode: [
+    'CODIGO CLIENTE',
+    'CODIGO DE CLIENTE',
+    'CODIGO DEL CLIENTE',
+    'CODIGO DE PEDIDO',
+    'CODIGO'
+  ],
+  site: ['SEDE']
+};
+
+function findImportIndex(headers, aliases) {
+  for (const alias of aliases) {
+    const index = headers.indexOf(alias);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+function detectImportSheet(workbook) {
+  const required = ['crew', 'date', 'state', 'typePartida'];
+  let best = null;
+
+  for (const name of workbook.SheetNames) {
+    const rows = importWorksheetMatrix(workbook.Sheets[name]);
+    const maxHeaderRows = Math.min(rows.length, 25);
+
+    for (let row = 0; row < maxHeaderRows; row++) {
+      const headers = (rows[row] || []).map(importNorm);
+      const indexes = {};
+
+      Object.keys(IMPORT_ALIASES).forEach(key => {
+        indexes[key] = findImportIndex(headers, IMPORT_ALIASES[key]);
+      });
+
+      // Fallback estructural confirmado para la base Lima:
+      // Cuadrilla D, Estado G, Código cliente S y Tipo atención T.
+      if (indexes.crew < 0 && headers.length >= 4) indexes.crew = 3;
+      if (indexes.state < 0 && headers.length >= 7) indexes.state = 6;
+      if (indexes.clientCode < 0 && headers.length >= 19) indexes.clientCode = 18;
+      if (indexes.typeAtencion < 0 && headers.length >= 20) indexes.typeAtencion = 19;
+
+      const score = required.filter(key => indexes[key] >= 0).length;
+
+      if (!best || score > best.score || (score === best.score && rows.length > best.rows.length)) {
+        best = { name, rows, headerRow: row, headers, indexes, score };
+      }
+    }
+  }
+
+  if (!best || best.score < 4) {
+    throw new Error(
+      'No encuentro las columnas obligatorias: Cuadrilla, Fecha de atención/Fecha, Estado y Tipo de Partida.'
+    );
+  }
+
+  return best;
+}
+
+function extractImportRecords(selection) {
+  const { rows, headerRow, indexes } = selection;
+  const records = [];
+  let omitted = 0;
+
+  for (let i = headerRow + 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+
+    const date = importDateIso(row[indexes.date]);
+    const crew = String(row[indexes.crew] ?? '').trim();
+    const state = String(row[indexes.state] ?? '').trim();
+    const typePartida = String(row[indexes.typePartida] ?? '').trim();
+
+    if (!date || !crew || !state || !typePartida) {
+      if (row.some(v => String(v ?? '').trim() !== '')) omitted++;
+      continue;
+    }
+
+    records.push({
+      rowNumber: i + 1,
+      date,
+      crew,
+      state,
+      typePartida,
+      typeAtencion: indexes.typeAtencion >= 0 ? String(row[indexes.typeAtencion] ?? '').trim() : '',
+      clientCode: indexes.clientCode >= 0 ? String(row[indexes.clientCode] ?? '').trim() : '',
+      site: indexes.site >= 0 ? String(row[indexes.site] ?? '').trim() : ''
+    });
+  }
+
+  if (!records.length) throw new Error('No se encontraron filas válidas en el archivo.');
+
+  const finalizedDates = records
+    .filter(r => importNorm(r.state) === 'FINALIZADA')
+    .map(r => r.date)
+    .sort();
+
+  if (!finalizedDates.length) {
+    throw new Error('El archivo no contiene órdenes FINALIZADAS.');
+  }
+
+  const cutoff = finalizedDates[finalizedDates.length - 1];
+  const period = cutoff.slice(0, 7);
+
+  return {
+    records,
+    omitted,
+    finalized: finalizedDates.length,
+    cutoff,
+    period
+  };
+}
+
+function importColumnDescription(indexes) {
+  const items = [
+    `Cuadrilla: ${indexes.crew + 1}`,
+    `Fecha: ${indexes.date + 1}`,
+    `Estado: ${indexes.state + 1}`,
+    `Tipo de Partida: ${indexes.typePartida + 1}`
+  ];
+
+  if (indexes.clientCode >= 0) items.push(`Código cliente: ${indexes.clientCode + 1}`);
+  if (indexes.typeAtencion >= 0) items.push(`Tipo de Atención: ${indexes.typeAtencion + 1}`);
+
+  return items.join(' · ');
+}
+
+$('readPerformanceFileButton').addEventListener('click', async () => {
+  const file = $('performanceImportFile').files?.[0];
+
+  if (!file) {
+    setMessage('performanceImportMessage', 'Selecciona primero el archivo Excel.');
+    return;
+  }
+
+  setMessage('performanceImportMessage');
+  $('performanceImportPreview').classList.add('hidden');
+  $('readPerformanceFileButton').disabled = true;
+  showLoader('Leyendo Excel…');
+
+  try {
+    await loadXlsxReader();
+
+    const buffer = await file.arrayBuffer();
+    const workbook = window.XLSX.read(buffer, {
+      type: 'array',
+      cellDates: true
+    });
+
+    const selection = detectImportSheet(workbook);
+    const result = extractImportRecords(selection);
+
+    performanceImportState = {
+      file,
+      sheetName: selection.name,
+      indexes: selection.indexes,
+      ...result
+    };
+
+    $('importSheetName').textContent = selection.name;
+    $('importValidRows').textContent = result.records.length;
+    $('importFinalizedRows').textContent = result.finalized;
+    $('importPeriod').textContent = result.period;
+    $('importColumnsDetected').textContent = importColumnDescription(selection.indexes);
+
+    $('performanceImportPreview').classList.remove('hidden');
+
+    const omittedText = result.omitted
+      ? ` · ${result.omitted} fila(s) incompleta(s) omitidas`
+      : '';
+
+    setMessage(
+      'performanceImportMessage',
+      `Lectura correcta: ${result.records.length} filas válidas${omittedText}. Pulsa “Actualizar datos” para continuar.`,
+      'success'
+    );
+  } catch (err) {
+    performanceImportState = null;
+    setMessage('performanceImportMessage', err.message || 'No se pudo leer el archivo.');
+  } finally {
+    $('readPerformanceFileButton').disabled = false;
+    hideLoader();
+  }
+});
+
+$('processPerformanceFileButton').addEventListener('click', async () => {
+  if (!performanceImportState?.records?.length) {
+    setMessage('performanceImportMessage', 'Primero usa “Leer y validar”.');
+    return;
+  }
+
+  if (!confirm(
+    `¿Actualizar los indicadores del periodo ${performanceImportState.period} con ${performanceImportState.records.length} filas válidas?`
+  )) return;
+
+  const button = $('processPerformanceFileButton');
+  const loading = $('importLoading');
+  const progress = $('importProgressText');
+
+  button.disabled = true;
+  loading.classList.remove('hidden');
+  setMessage('performanceImportMessage');
+
+  try {
+    const start = await api('adminImportStart', {
+      token: token(),
+      fileName: performanceImportState.file.name,
+      totalRows: performanceImportState.records.length
+    });
+
+    if (!start.ok) throw new Error(start.error || 'No se pudo iniciar la actualización.');
+
+    const chunkSize = 150;
+    const total = performanceImportState.records.length;
+
+    for (let i = 0; i < total; i += chunkSize) {
+      const chunk = performanceImportState.records.slice(i, i + chunkSize);
+
+      progress.textContent = `Enviando ${Math.min(i + chunk.length, total)} de ${total}…`;
+
+      const result = await api('adminImportChunk', {
+        token: token(),
+        importId: start.importId,
+        chunk: JSON.stringify(chunk)
+      });
+
+      if (!result.ok) throw new Error(result.error || 'Falló un bloque de datos.');
+    }
+
+    progress.textContent = 'Validando catálogo y cuadrillas…';
+
+    const finish = await api('adminImportFinish', {
+      token: token(),
+      importId: start.importId,
+      fileName: performanceImportState.file.name
+    });
+
+    if (!finish.ok) {
+      throw new Error(finish.error || 'No se pudo actualizar la base.');
+    }
+
+    setMessage(
+      'performanceImportMessage',
+      `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} registros procesados.`,
+      'success'
+    );
+
+    performanceImportState = null;
+    $('performanceImportFile').value = '';
+    $('performanceImportPreview').classList.add('hidden');
+
+    await loadDataStatus();
+  } catch (err) {
+    setMessage(
+      'performanceImportMessage',
+      err.message || 'No se pudo actualizar. No se reemplazaron los indicadores.'
+    );
+  } finally {
+    button.disabled = false;
+    loading.classList.add('hidden');
+    progress.textContent = 'Procesando…';
+  }
+});
 
 /* =========================
    EDITAR USUARIO
@@ -1076,19 +1431,62 @@ $('passwordResetForm').addEventListener('submit', async (e) => {
 
 
 /* =========================
-   MI DESEMPEÑO
+   MI DESEMPEÑO / DASHBOARD DESEMPEÑO
    ========================= */
 
 let performanceCrewId = '';
+let dashboardFilterData = null;
+
+function currentProfileNorm() {
+  return normalizeText(sessionData?.user?.profile);
+}
+
+function isTechnicianSession() {
+  return currentProfileNorm() === 'TECNICO';
+}
+
+function isSupervisorSession() {
+  return currentProfileNorm() === 'SUPERVISOR';
+}
+
+function crewDisplayFrontend(c) {
+  const text = [
+    c?.code || c?.crewCode || '',
+    c?.platform || '',
+    c?.name ? `— ${c.name}` : ''
+  ].filter(Boolean).join(' ');
+
+  return text.toUpperCase();
+}
 
 async function openPerformance() {
-  const scopeCrews = sessionData?.scope?.crews || [];
+  const technical = isTechnicianSession();
+
+  $('performanceTechPanel').classList.toggle('hidden', !technical);
+  $('performanceDashboardPanel').classList.toggle('hidden', technical);
 
   $('performanceViewLabel').textContent =
-    normalizeText(sessionData?.user?.profile) === 'TECNICO'
-      ? 'MI DESEMPEÑO'
-      : 'DASHBOARD DESEMPEÑO';
+    technical ? 'MI DESEMPEÑO' : 'DASHBOARD DESEMPEÑO';
 
+  $('performanceSubtitle').textContent =
+    technical
+      ? 'Indicadores operativos de tu cuadrilla desde agosto 2026'
+      : 'Ranking e indicadores de las cuadrillas dentro de tu alcance';
+
+  showView('performance');
+
+  if (technical) {
+    await openTechnicianPerformance();
+  } else {
+    $('performanceCrewTitle').textContent = 'RESUMEN DE CUADRILLAS';
+    await openPerformanceDashboard();
+  }
+}
+
+/* -------- Técnico -------- */
+
+async function openTechnicianPerformance() {
+  const scopeCrews = sessionData?.scope?.crews || [];
   $('performancePeriod').value = '2026-08';
 
   if (scopeCrews.length === 1) {
@@ -1098,12 +1496,11 @@ async function openPerformance() {
     performanceCrewId = scopeCrews[0]?.id || '';
     $('performanceCrewSelectWrap').classList.remove('hidden');
     $('performanceCrewSelect').innerHTML = scopeCrews
-      .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.code)} · ${escapeHtml(c.platform || 'SIN PLATAFORMA')}</option>`)
+      .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(crewDisplayFrontend(c))}</option>`)
       .join('');
     $('performanceCrewSelect').value = performanceCrewId;
   }
 
-  showView('performance');
   await loadPerformance();
 }
 
@@ -1146,7 +1543,7 @@ function renderPerformance(data) {
   const daily = data.daily || [];
 
   $('performanceCrewTitle').textContent =
-    `${crew.code || ''}${crew.platform ? ' · ' + crew.platform : ''}`.trim() || 'Cuadrilla';
+    (crew.display || crewDisplayFrontend(crew) || 'CUADRILLA').toUpperCase();
 
   $('perfPoints').textContent = `${Number(summary.points || 0).toFixed(2)} pts`;
   $('perfFinalized').textContent = summary.finalized ?? 0;
@@ -1155,11 +1552,7 @@ function renderPerformance(data) {
   $('perfEffectiveness').textContent =
     eff == null ? '—' : `${(Number(eff) * 100).toFixed(1)}%`;
 
-  const effCard = $('effectivenessCard');
-  effCard.classList.remove('signal-green', 'signal-red', 'signal-neutral');
-  if (eff == null) effCard.classList.add('signal-neutral');
-  else if (Number(eff) >= 0.70) effCard.classList.add('signal-green');
-  else effCard.classList.add('signal-red');
+  setEffectivenessSignal($('effectivenessCard'), eff);
 
   const rec = summary.recablePercent;
   $('perfRecable').textContent =
@@ -1178,6 +1571,7 @@ function renderPerformance(data) {
   $('performanceDailyList').innerHTML = daily.map(d => {
     const effText = d.effectiveness == null ? '—' : `${(Number(d.effectiveness) * 100).toFixed(1)}%`;
     const signal = d.effectiveness == null ? 'neutral' : (Number(d.effectiveness) >= 0.70 ? 'green' : 'red');
+
     return `
       <button type="button" class="daily-performance-row" data-performance-date="${escapeHtml(d.date)}">
         <div>
@@ -1191,6 +1585,16 @@ function renderPerformance(data) {
   }).join('');
 }
 
+function setEffectivenessSignal(card, value) {
+  if (!card) return;
+
+  card.classList.remove('signal-green', 'signal-red', 'signal-neutral');
+
+  if (value == null || value === '') card.classList.add('signal-neutral');
+  else if (Number(value) >= 0.70) card.classList.add('signal-green');
+  else card.classList.add('signal-red');
+}
+
 $('performanceCrewSelect').addEventListener('change', () => {
   performanceCrewId = $('performanceCrewSelect').value;
   loadPerformance();
@@ -1198,6 +1602,204 @@ $('performanceCrewSelect').addEventListener('change', () => {
 
 $('performancePeriod').addEventListener('change', loadPerformance);
 $('refreshPerformanceButton').addEventListener('click', loadPerformance);
+
+/* -------- Dashboard -------- */
+
+async function openPerformanceDashboard() {
+  $('dashboardPeriod').value = '2026-08';
+
+  $('dashboardSiteWrap').classList.toggle('hidden', isSupervisorSession());
+  $('dashboardSupervisorWrap').classList.toggle('hidden', isSupervisorSession());
+
+  await loadPerformanceDashboard(true);
+}
+
+async function loadPerformanceDashboard(resetFilters = false) {
+  const loading = $('dashboardLoading');
+  loading.classList.remove('hidden');
+
+  if (resetFilters) {
+    $('dashboardSite').value = 'LIMA';
+    $('dashboardSupervisor').value = '';
+    $('dashboardCrew').value = '';
+    $('dashboardIndicator').value = 'PRODUCCION';
+  }
+
+  try {
+    const data = await api('performanceDashboard', {
+      token: token(),
+      period: $('dashboardPeriod').value || '2026-08',
+      indicator: $('dashboardIndicator').value || 'PRODUCCION',
+      site: isSupervisorSession() ? '' : $('dashboardSite').value,
+      supervisorId: isSupervisorSession() ? '' : $('dashboardSupervisor').value,
+      crewId: $('dashboardCrew').value
+    });
+
+    if (!data.ok) {
+      if (data.expired) return clearSession();
+      throw new Error(data.error || 'No se pudo cargar el Dashboard.');
+    }
+
+    dashboardFilterData = data;
+    fillDashboardFilters(data, resetFilters);
+    renderDashboardRanking(data);
+
+    const selectedCrew = $('dashboardCrew').value;
+    if (selectedCrew && !data.indicator?.construction) {
+      await loadDashboardCrewDetail(selectedCrew);
+    } else {
+      $('dashboardCrewDetail').classList.add('hidden');
+    }
+  } catch (err) {
+    $('dashboardRankingList').innerHTML =
+      `<p class="empty">${escapeHtml(err.message || 'No se pudo cargar el Dashboard.')}</p>`;
+    $('dashboardCrewDetail').classList.add('hidden');
+  } finally {
+    loading.classList.add('hidden');
+  }
+}
+
+function fillDashboardFilters(data, resetFilters) {
+  const filters = data.filters || {};
+
+  if (!isSupervisorSession()) {
+    const currentSupervisor = resetFilters ? '' : $('dashboardSupervisor').value;
+
+    $('dashboardSupervisor').innerHTML =
+      '<option value="">Todos los supervisores</option>' +
+      (filters.supervisors || []).map(s =>
+        `<option value="${escapeHtml(s.id)}">${escapeHtml(String(s.name || '').toUpperCase())}</option>`
+      ).join('');
+
+    if ([...$('dashboardSupervisor').options].some(o => o.value === currentSupervisor)) {
+      $('dashboardSupervisor').value = currentSupervisor;
+    }
+  }
+
+  const currentCrew = resetFilters ? '' : $('dashboardCrew').value;
+  const selectedSupervisor = isSupervisorSession() ? '' : $('dashboardSupervisor').value;
+
+  const crews = (filters.crews || []).filter(c =>
+    !selectedSupervisor || c.supervisorId === selectedSupervisor
+  );
+
+  $('dashboardCrew').innerHTML =
+    '<option value="">Todas las cuadrillas</option>' +
+    crews.map(c =>
+      `<option value="${escapeHtml(c.id)}">${escapeHtml(c.display)}</option>`
+    ).join('');
+
+  if ([...$('dashboardCrew').options].some(o => o.value === currentCrew)) {
+    $('dashboardCrew').value = currentCrew;
+  }
+}
+
+function renderDashboardRanking(data) {
+  const meta = data.indicator || {};
+  const rows = data.rows || [];
+
+  $('dashboardRankingTitle').textContent = `Ranking de ${meta.label || 'Indicador'}`;
+  $('dashboardRankingHelp').textContent = meta.help || '';
+
+  $('dashboardConstruction').classList.toggle('hidden', !meta.construction);
+
+  if (meta.construction) {
+    $('dashboardConstruction').textContent =
+      `${meta.label || 'Indicador'} está en construcción. Se mantiene visible para integrarlo cuando definamos su fuente.`;
+    $('dashboardRankingList').innerHTML = '';
+    return;
+  }
+
+  if (!rows.length) {
+    $('dashboardRankingList').innerHTML =
+      '<p class="empty">No hay cuadrillas con esos filtros.</p>';
+    return;
+  }
+
+  $('dashboardRankingList').innerHTML = rows.map(r => {
+    const value = formatDashboardIndicatorValue(meta.key, r.value);
+    const rank = r.rank == null ? '—' : `#${r.rank}`;
+
+    let detail = '';
+    if (meta.key === 'PRODUCCION') {
+      detail = `${Number(r.finalized || 0)} finalizadas`;
+    } else if (meta.key === 'EFECTIVIDAD') {
+      detail = `${Number(r.finalized || 0)} finalizadas`;
+    } else if (meta.key === 'RECABLEADO') {
+      detail = `${Number(r.losRojo || 0)} LOS ROJO · ${Number(r.recables || 0)} recableados`;
+    }
+
+    return `
+      <article class="dashboard-rank-row">
+        <div class="dashboard-rank-position">${rank}</div>
+        <div class="dashboard-rank-copy">
+          <strong>${escapeHtml(r.crewDisplay || '')}</strong>
+          <small>${escapeHtml(r.supervisor || '')}${detail ? ' · ' + escapeHtml(detail) : ''}</small>
+        </div>
+        <div class="dashboard-rank-value">${escapeHtml(value)}</div>
+      </article>
+    `;
+  }).join('');
+}
+
+function formatDashboardIndicatorValue(key, value) {
+  if (value == null || value === '') return 'Sin datos';
+
+  if (key === 'PRODUCCION') return `${Number(value).toFixed(2)} pts`;
+  if (key === 'EFECTIVIDAD' || key === 'RECABLEADO') {
+    return `${(Number(value) * 100).toFixed(1)}%`;
+  }
+
+  return String(value);
+}
+
+async function loadDashboardCrewDetail(crewId) {
+  const data = await api('performanceSummary', {
+    token: token(),
+    period: $('dashboardPeriod').value || '2026-08',
+    crewId
+  });
+
+  if (!data.ok) {
+    $('dashboardCrewDetail').classList.add('hidden');
+    return;
+  }
+
+  const crew = data.crew || {};
+  const summary = data.summary || {};
+
+  $('dashboardCrewDetailTitle').textContent =
+    (crew.display || crewDisplayFrontend(crew) || 'CUADRILLA').toUpperCase();
+
+  $('dashDetailPoints').textContent = `${Number(summary.points || 0).toFixed(2)} pts`;
+  $('dashDetailFinalized').textContent = Number(summary.finalized || 0);
+
+  const eff = summary.effectiveness;
+  $('dashDetailEffectiveness').textContent =
+    eff == null ? '—' : `${(Number(eff) * 100).toFixed(1)}%`;
+  setEffectivenessSignal($('dashDetailEffectivenessCard'), eff);
+
+  const rec = summary.recablePercent;
+  $('dashDetailRecable').textContent =
+    rec == null ? '—' : `${(Number(rec) * 100).toFixed(1)}%`;
+  $('dashDetailLos').textContent = Number(summary.losRojo || 0);
+  $('dashDetailRecables').textContent = Number(summary.recables || 0);
+
+  $('dashboardCrewDetail').classList.remove('hidden');
+}
+
+$('dashboardSupervisor').addEventListener('change', () => {
+  $('dashboardCrew').value = '';
+  loadPerformanceDashboard(false);
+});
+
+$('dashboardCrew').addEventListener('change', () => loadPerformanceDashboard(false));
+$('dashboardIndicator').addEventListener('change', () => loadPerformanceDashboard(false));
+$('dashboardPeriod').addEventListener('change', () => loadPerformanceDashboard(false));
+$('dashboardSite').addEventListener('change', () => loadPerformanceDashboard(false));
+$('refreshDashboardButton').addEventListener('click', () => loadPerformanceDashboard(false));
+
+/* -------- Detalle diario Técnico -------- */
 
 $('performanceDailyList').addEventListener('click', async (e) => {
   const button = e.target.closest('[data-performance-date]');
