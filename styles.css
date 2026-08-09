@@ -249,7 +249,7 @@ input:focus, select:focus, textarea:focus {
 
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 9px;
   margin: 20px 0;
 }
@@ -588,7 +588,7 @@ select option:disabled {
 
 .admin-create-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 9px;
   margin: 18px 0 16px;
 }
@@ -822,5 +822,237 @@ select option:disabled {
   .assignment-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+
+/* =========================
+   V1.4 MI DESEMPEÑO + DATOS
+   ========================= */
+
+.admin-tabs {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.data-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin: 16px 0;
+}
+
+.data-update-card {
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  background: #fff;
+  padding: 15px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.performance-controls {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  gap: 9px;
+  align-items: end;
+  margin: 18px 0;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.performance-card {
+  min-height: 118px;
+  border: 1px solid #dfe7f1;
+  border-radius: 17px;
+  background: #fff;
+  padding: 15px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  box-shadow: 0 5px 16px rgba(7,88,183,.05);
+}
+
+.performance-card strong {
+  font-size: 1.45rem;
+  color: var(--brand-navy);
+}
+
+.performance-card small {
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.performance-label {
+  color: #57708d;
+  font-size: .74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.performance-card.signal-green {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.performance-card.signal-green strong {
+  color: #166534;
+}
+
+.performance-card.signal-red {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.performance-card.signal-red strong {
+  color: #b91c1c;
+}
+
+.performance-card.signal-neutral {
+  border-color: #dfe7f1;
+}
+
+.performance-card.under-construction {
+  background: #f8fafc;
+  border-style: dashed;
+}
+
+.performance-card.under-construction strong {
+  font-size: .98rem;
+  color: #64748b;
+}
+
+.performance-note {
+  margin-top: 12px;
+  border: 1px solid #dbe7f5;
+  background: #f8fbff;
+  color: #4e6680;
+  border-radius: 14px;
+  padding: 11px 13px;
+  font-size: .82rem;
+}
+
+.daily-performance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-performance-row {
+  width: 100%;
+  min-height: 66px;
+  border: 1px solid #e1e8f0;
+  background: #fff;
+  color: var(--text);
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+}
+
+.daily-performance-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.daily-performance-row small {
+  color: var(--muted);
+  font-size: .74rem;
+}
+
+.daily-eff {
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.daily-eff.green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.daily-eff.red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.daily-eff.neutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.day-orders-list {
+  display: grid;
+  gap: 8px;
+}
+
+.day-order-row {
+  border: 1px solid #e1e8f0;
+  border-radius: 13px;
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.day-order-row span {
+  color: #4f637b;
+  font-size: .78rem;
+}
+
+.day-order-row b {
+  color: var(--brand-blue);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .admin-create-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .performance-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .data-status-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .data-update-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .day-order-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .day-order-row span {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-create-grid,
+  .performance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-status-grid {
+    grid-template-columns: 1fr;
   }
 }

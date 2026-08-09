@@ -1,6 +1,6 @@
 /**
- * MI VISUAL LIMA - Frontend V1.3
- * Login + Home + Gestión de Personal y Cuadrillas
+ * MI VISUAL LIMA - Frontend V1.4
+ * Login + Administración + Mi Desempeño
  */
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxD95mFsCWIdOjkDqA-iEVBlj3JQp-y29O6NI6sfc5YcU4LzJi2IW8E1DUkAjRmsPuG/exec';
@@ -12,7 +12,8 @@ const views = {
   login: $('loginView'),
   change: $('changePasswordView'),
   home: $('homeView'),
-  admin: $('adminView')
+  admin: $('adminView'),
+  performance: $('performanceView')
 };
 
 let sessionData = null;
@@ -199,7 +200,15 @@ function renderHome(data) {
 
 function moduleCard(m) {
   const isAdmin = m.module === 'Administración';
-  const enabled = isAdmin && m.permissions?.administrar;
+  const isPerformance = m.module === 'Mi Desempeño';
+
+  const enabled =
+    (isAdmin && m.permissions?.administrar) ||
+    (isPerformance && m.permissions?.ver);
+
+  let subtitle = 'Próxima etapa';
+  if (isAdmin && enabled) subtitle = 'Gestionar personal y datos';
+  if (isPerformance && enabled) subtitle = 'Ver indicadores';
 
   return `
     <button
@@ -211,7 +220,7 @@ function moduleCard(m) {
       <span class="module-icon">${moduleIcon(m.module)}</span>
       <span class="module-copy">
         <strong>${escapeHtml(m.module)}</strong>
-        <small>${enabled ? 'Gestionar usuarios' : 'Próxima etapa'}</small>
+        <small>${subtitle}</small>
       </span>
       <span class="module-arrow">${enabled ? '›' : ''}</span>
     </button>
@@ -240,9 +249,18 @@ $('moduleList').addEventListener('click', (e) => {
   if (button.dataset.module === 'Administración') {
     openAdmin();
   }
+
+  if (button.dataset.module === 'Mi Desempeño') {
+    openPerformance();
+  }
 });
 
 $('backHomeButton').addEventListener('click', () => {
+  if (sessionData) renderHome(sessionData);
+  else restoreSession();
+});
+
+$('backHomePerformanceButton').addEventListener('click', () => {
   if (sessionData) renderHome(sessionData);
   else restoreSession();
 });
@@ -318,16 +336,25 @@ function normalizeText(value) {
 function setAdminTab(tab) {
   adminActiveTab = tab;
   const users = tab === 'users';
-  $('usersPanel').classList.toggle('hidden', !users);
-  $('crewsPanel').classList.toggle('hidden', users);
-  $('usersTabButton').classList.toggle('active', users);
-  $('crewsTabButton').classList.toggle('active', !users);
+  const crews = tab === 'crews';
+  const data = tab === 'data';
 
-  if (!users) renderCrews();
+  $('usersPanel').classList.toggle('hidden', !users);
+  $('crewsPanel').classList.toggle('hidden', !crews);
+  $('dataPanel').classList.toggle('hidden', !data);
+
+  $('usersTabButton').classList.toggle('active', users);
+  $('crewsTabButton').classList.toggle('active', crews);
+  $('dataTabButton').classList.toggle('active', data);
+
+  if (crews) renderCrews();
+  if (data) loadDataStatus();
 }
 
 $('usersTabButton').addEventListener('click', () => setAdminTab('users'));
 $('crewsTabButton').addEventListener('click', () => setAdminTab('crews'));
+$('dataTabButton').addEventListener('click', () => setAdminTab('data'));
+$('dataUpdateButton').addEventListener('click', () => setAdminTab('data'));
 
 function setUsersBusy(busy) {
   const button = $('searchUsersButton');
@@ -562,6 +589,41 @@ $('crewsList').addEventListener('click', (e) => {
   const crew = (adminCatalogs?.crews || []).find(c => c.id === button.dataset.crewId);
   if (crew) openCrewEditModal(crew);
 });
+
+
+/* =========================
+   ADMIN - ACTUALIZACIÓN DE DATOS
+   ========================= */
+
+async function loadDataStatus() {
+  try {
+    const data = await api('adminDataStatus', { token: token() });
+    if (!data.ok) throw new Error(data.error || 'No se pudo consultar el estado de datos.');
+
+    $('dataCatalogCount').textContent = data.catalogCount ?? 0;
+    $('dataRecableCount').textContent = data.recableRulesCount ?? 0;
+    $('dataOrdersCount').textContent = data.ordersCount ?? 0;
+
+    const hasOrders = Number(data.ordersCount || 0) > 0;
+    $('dataOrdersStatus').textContent = hasOrders ? 'Datos disponibles' : 'Pendiente de carga';
+    $('dataOrdersStatus').classList.toggle('active', hasOrders);
+
+    if (data.lastLoad) {
+      $('dataLastLoad').textContent = `${data.lastLoad.period || ''} · ${data.lastLoad.status || ''}`.trim();
+      $('dataLastLoadDetail').textContent =
+        `${data.lastLoad.file || 'Carga registrada'} · ${data.lastLoad.validRows || 0} filas válidas`;
+    } else {
+      $('dataLastLoad').textContent = 'Sin cargas registradas';
+      $('dataLastLoadDetail').textContent =
+        'La carga Excel se conectará al confirmar el archivo fuente de órdenes de Lima.';
+    }
+  } catch (err) {
+    $('dataLastLoad').textContent = 'No se pudo consultar';
+    $('dataLastLoadDetail').textContent = err.message || 'Error de conexión.';
+  }
+}
+
+$('refreshDataStatusButton').addEventListener('click', loadDataStatus);
 
 /* =========================
    EDITAR USUARIO
@@ -989,6 +1051,168 @@ $('passwordResetForm').addEventListener('submit', async (e) => {
 /* =========================
    RESTAURAR SESIÓN
    ========================= */
+
+
+/* =========================
+   MI DESEMPEÑO
+   ========================= */
+
+let performanceCrewId = '';
+
+async function openPerformance() {
+  const scopeCrews = sessionData?.scope?.crews || [];
+
+  $('performancePeriod').value = '2026-08';
+
+  if (scopeCrews.length === 1) {
+    performanceCrewId = scopeCrews[0].id;
+    $('performanceCrewSelectWrap').classList.add('hidden');
+  } else {
+    performanceCrewId = scopeCrews[0]?.id || '';
+    $('performanceCrewSelectWrap').classList.remove('hidden');
+    $('performanceCrewSelect').innerHTML = scopeCrews
+      .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.code)} · ${escapeHtml(c.platform || 'SIN PLATAFORMA')}</option>`)
+      .join('');
+    $('performanceCrewSelect').value = performanceCrewId;
+  }
+
+  showView('performance');
+  await loadPerformance();
+}
+
+async function loadPerformance() {
+  const period = $('performancePeriod').value || '2026-08';
+  const crewId = performanceCrewId || $('performanceCrewSelect').value || '';
+
+  if (!crewId) {
+    $('performanceNoData').classList.remove('hidden');
+    $('performanceNoData').textContent = 'No hay una cuadrilla disponible en tu alcance.';
+    return;
+  }
+
+  showLoader('Cargando desempeño…');
+
+  try {
+    const data = await api('performanceSummary', {
+      token: token(),
+      period,
+      crewId
+    });
+
+    if (!data.ok) {
+      if (data.expired) return clearSession();
+      throw new Error(data.error || 'No se pudo cargar Mi Desempeño.');
+    }
+
+    renderPerformance(data);
+  } catch (err) {
+    $('performanceNoData').classList.remove('hidden');
+    $('performanceNoData').textContent = err.message || 'No se pudo cargar el desempeño.';
+  } finally {
+    hideLoader();
+  }
+}
+
+function renderPerformance(data) {
+  const crew = data.crew || {};
+  const summary = data.summary || {};
+  const daily = data.daily || [];
+
+  $('performanceCrewTitle').textContent =
+    `${crew.code || ''}${crew.platform ? ' · ' + crew.platform : ''}`.trim() || 'Cuadrilla';
+
+  $('perfPoints').textContent = `${Number(summary.points || 0).toFixed(2)} pts`;
+  $('perfFinalized').textContent = summary.finalized ?? 0;
+
+  const eff = summary.effectiveness;
+  $('perfEffectiveness').textContent =
+    eff == null ? '—' : `${(Number(eff) * 100).toFixed(1)}%`;
+
+  const effCard = $('effectivenessCard');
+  effCard.classList.remove('signal-green', 'signal-red', 'signal-neutral');
+  if (eff == null) effCard.classList.add('signal-neutral');
+  else if (Number(eff) >= 0.70) effCard.classList.add('signal-green');
+  else effCard.classList.add('signal-red');
+
+  const rec = summary.recablePercent;
+  $('perfRecable').textContent =
+    rec == null ? '—' : `${(Number(rec) * 100).toFixed(1)}%`;
+  $('perfLosRojo').textContent = summary.losRojo ?? 0;
+  $('perfRecables').textContent = summary.recables ?? 0;
+
+  $('performanceNoData').classList.toggle('hidden', Boolean(data.hasData));
+
+  if (!daily.length) {
+    $('performanceDailyList').innerHTML =
+      '<p class="empty">No hay detalle diario para este periodo.</p>';
+    return;
+  }
+
+  $('performanceDailyList').innerHTML = daily.map(d => {
+    const effText = d.effectiveness == null ? '—' : `${(Number(d.effectiveness) * 100).toFixed(1)}%`;
+    const signal = d.effectiveness == null ? 'neutral' : (Number(d.effectiveness) >= 0.70 ? 'green' : 'red');
+    return `
+      <button type="button" class="daily-performance-row" data-performance-date="${escapeHtml(d.date)}">
+        <div>
+          <strong>${escapeHtml(d.dateLabel)}</strong>
+          <small>${d.finalized || 0} finalizadas · ${Number(d.points || 0).toFixed(2)} pts</small>
+        </div>
+        <span class="daily-eff ${signal}">${effText}</span>
+        <span class="module-arrow">›</span>
+      </button>
+    `;
+  }).join('');
+}
+
+$('performanceCrewSelect').addEventListener('change', () => {
+  performanceCrewId = $('performanceCrewSelect').value;
+  loadPerformance();
+});
+
+$('performancePeriod').addEventListener('change', loadPerformance);
+$('refreshPerformanceButton').addEventListener('click', loadPerformance);
+
+$('performanceDailyList').addEventListener('click', async (e) => {
+  const button = e.target.closest('[data-performance-date]');
+  if (!button) return;
+
+  const date = button.dataset.performanceDate;
+  showLoader('Cargando detalle…');
+
+  try {
+    const data = await api('performanceDayDetail', {
+      token: token(),
+      crewId: performanceCrewId || $('performanceCrewSelect').value || '',
+      date
+    });
+
+    if (!data.ok) throw new Error(data.error || 'No se pudo cargar el detalle del día.');
+
+    $('performanceDayTitle').textContent = data.dateLabel || date;
+    $('performanceDaySummary').textContent =
+      `${data.orders?.length || 0} órdenes finalizadas · ${Number(data.totalPoints || 0).toFixed(2)} puntos`;
+
+    $('performanceDayOrders').innerHTML = (data.orders || []).length
+      ? data.orders.map(o => `
+          <article class="day-order-row">
+            <strong>${escapeHtml(o.clientCode || 'Sin código')}</strong>
+            <span>${escapeHtml(o.typePartida || 'Sin tipo de partida')}</span>
+            <b>${Number(o.points || 0).toFixed(2)} pts</b>
+          </article>
+        `).join('')
+      : '<p class="empty">No hay órdenes finalizadas para este día.</p>';
+
+    $('performanceDayModal').classList.remove('hidden');
+  } catch (err) {
+    alert(err.message || 'No se pudo cargar el detalle.');
+  } finally {
+    hideLoader();
+  }
+});
+
+$('closePerformanceDayModal').addEventListener('click', () => {
+  $('performanceDayModal').classList.add('hidden');
+});
 
 async function restoreSession() {
   showLoader('Cargando aplicación…');

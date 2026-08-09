@@ -107,6 +107,93 @@
       <div id="moduleList" class="module-grid"></div>
     </section>
 
+
+    <!-- MI DESEMPEÑO -->
+    <section class="card app-card hidden" id="performanceView">
+      <div class="topbar">
+        <div>
+          <button type="button" class="back-link" id="backHomePerformanceButton">← Inicio</button>
+          <p class="eyebrow">MI DESEMPEÑO</p>
+          <h2 id="performanceCrewTitle">Cuadrilla</h2>
+          <p class="muted">Indicadores operativos desde agosto 2026</p>
+        </div>
+      </div>
+
+      <div class="performance-controls">
+        <label class="filter-field">
+          Periodo
+          <input type="month" id="performancePeriod" min="2026-08" value="2026-08">
+        </label>
+
+        <label class="filter-field hidden" id="performanceCrewSelectWrap">
+          Cuadrilla
+          <select id="performanceCrewSelect"></select>
+        </label>
+
+        <button type="button" class="primary compact" id="refreshPerformanceButton">Actualizar</button>
+      </div>
+
+      <div class="performance-grid">
+        <article class="performance-card production-card">
+          <span class="performance-label">Producción</span>
+          <strong id="perfPoints">0.00 pts</strong>
+          <small><span id="perfFinalized">0</span> órdenes finalizadas</small>
+        </article>
+
+        <article class="performance-card" id="effectivenessCard">
+          <span class="performance-label">Efectividad</span>
+          <strong id="perfEffectiveness">—</strong>
+          <small>Meta mínima 70%</small>
+        </article>
+
+        <article class="performance-card">
+          <span class="performance-label">% Recableado</span>
+          <strong id="perfRecable">—</strong>
+          <small><span id="perfLosRojo">0</span> LOS ROJO · <span id="perfRecables">0</span> recableados</small>
+        </article>
+
+        <article class="performance-card under-construction">
+          <span class="performance-label">BTR / GAR</span>
+          <strong>En construcción</strong>
+          <small>Fuente Lima pendiente de definir</small>
+        </article>
+
+        <article class="performance-card under-construction">
+          <span class="performance-label">SLA / Tiempo de gestión</span>
+          <strong>En construcción</strong>
+          <small>Regla y timestamps pendientes</small>
+        </article>
+      </div>
+
+      <div class="performance-note hidden" id="performanceNoData">
+        Aún no hay datos procesados para este periodo.
+      </div>
+
+      <div class="section-title">
+        <div>
+          <h3>Detalle diario</h3>
+          <p class="section-subtitle">Producción y efectividad por día.</p>
+        </div>
+      </div>
+
+      <div class="daily-performance-list" id="performanceDailyList"></div>
+
+      <div class="modal hidden" id="performanceDayModal" role="dialog" aria-modal="true">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div>
+              <p class="eyebrow">PRODUCCIÓN DEL DÍA</p>
+              <h2 id="performanceDayTitle">Detalle</h2>
+              <p class="muted" id="performanceDaySummary"></p>
+            </div>
+            <button type="button" class="icon-button" id="closePerformanceDayModal" aria-label="Cerrar">×</button>
+          </div>
+
+          <div id="performanceDayOrders" class="day-orders-list"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ADMINISTRACIÓN -->
     <section class="card app-card hidden" id="adminView">
       <div class="topbar">
@@ -131,11 +218,16 @@
           <span class="create-icon">＋</span>
           <span><strong>Nuevo personal</strong><small>Back, jefaturas, gerencia</small></span>
         </button>
+        <button type="button" class="create-action" id="dataUpdateButton">
+          <span class="create-icon">↻</span>
+          <span><strong>Actualización de datos</strong><small>Catálogos y producción</small></span>
+        </button>
       </div>
 
       <div class="admin-tabs" role="tablist">
         <button type="button" class="admin-tab active" id="usersTabButton">Usuarios</button>
         <button type="button" class="admin-tab" id="crewsTabButton">Cuadrillas</button>
+        <button type="button" class="admin-tab" id="dataTabButton">Datos</button>
       </div>
 
       <!-- TAB USUARIOS -->
@@ -222,6 +314,39 @@
         </div>
 
         <div id="crewsList" class="crews-list"></div>
+      </div>
+
+      <!-- TAB DATOS -->
+      <div id="dataPanel" class="hidden">
+        <div class="data-status-grid">
+          <div class="mini-metric"><span>Catálogo órdenes</span><strong id="dataCatalogCount">0</strong></div>
+          <div class="mini-metric"><span>Reglas recableado</span><strong id="dataRecableCount">0</strong></div>
+          <div class="mini-metric"><span>Órdenes procesadas</span><strong id="dataOrdersCount">0</strong></div>
+        </div>
+
+        <article class="data-update-card">
+          <div>
+            <p class="eyebrow">PRODUCCIÓN</p>
+            <h3>Base de órdenes</h3>
+            <p class="muted">La estructura para Producción, Efectividad y % Recableado ya está creada.</p>
+          </div>
+          <span class="status-pill" id="dataOrdersStatus">Pendiente de carga</span>
+        </article>
+
+        <article class="data-update-card">
+          <div>
+            <p class="eyebrow">ÚLTIMA ACTUALIZACIÓN</p>
+            <h3 id="dataLastLoad">Sin cargas registradas</h3>
+            <p class="muted" id="dataLastLoadDetail">La carga Excel se conectará al confirmar el archivo fuente de órdenes de Lima.</p>
+          </div>
+          <button type="button" class="ghost compact" id="refreshDataStatusButton">Actualizar estado</button>
+        </article>
+
+        <div class="info-box">
+          <strong>Reglas activas</strong>
+          <p>Producción: solo FINALIZADA · Efectividad verde desde 70% · Recableado basado en LOS ROJO.</p>
+          <p>BTR/GAR y SLA permanecen en construcción. Los montos económicos no se muestran al Técnico.</p>
+        </div>
       </div>
     </section>
 
