@@ -3,17 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0758b7">
   <title>MI VISUAL LIMA</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+  <div class="app-loader" id="appLoader" aria-live="polite">
+    <div class="loader-brand">
+      <div class="loader-logo" aria-hidden="true">MV</div>
+      <strong>MI VISUAL LIMA</strong>
+      <span id="loaderText">Cargando aplicación…</span>
+      <div class="spinner" aria-hidden="true"></div>
+    </div>
+  </div>
+
   <main class="shell">
 
     <!-- LOGIN -->
     <section class="card auth-card" id="loginView">
       <div class="brand">
-        <div class="brand-mark">MV</div>
+        <div class="brand-mark brand-logo-slot" title="Espacio preparado para logo oficial">MV</div>
         <div>
           <h1>MI VISUAL LIMA</h1>
           <p>Acceso operativo</p>
@@ -116,16 +125,37 @@
         <div class="mini-metric"><span>Sin acceso</span><strong id="statNoAccess">0</strong></div>
       </div>
 
-      <div class="filters">
-        <input id="userSearch" type="search" placeholder="Buscar nombre, DNI, usuario o ID">
-        <select id="profileFilter">
-          <option value="">Todos los perfiles</option>
-        </select>
-        <select id="statusFilter">
-          <option value="">Todos los estados</option>
-          <option value="ACTIVO">Activos</option>
-          <option value="INACTIVO">Inactivos</option>
-        </select>
+      <div class="filters admin-filters">
+        <label class="filter-field">
+          Buscar
+          <input id="userSearch" type="search" placeholder="Nombre, usuario o ID">
+        </label>
+
+        <label class="filter-field">
+          DNI
+          <input id="dniFilter" inputmode="numeric" placeholder="DNI">
+        </label>
+
+        <label class="filter-field">
+          Perfil
+          <select id="profileFilter">
+            <option value="">Todos los perfiles</option>
+          </select>
+        </label>
+
+        <label class="filter-field">
+          Estado
+          <select id="statusFilter">
+            <option value="">Todos los estados</option>
+            <option value="ACTIVO">Activos</option>
+            <option value="INACTIVO">Inactivos</option>
+          </select>
+        </label>
+
+        <div class="filter-actions">
+          <button type="button" class="primary compact" id="searchUsersButton">Buscar</button>
+          <button type="button" class="ghost compact" id="clearUsersButton">Limpiar</button>
+        </div>
       </div>
 
       <div class="toolbar-line">
@@ -166,6 +196,27 @@
             <select id="fPerfil" required></select>
           </label>
 
+          <div class="span-2 technician-assignment hidden" id="technicianAssignmentBlock">
+            <div class="assignment-grid">
+              <label>
+                Supervisor
+                <select id="fSupervisor">
+                  <option value="">Seleccionar supervisor</option>
+                </select>
+              </label>
+
+              <label>
+                Cuadrilla
+                <select id="fCrew">
+                  <option value="">Sin cuadrilla asignada</option>
+                </select>
+              </label>
+            </div>
+            <p class="assignment-help">
+              El supervisor sirve para filtrar las cuadrillas. La relación real se guarda en CUADRILLAS, no se duplica en USUARIOS.
+            </p>
+          </div>
+
           <label>
             Celular
             <input id="fCelular" inputmode="tel" maxlength="20">
@@ -200,8 +251,8 @@
           </label>
 
           <div class="span-2 info-box">
-            <strong>Asignación de cuadrilla</strong>
-            <p>La cuadrilla no se edita aquí. Se mantiene en la hoja CUADRILLAS para evitar duplicar relaciones.</p>
+            <strong>Relaciones operativas</strong>
+            <p>Para Técnico, la asignación se registra directamente en CUADRILLAS. Para los demás perfiles no se duplican relaciones dentro de USUARIOS.</p>
           </div>
 
           <p class="message span-2" id="userFormMessage"></p>

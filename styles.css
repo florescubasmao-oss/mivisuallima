@@ -1,8 +1,17 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #0f172a;
-  background: #f1f5f9;
+  color: #10213d;
+  background: #eef5ff;
   font-synthesis: none;
+
+  --brand-blue: #0758b7;
+  --brand-blue-2: #0b6bdc;
+  --brand-navy: #073b78;
+  --brand-soft: #eaf3ff;
+  --brand-border: #c9dfff;
+  --surface: #ffffff;
+  --text: #10213d;
+  --muted: #63748b;
 }
 
 * { box-sizing: border-box; }
@@ -11,8 +20,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(59,130,246,.12), transparent 36rem),
-    #f1f5f9;
+    radial-gradient(circle at top, rgba(7,88,183,.16), transparent 34rem),
+    linear-gradient(180deg, #eef5ff 0%, #f7faff 38%, #f3f6fa 100%);
 }
 
 button, input, select, textarea { font: inherit; }
@@ -49,7 +58,7 @@ button:disabled { cursor: default; }
   display: grid;
   place-items: center;
   border-radius: 16px;
-  background: #0f172a;
+  background: linear-gradient(145deg, var(--brand-blue), var(--brand-navy));
   color: #fff;
   font-weight: 800;
   letter-spacing: -.04em;
@@ -85,8 +94,8 @@ input, select, textarea {
 textarea { resize: vertical; }
 
 input:focus, select:focus, textarea:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  border-color: var(--brand-blue);
+  box-shadow: 0 0 0 3px rgba(7,88,183,.14);
 }
 
 .password-wrap {
@@ -97,7 +106,7 @@ input:focus, select:focus, textarea:focus {
 
 .primary {
   padding: 13px 16px;
-  background: #0f172a;
+  background: linear-gradient(145deg, var(--brand-blue), var(--brand-navy));
   color: #fff;
   font-weight: 800;
 }
@@ -132,7 +141,7 @@ input:focus, select:focus, textarea:focus {
 
 .eyebrow {
   margin-bottom: 6px;
-  color: #2563eb;
+  color: var(--brand-blue);
   font-size: .72rem;
   font-weight: 900;
   letter-spacing: .08em;
@@ -214,8 +223,8 @@ input:focus, select:focus, textarea:focus {
 .module-active {
   background: #fff;
   color: #0f172a;
-  border-color: #bfdbfe;
-  box-shadow: 0 6px 18px rgba(37,99,235,.08);
+  border-color: var(--brand-border);
+  box-shadow: 0 6px 18px rgba(7,88,183,.10);
 }
 
 .module-icon {
@@ -229,14 +238,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 .module-active .module-icon {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--brand-soft);
+  color: var(--brand-blue);
 }
 
 .module-copy { display: grid; gap: 4px; }
 .module-copy strong { font-size: .91rem; }
 .module-copy small { color: #94a3b8; font-size: .73rem; }
-.module-arrow { font-size: 1.45rem; color: #2563eb; }
+.module-arrow { font-size: 1.45rem; color: var(--brand-blue); }
 
 .admin-stats {
   display: grid;
@@ -317,7 +326,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .tag { background: #f1f5f9; color: #475569; }
-.tag.ok { background: #dbeafe; color: #1d4ed8; }
+.tag.ok { background: var(--brand-soft); color: var(--brand-blue); }
 .tag.neutral { background: #f1f5f9; color: #64748b; }
 
 .assignment-line {
@@ -410,7 +419,147 @@ input:focus, select:focus, textarea:focus {
 
 .info-box p { margin: 4px 0 0; }
 
+
+/* =========================
+   IDENTIDAD MI VISUAL / CARGA
+   ========================= */
+
+.app-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, var(--brand-navy), var(--brand-blue));
+  color: #fff;
+  transition: opacity .22s ease, visibility .22s ease;
+}
+
+.app-loader.loader-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-brand {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+}
+
+.loader-logo,
+.brand-logo-slot {
+  border: 2px solid rgba(255,255,255,.38);
+  box-shadow: 0 12px 30px rgba(3,36,81,.18);
+}
+
+.loader-logo {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 23px;
+  background: rgba(255,255,255,.14);
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -.05em;
+}
+
+.loader-brand span {
+  color: rgba(255,255,255,.78);
+  font-size: .82rem;
+}
+
+.spinner {
+  width: 25px;
+  height: 25px;
+  margin-top: 5px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.28);
+  border-top-color: #fff;
+  animation: mvl-spin .75s linear infinite;
+}
+
+@keyframes mvl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.card {
+  border-top: 4px solid var(--brand-blue);
+}
+
+.primary {
+  background: var(--brand-blue);
+}
+
+.primary:hover {
+  background: var(--brand-navy);
+}
+
+.ghost {
+  background: #edf3fb;
+  color: var(--brand-navy);
+}
+
+/* =========================
+   FILTROS ADMIN
+   ========================= */
+
+.admin-filters {
+  grid-template-columns: 1.45fr .75fr 1fr .85fr auto;
+  align-items: end;
+}
+
+.filter-field {
+  font-size: .74rem;
+  color: #4c6079;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 7px;
+  align-items: end;
+  padding-bottom: 1px;
+}
+
+.filter-actions button {
+  min-height: 42px;
+}
+
+/* =========================
+   ASIGNACIÓN TÉCNICO
+   ========================= */
+
+.technician-assignment {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  border-radius: 15px;
+  padding: 13px;
+}
+
+.assignment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.assignment-help {
+  margin: 9px 0 0;
+  color: #4d6785;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+select option:disabled {
+  color: #9aa8b8;
+}
+
 @media (max-width: 640px) {
+  .admin-filters { grid-template-columns: 1fr 1fr; }
+  .filter-actions { grid-column: 1 / -1; }
+  .assignment-grid { grid-template-columns: 1fr; }
   .shell { padding: 12px 9px 28px; }
   .card { padding: 17px; border-radius: 18px; }
   .module-grid { grid-template-columns: 1fr; }
@@ -422,6 +571,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 420px) {
+  .admin-filters { grid-template-columns: 1fr; }
+  .filter-actions { grid-column: auto; }
   .summary { grid-template-columns: 1fr; }
   .admin-stats { grid-template-columns: 1fr 1fr 1fr; }
   .mini-metric { padding: 10px 8px; }

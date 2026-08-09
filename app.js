@@ -1,5 +1,5 @@
 /**
- * MI VISUAL LIMA - Frontend V1.1
+ * MI VISUAL LIMA - Frontend V1.2
  * Login + Home dinámico + Administración de Usuarios
  */
 
@@ -21,9 +21,21 @@ let adminUsers = [];
 let adminSearchTimer = null;
 
 function showView(name) {
-  Object.values(views).forEach(v => v.classList.add('hidden'));
-  views[name].classList.remove('hidden');
+  Object.values(views).filter(Boolean).forEach(v => v.classList.add('hidden'));
+  if (views[name]) views[name].classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function showLoader(text = 'Cargando aplicación…') {
+  const loader = $('appLoader');
+  const label = $('loaderText');
+  if (label) label.textContent = text;
+  if (loader) loader.classList.remove('loader-hidden');
+}
+
+function hideLoader() {
+  const loader = $('appLoader');
+  if (loader) loader.classList.add('loader-hidden');
 }
 
 function token() {
@@ -45,6 +57,7 @@ async function api(action, params = {}) {
 
 function setMessage(id, text = '', type = 'error') {
   const el = $(id);
+  if (!el) return;
   el.textContent = text;
   el.classList.toggle('success-message', type === 'success');
 }
@@ -240,6 +253,7 @@ $('backHomeButton').addEventListener('click', () => {
 
 async function openAdmin() {
   showView('admin');
+  showLoader('Cargando administración…');
   setMessage('adminMessage');
   $('usersList').innerHTML = '<p class="empty">Cargando usuarios…</p>';
 
@@ -249,11 +263,14 @@ async function openAdmin() {
       if (!cat.ok) throw new Error(cat.error || 'No se pudieron cargar los catálogos.');
       adminCatalogs = cat;
       fillProfileSelectors(cat.profiles || []);
+      fillSupervisorSelector(cat.supervisors || []);
     }
     await loadUsers();
   } catch (err) {
     setMessage('adminMessage', err.message || 'No se pudo abrir Administración.');
     $('usersList').innerHTML = '';
+  } finally {
+    hideLoader();
   }
 }
 
@@ -269,12 +286,83 @@ function fillProfileSelectors(profiles) {
     '<option value="">Seleccionar perfil</option>' + options;
 }
 
+function fillSupervisorSelector(supervisors) {
+  const options = supervisors
+    .map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}${s.code ? ` · ${escapeHtml(s.code)}` : ''}</option>`)
+    .join('');
+
+  $('fSupervisor').innerHTML =
+    '<option value="">Seleccionar supervisor</option>' +
+    options +
+    '<option value="__GG__">GG / Sin supervisor</option>';
+}
+
+function isTechnicianProfile(profile) {
+  return String(profile || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase() === 'TECNICO';
+}
+
+function currentCrewForUser(user) {
+  if (!user?.assignedCrewId) return null;
+  return (adminCatalogs?.crews || []).find(c => c.id === user.assignedCrewId) || null;
+}
+
+function refreshTechnicianAssignment(user = null) {
+  const isTech = isTechnicianProfile($('fPerfil').value);
+  $('technicianAssignmentBlock').classList.toggle('hidden', !isTech);
+
+  if (!isTech) {
+    $('fSupervisor').value = '';
+    $('fCrew').innerHTML = '<option value="">Sin cuadrilla asignada</option>';
+    return;
+  }
+
+  const currentCrew = currentCrewForUser(user);
+  let supervisorValue = $('fSupervisor').value;
+
+  if (!supervisorValue && currentCrew) {
+    supervisorValue = currentCrew.supervisorId || '__GG__';
+    $('fSupervisor').value = supervisorValue;
+  }
+
+  renderCrewOptions(supervisorValue, user?.id || '', user?.assignedCrewId || '');
+}
+
+function renderCrewOptions(supervisorValue, editingUserId = '', selectedCrewId = '') {
+  const crews = adminCatalogs?.crews || [];
+
+  const filtered = crews.filter(c => {
+    if (!supervisorValue) return false;
+    if (supervisorValue === '__GG__') return !c.supervisorId;
+    return c.supervisorId === supervisorValue;
+  });
+
+  const options = filtered.map(c => {
+    const occupiedIds = [c.technician1Id, c.technician2Id].filter(Boolean);
+    const isCurrent = c.id === selectedCrewId || occupiedIds.includes(editingUserId);
+    const full = occupiedIds.length >= 2 && !isCurrent;
+    const occupancy = `${occupiedIds.length}/2 técnicos`;
+
+    return `<option value="${escapeHtml(c.id)}" ${full ? 'disabled' : ''}>${escapeHtml(c.code || c.id)} · ${escapeHtml(c.name)} · ${occupancy}${full ? ' · COMPLETA' : ''}</option>`;
+  }).join('');
+
+  $('fCrew').innerHTML =
+    '<option value="">Sin cuadrilla asignada</option>' + options;
+
+  if (selectedCrewId && filtered.some(c => c.id === selectedCrewId)) {
+    $('fCrew').value = selectedCrewId;
+  }
+}
+
 async function loadUsers() {
   setMessage('adminMessage');
 
   const data = await api('adminUsersList', {
     token: token(),
     search: $('userSearch').value.trim(),
+    dni: $('dniFilter').value.trim(),
     profile: $('profileFilter').value,
     status: $('statusFilter').value
   });
@@ -384,11 +472,28 @@ $('usersList').addEventListener('click', async (e) => {
 });
 
 $('refreshUsersButton').addEventListener('click', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
-$('profileFilter').addEventListener('change', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
-$('statusFilter').addEventListener('change', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
-$('userSearch').addEventListener('input', () => {
-  clearTimeout(adminSearchTimer);
-  adminSearchTimer = setTimeout(() => loadUsers().catch(err => setMessage('adminMessage', err.message)), 350);
+$('searchUsersButton').addEventListener('click', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
+
+$('clearUsersButton').addEventListener('click', () => {
+  $('userSearch').value = '';
+  $('dniFilter').value = '';
+  $('profileFilter').value = '';
+  $('statusFilter').value = '';
+  loadUsers().catch(err => setMessage('adminMessage', err.message));
+});
+
+['userSearch', 'dniFilter'].forEach(id => {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      loadUsers().catch(err => setMessage('adminMessage', err.message));
+    }
+  });
+});
+
+$('fPerfil').addEventListener('change', () => refreshTechnicianAssignment(null));
+$('fSupervisor').addEventListener('change', () => {
+  renderCrewOptions($('fSupervisor').value, $('editUserId').value, '');
 });
 
 /* =========================
@@ -416,6 +521,9 @@ function openUserModal(user) {
   $('fEstado').value = user?.status || 'ACTIVO';
   $('fObservacion').value = user?.observation || '';
 
+  $('fSupervisor').value = user?.assignedSupervisorId || (user?.directManagement ? '__GG__' : '');
+  refreshTechnicianAssignment(user);
+
   $('userModal').classList.remove('hidden');
 }
 
@@ -439,7 +547,8 @@ $('userForm').addEventListener('submit', async (e) => {
     username: $('fUsuario').value.trim(),
     operationalCode: $('fCodigoOperativo').value.trim(),
     status: $('fEstado').value,
-    observation: $('fObservacion').value.trim()
+    observation: $('fObservacion').value.trim(),
+    crewId: isTechnicianProfile($('fPerfil').value) ? $('fCrew').value : ''
   };
 
   if (!payload.name || !payload.profile) {
@@ -518,8 +627,11 @@ $('passwordResetForm').addEventListener('submit', async (e) => {
    ========================= */
 
 async function restoreSession() {
+  showLoader('Cargando aplicación…');
+
   if (!token()) {
     showView('login');
+    hideLoader();
     return;
   }
 
@@ -529,6 +641,8 @@ async function restoreSession() {
     renderHome(data);
   } catch (_) {
     clearSession();
+  } finally {
+    hideLoader();
   }
 }
 
