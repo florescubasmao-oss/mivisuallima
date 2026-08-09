@@ -1,6 +1,6 @@
 /**
- * MI VISUAL LIMA - Frontend V1.4
- * Login + Administración + Mi Desempeño
+ * MI VISUAL LIMA - Frontend V1.5
+ * Login + Identidad visual + Administración + Desempeño
  */
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxD95mFsCWIdOjkDqA-iEVBlj3JQp-y29O6NI6sfc5YcU4LzJi2IW8E1DUkAjRmsPuG/exec';
@@ -24,6 +24,9 @@ let adminSearchTimer = null;
 function showView(name) {
   Object.values(views).filter(Boolean).forEach(v => v.classList.add('hidden'));
   if (views[name]) views[name].classList.remove('hidden');
+
+  document.body.classList.toggle('login-mode', name === 'login');
+
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
@@ -198,6 +201,12 @@ function renderHome(data) {
   showView('home');
 }
 
+function performanceModuleLabel_() {
+  return normalizeText(sessionData?.user?.profile) === 'TECNICO'
+    ? 'Mi Desempeño'
+    : 'Dashboard Desempeño';
+}
+
 function moduleCard(m) {
   const isAdmin = m.module === 'Administración';
   const isPerformance = m.module === 'Mi Desempeño';
@@ -206,9 +215,15 @@ function moduleCard(m) {
     (isAdmin && m.permissions?.administrar) ||
     (isPerformance && m.permissions?.ver);
 
+  const displayName = isPerformance ? performanceModuleLabel_() : m.module;
+
   let subtitle = 'Próxima etapa';
-  if (isAdmin && enabled) subtitle = 'Gestionar personal y datos';
-  if (isPerformance && enabled) subtitle = 'Ver indicadores';
+  if (isAdmin && enabled) subtitle = 'Usuarios y gestión de datos';
+  if (isPerformance && enabled) {
+    subtitle = normalizeText(sessionData?.user?.profile) === 'TECNICO'
+      ? 'Ver mis indicadores'
+      : 'Ver indicadores de cuadrillas';
+  }
 
   return `
     <button
@@ -219,7 +234,7 @@ function moduleCard(m) {
     >
       <span class="module-icon">${moduleIcon(m.module)}</span>
       <span class="module-copy">
-        <strong>${escapeHtml(m.module)}</strong>
+        <strong>${escapeHtml(displayName)}</strong>
         <small>${subtitle}</small>
       </span>
       <span class="module-arrow">${enabled ? '›' : ''}</span>
@@ -335,22 +350,29 @@ function normalizeText(value) {
 
 function setAdminTab(tab) {
   adminActiveTab = tab;
+
   const users = tab === 'users';
   const crews = tab === 'crews';
   const data = tab === 'data';
+  const people = users || crews;
+
+  $('peoplePanel').classList.toggle('hidden', !people);
+  $('dataPanel').classList.toggle('hidden', !data);
 
   $('usersPanel').classList.toggle('hidden', !users);
   $('crewsPanel').classList.toggle('hidden', !crews);
-  $('dataPanel').classList.toggle('hidden', !data);
+
+  $('peopleTabButton').classList.toggle('active', people);
+  $('dataTabButton').classList.toggle('active', data);
 
   $('usersTabButton').classList.toggle('active', users);
   $('crewsTabButton').classList.toggle('active', crews);
-  $('dataTabButton').classList.toggle('active', data);
 
   if (crews) renderCrews();
   if (data) loadDataStatus();
 }
 
+$('peopleTabButton').addEventListener('click', () => setAdminTab('users'));
 $('usersTabButton').addEventListener('click', () => setAdminTab('users'));
 $('crewsTabButton').addEventListener('click', () => setAdminTab('crews'));
 $('dataTabButton').addEventListener('click', () => setAdminTab('data'));
@@ -1061,6 +1083,11 @@ let performanceCrewId = '';
 
 async function openPerformance() {
   const scopeCrews = sessionData?.scope?.crews || [];
+
+  $('performanceViewLabel').textContent =
+    normalizeText(sessionData?.user?.profile) === 'TECNICO'
+      ? 'MI DESEMPEÑO'
+      : 'DASHBOARD DESEMPEÑO';
 
   $('performancePeriod').value = '2026-08';
 

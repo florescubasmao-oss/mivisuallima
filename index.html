@@ -4,7 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0758b7">
+  <meta name="application-name" content="MI VISUAL LIMA">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MI VISUAL">
   <title>MI VISUAL LIMA</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="64x64" href="./assets/favicon-64.png">
+  <link rel="apple-touch-icon" href="./assets/app-icon-192.png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -22,7 +29,7 @@
     <!-- LOGIN -->
     <section class="card auth-card" id="loginView">
       <div class="brand">
-        <div class="brand-mark brand-logo-slot" title="Espacio preparado para logo oficial">MV</div>
+        <img class="brand-mark-image" src="./assets/app-icon-192.png" alt="MI VISUAL">
         <div>
           <h1>MI VISUAL LIMA</h1>
           <p>Acceso operativo</p>
@@ -113,7 +120,7 @@
       <div class="topbar">
         <div>
           <button type="button" class="back-link" id="backHomePerformanceButton">← Inicio</button>
-          <p class="eyebrow">MI DESEMPEÑO</p>
+          <p class="eyebrow" id="performanceViewLabel">MI DESEMPEÑO</p>
           <h2 id="performanceCrewTitle">Cuadrilla</h2>
           <p class="muted">Indicadores operativos desde agosto 2026</p>
         </div>
@@ -200,8 +207,8 @@
         <div>
           <button type="button" class="back-link" id="backHomeButton">← Inicio</button>
           <p class="eyebrow">ADMINISTRACIÓN</p>
-          <h2>Gestión de personal</h2>
-          <p class="muted">Usuarios, cuadrillas y accesos de MI VISUAL LIMA</p>
+          <h2>Administración</h2>
+          <p class="muted">Gestión de usuarios, cuadrillas y actualización de datos</p>
         </div>
       </div>
 
@@ -220,15 +227,20 @@
         </button>
         <button type="button" class="create-action" id="dataUpdateButton">
           <span class="create-icon">↻</span>
-          <span><strong>Actualización de datos</strong><small>Catálogos y producción</small></span>
+          <span><strong>Gestión de datos</strong><small>Catálogos y producción</small></span>
         </button>
       </div>
 
-      <div class="admin-tabs" role="tablist">
-        <button type="button" class="admin-tab active" id="usersTabButton">Usuarios</button>
-        <button type="button" class="admin-tab" id="crewsTabButton">Cuadrillas</button>
-        <button type="button" class="admin-tab" id="dataTabButton">Datos</button>
+      <div class="admin-tabs admin-main-tabs" role="tablist">
+        <button type="button" class="admin-tab active" id="peopleTabButton">Gestión de usuarios</button>
+        <button type="button" class="admin-tab" id="dataTabButton">Gestión de datos</button>
       </div>
+
+      <div id="peoplePanel">
+        <div class="admin-subtabs" role="tablist">
+          <button type="button" class="admin-subtab active" id="usersTabButton">Usuarios</button>
+          <button type="button" class="admin-subtab" id="crewsTabButton">Cuadrillas</button>
+        </div>
 
       <!-- TAB USUARIOS -->
       <div id="usersPanel">
@@ -315,8 +327,9 @@
 
         <div id="crewsList" class="crews-list"></div>
       </div>
+      </div>
 
-      <!-- TAB DATOS -->
+      <!-- GESTIÓN DE DATOS -->
       <div id="dataPanel" class="hidden">
         <div class="data-status-grid">
           <div class="mini-metric"><span>Catálogo órdenes</span><strong id="dataCatalogCount">0</strong></div>
