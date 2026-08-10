@@ -1,2171 +1,667 @@
 /**
- * MI VISUAL LIMA - Frontend V1.8
- * Login + Administración + Partidas dinámicas + Dashboard Desempeño
+ * MI VISUAL LIMA - Frontend V1.9 (actualización incremental)
+ *
+ * OBJETIVO
+ * - Mantener intacto el núcleo V1.8 ya probado.
+ * - Agregar Dashboard V1.9: resumen total + filtros combinables + ranking.
+ * - Separar Tipo de cuadrilla Visual de Plataforma WIN.
+ *
+ * IMPORTANTE
+ * Este archivo carga el núcleo V1.8 fijado al commit que estaba publicado al
+ * momento de preparar esta actualización, y luego aplica únicamente la capa V1.9.
  */
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxD95mFsCWIdOjkDqA-iEVBlj3JQp-y29O6NI6sfc5YcU4LzJi2IW8E1DUkAjRmsPuG/exec';
-const TOKEN_KEY = 'mvl_session_token';
+(() => {
+  const MVL_CORE_V18 =
+    'https://cdn.jsdelivr.net/gh/florescubasmao-oss/mivisuallima@8f08004a72c45a7eda063aca6e64eb2ce1d3fe92/app.js';
 
-const $ = (id) => document.getElementById(id);
-
-const views = {
-  login: $('loginView'),
-  change: $('changePasswordView'),
-  home: $('homeView'),
-  admin: $('adminView'),
-  performance: $('performanceView')
-};
-
-let sessionData = null;
-let adminCatalogs = null;
-let adminUsers = [];
-let adminSearchTimer = null;
-
-function showView(name) {
-  Object.values(views).filter(Boolean).forEach(v => v.classList.add('hidden'));
-  if (views[name]) views[name].classList.remove('hidden');
-
-  document.body.classList.toggle('login-mode', name === 'login');
-
-  window.scrollTo({ top: 0, behavior: 'instant' });
-}
-
-function showLoader(text = 'Cargando aplicación…') {
-  const loader = $('appLoader');
-  const label = $('loaderText');
-  if (label) label.textContent = text;
-  if (loader) loader.classList.remove('loader-hidden');
-}
-
-function hideLoader() {
-  const loader = $('appLoader');
-  if (loader) loader.classList.add('loader-hidden');
-}
-
-function token() {
-  return localStorage.getItem(TOKEN_KEY) || '';
-}
-
-async function api(action, params = {}) {
-  if (!API_URL) throw new Error('Falta configurar API_URL.');
-
-  const body = new URLSearchParams({ action, ...params });
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    body
-  });
-
-  if (!response.ok) throw new Error('No se pudo conectar con el servidor.');
-  return response.json();
-}
-
-function setMessage(id, text = '', type = 'error') {
-  const el = $(id);
-  if (!el) return;
-  el.textContent = text;
-  el.classList.toggle('success-message', type === 'success');
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function readableScope(scope) {
-  const map = {
-    CUADRILLA: 'Mi cuadrilla',
-    CUADRILLAS_ASIGNADAS: 'Cuadrillas a cargo',
-    TOTAL: 'Todas las cuadrillas',
-    SIN_ALCANCE: 'Sin alcance'
+  const core = document.createElement('script');
+  core.src = MVL_CORE_V18;
+  core.async = false;
+  core.onload = () => window.setTimeout(iniciarDashboardV19, 0);
+  core.onerror = () => {
+    const loaderText = document.getElementById('loaderText');
+    if (loaderText) {
+      loaderText.textContent = 'No se pudo cargar el núcleo V1.8. Verifica la conexión e inténtalo nuevamente.';
+    }
+    console.error('[MI VISUAL LIMA V1.9] No se pudo cargar el núcleo V1.8.');
   };
-  return map[scope] || scope || '—';
-}
+  document.head.appendChild(core);
 
-function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionData = null;
-  adminCatalogs = null;
-  adminUsers = [];
-  $('clave').value = '';
-  showView('login');
-}
-
-/* =========================
-   LOGIN
-   ========================= */
-
-$('togglePassword').addEventListener('click', () => {
-  const input = $('clave');
-  const visible = input.type === 'text';
-  input.type = visible ? 'password' : 'text';
-  $('togglePassword').textContent = visible ? 'Ver' : 'Ocultar';
-});
-
-$('loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('loginMessage');
-  $('loginButton').disabled = true;
-
-  try {
-    const usuario = $('usuario').value.trim();
-    const clave = $('clave').value;
-
-    const data = await api('login', { usuario, clave });
-
-    if (!data.ok) {
-      setMessage('loginMessage', data.error || 'No se pudo ingresar.');
-      return;
-    }
-
-    localStorage.setItem(TOKEN_KEY, data.token);
-    sessionData = data;
-
-    if (data.mustChangePassword) {
-      $('actual').value = clave;
-      showView('change');
-    } else {
-      renderHome(data);
-    }
-  } catch (err) {
-    setMessage('loginMessage', err.message || 'Error de conexión.');
-  } finally {
-    $('loginButton').disabled = false;
-  }
-});
-
-$('changePasswordForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('changeMessage');
-
-  const actual = $('actual').value;
-  const nueva = $('nueva').value;
-  const repetir = $('repetir').value;
-
-  if (nueva !== repetir) {
-    setMessage('changeMessage', 'Las contraseñas nuevas no coinciden.');
-    return;
-  }
-
-  try {
-    const data = await api('changePassword', {
-      token: token(),
-      claveActual: actual,
-      claveNueva: nueva
-    });
-
-    if (!data.ok) {
-      setMessage('changeMessage', data.error || 'No se pudo cambiar la contraseña.');
-      return;
-    }
-
-    const fresh = await api('session', { token: token() });
-    if (!fresh.ok) return clearSession();
-
-    renderHome(fresh);
-  } catch (err) {
-    setMessage('changeMessage', err.message || 'Error de conexión.');
-  }
-});
-
-$('logoutButton').addEventListener('click', async () => {
-  try {
-    if (token()) await api('logout', { token: token() });
-  } catch (_) {}
-  clearSession();
-});
-
-/* =========================
-   HOME
-   ========================= */
-
-function renderHome(data) {
-  sessionData = data;
-
-  $('userName').textContent = data.user?.name || data.user?.id || 'Usuario';
-  $('userProfile').textContent = data.user?.profile || '';
-  $('scopeType').textContent = readableScope(data.scope?.type);
-  $('crewCount').textContent = data.scope?.totalCrews ?? 0;
-
-  const includesGG = (data.scope?.crews || []).some(c => c.directManagement);
-  $('ggNotice').classList.toggle('hidden', !includesGG);
-
-  const modules = data.modules || [];
-  $('moduleList').innerHTML = modules.length
-    ? modules.map(moduleCard).join('')
-    : '<p class="empty">No hay módulos habilitados.</p>';
-
-  showView('home');
-}
-
-function performanceModuleLabel_() {
-  return normalizeText(sessionData?.user?.profile) === 'TECNICO'
-    ? 'Mi Desempeño'
-    : 'Dashboard Desempeño';
-}
-
-function moduleCard(m) {
-  const isAdmin = m.module === 'Administración';
-  const isPerformance = m.module === 'Mi Desempeño';
-
-  const enabled =
-    (isAdmin && m.permissions?.administrar) ||
-    (isPerformance && m.permissions?.ver);
-
-  const displayName = isPerformance ? performanceModuleLabel_() : m.module;
-
-  let subtitle = 'Próxima etapa';
-  if (isAdmin && enabled) subtitle = 'Usuarios y gestión de datos';
-  if (isPerformance && enabled) {
-    subtitle = normalizeText(sessionData?.user?.profile) === 'TECNICO'
-      ? 'Ver mis indicadores'
-      : 'Ver indicadores de cuadrillas';
-  }
-
-  return `
-    <button
-      class="module-card ${enabled ? 'module-active' : ''}"
-      type="button"
-      data-module="${escapeHtml(m.module)}"
-      ${enabled ? '' : 'disabled'}
-    >
-      <span class="module-icon">${moduleIcon(m.module)}</span>
-      <span class="module-copy">
-        <strong>${escapeHtml(displayName)}</strong>
-        <small>${subtitle}</small>
-      </span>
-      <span class="module-arrow">${enabled ? '›' : ''}</span>
-    </button>
-  `;
-}
-
-function moduleIcon(name) {
-  const icons = {
-    'Mapa Operativo': '⌖',
-    'Mi Desempeño': '↗',
-    'Observaciones': '!',
-    'Validación Técnica': '✓',
-    'Gestión de Actas': '▤',
-    'Actividad en Campo': '◎',
-    'Descansos Programados': '◷',
-    'Checklist': '☑',
-    'Administración': '⚙'
-  };
-  return icons[name] || '•';
-}
-
-$('moduleList').addEventListener('click', (e) => {
-  const button = e.target.closest('[data-module]');
-  if (!button || button.disabled) return;
-
-  if (button.dataset.module === 'Administración') {
-    openAdmin();
-  }
-
-  if (button.dataset.module === 'Mi Desempeño') {
-    openPerformance();
-  }
-});
-
-$('backHomeButton').addEventListener('click', () => {
-  if (sessionData) renderHome(sessionData);
-  else restoreSession();
-});
-
-$('backHomePerformanceButton').addEventListener('click', () => {
-  if (sessionData) renderHome(sessionData);
-  else restoreSession();
-});
-
-/* =========================
-   ADMINISTRACIÓN
-   ========================= */
-
-let adminActiveTab = 'users';
-
-async function openAdmin() {
-  showView('admin');
-  showLoader('Cargando administración…');
-  setMessage('adminMessage');
-
-  try {
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    setAdminTab('users');
-    await loadUsers();
-  } catch (err) {
-    setMessage('adminMessage', err.message || 'No se pudo abrir Administración.');
-  } finally {
-    hideLoader();
-  }
-}
-
-async function refreshAdminCatalogs() {
-  const cat = await api('adminCatalogs', { token: token() });
-  if (!cat.ok) {
-    if (cat.expired) return clearSession();
-    throw new Error(cat.error || 'No se pudieron cargar los catálogos.');
-  }
-  adminCatalogs = cat;
-  return cat;
-}
-
-function fillAdminSelectors() {
-  const profiles = adminCatalogs?.profiles || [];
-  const supervisors = adminCatalogs?.supervisors || [];
-
-  const profileOptions = profiles
-    .map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
-    .join('');
-
-  $('profileFilter').innerHTML = '<option value="">Todos los perfiles</option>' + profileOptions;
-  $('fPerfil').innerHTML = '<option value="">Seleccionar perfil</option>' + profileOptions;
-
-  const staffProfiles = profiles.filter(p => {
-    const n = normalizeText(p);
-    return n !== 'TECNICO' && n !== 'SUPERVISOR';
-  });
-  $('npPerfil').innerHTML = '<option value="">Seleccionar perfil</option>' +
-    staffProfiles.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
-
-  const supervisorOptions =
-    '<option value="">Seleccionar supervisor</option>' +
-    supervisors.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}${s.code ? ` · ${escapeHtml(s.code)}` : ''}</option>`).join('') +
-    '<option value="__GG__">GG / Supervisión directa de Gerencia</option>';
-
-  $('ncSupervisor').innerHTML = supervisorOptions;
-  $('ecSupervisor').innerHTML = supervisorOptions;
-}
-
-function normalizeText(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
-}
-
-function setAdminTab(tab) {
-  adminActiveTab = tab;
-
-  const users = tab === 'users';
-  const crews = tab === 'crews';
-  const data = tab === 'data';
-  const people = users || crews;
-
-  $('peoplePanel').classList.toggle('hidden', !people);
-  $('dataPanel').classList.toggle('hidden', !data);
-
-  $('usersPanel').classList.toggle('hidden', !users);
-  $('crewsPanel').classList.toggle('hidden', !crews);
-
-  $('peopleTabButton').classList.toggle('active', people);
-  $('dataTabButton').classList.toggle('active', data);
-
-  $('usersTabButton').classList.toggle('active', users);
-  $('crewsTabButton').classList.toggle('active', crews);
-
-  if (crews) renderCrews();
-  if (data) loadDataStatus();
-}
-
-$('peopleTabButton').addEventListener('click', () => setAdminTab('users'));
-$('usersTabButton').addEventListener('click', () => setAdminTab('users'));
-$('crewsTabButton').addEventListener('click', () => setAdminTab('crews'));
-$('dataTabButton').addEventListener('click', () => setAdminTab('data'));
-
-function setUsersBusy(busy) {
-  const button = $('searchUsersButton');
-  const loading = $('usersLoading');
-  if (button) {
-    button.disabled = busy;
-    button.textContent = busy ? 'Buscando…' : 'Buscar';
-  }
-  if (loading) loading.classList.toggle('hidden', !busy);
-}
-
-async function loadUsers() {
-  setMessage('adminMessage');
-  setUsersBusy(true);
-
-  try {
-    const data = await api('adminUsersList', {
-      token: token(),
-      search: $('userSearch').value.trim(),
-      dni: $('dniFilter').value.trim(),
-      profile: $('profileFilter').value,
-      status: $('statusFilter').value
-    });
-
-    if (!data.ok) {
-      if (data.expired) return clearSession();
-      throw new Error(data.error || 'No se pudieron cargar los usuarios.');
-    }
-
-    adminUsers = data.users || [];
-    renderUsers(adminUsers, data.summary || {});
-  } finally {
-    setUsersBusy(false);
-  }
-}
-
-function renderUsers(users, summary) {
-  $('statTotal').textContent = summary.total ?? users.length;
-  $('statActive').textContent = summary.active ?? users.filter(u => u.status === 'ACTIVO').length;
-  $('statNoAccess').textContent = summary.withoutAccess ?? users.filter(u => !u.hasAccess).length;
-  $('userResultCount').textContent = `${users.length} usuario${users.length === 1 ? '' : 's'}`;
-
-  if (!users.length) {
-    $('usersList').innerHTML = '<p class="empty">No se encontraron usuarios con esos filtros.</p>';
-    return;
-  }
-
-  $('usersList').innerHTML = users.map(userCard).join('');
-}
-
-function userCard(u) {
-  const accessClass = u.hasAccess ? 'ok' : 'neutral';
-  const accessText = u.hasAccess ? 'Con acceso' : 'Sin acceso';
-  const tech = normalizeText(u.profile) === 'TECNICO';
-
-  const assignment = tech && u.assignedCrewCode
-    ? `<div class="assignment-strong">${escapeHtml(u.assignedCrewCode)} · ${escapeHtml(u.assignedCrewPlatform || 'SIN PLATAFORMA')}</div>`
-    : `<div class="assignment-strong">${escapeHtml(u.crewSummary || 'Alcance según perfil')}</div>`;
-
-  const supervisionBadge = tech
-    ? `<span class="supervision-pill ${u.directManagement ? 'gg' : ''}">${escapeHtml(u.directManagement ? 'GG' : (u.assignedSupervisorName || 'Sin supervisor'))}</span>`
-    : '';
-
-  return `
-    <article class="user-card">
-      <div class="user-main">
-        <div class="user-title-row">
-          <div>
-            <strong class="person-name">${escapeHtml(u.name || 'Sin nombre')}</strong>
-            <div class="user-meta">
-              ${u.dni ? `<span>DNI ${escapeHtml(u.dni)}</span>` : ''}
-              ${u.username ? `<span>@${escapeHtml(u.username)}</span>` : ''}
-              <span>${escapeHtml(u.id)}</span>
-            </div>
-          </div>
-          <span class="status-pill ${u.status === 'ACTIVO' ? 'active' : 'inactive'}">${escapeHtml(u.status)}</span>
-        </div>
-
-        <div class="assignment-row">
-          ${assignment}
-          ${supervisionBadge}
-        </div>
-
-        <div class="user-tags">
-          <span class="tag">${escapeHtml(u.profile || 'Sin perfil')}</span>
-          <span class="tag ${accessClass}">${accessText}</span>
-        </div>
-      </div>
-
-      <div class="user-actions">
-        <button type="button" class="ghost compact" data-user-action="edit" data-user-id="${escapeHtml(u.id)}">Editar</button>
-        <button type="button" class="ghost compact" data-user-action="password" data-user-id="${escapeHtml(u.id)}">Clave</button>
-        <button
-          type="button"
-          class="${u.status === 'ACTIVO' ? 'danger-soft' : 'success-soft'} compact"
-          data-user-action="status"
-          data-user-id="${escapeHtml(u.id)}"
-        >${u.status === 'ACTIVO' ? 'Desactivar' : 'Activar'}</button>
-      </div>
-    </article>
-  `;
-}
-
-$('usersList').addEventListener('click', async (e) => {
-  const button = e.target.closest('[data-user-action]');
-  if (!button) return;
-
-  const user = adminUsers.find(u => u.id === button.dataset.userId);
-  if (!user) return;
-
-  const action = button.dataset.userAction;
-
-  if (action === 'edit') openUserModal(user);
-  if (action === 'password') openPasswordModal(user);
-
-  if (action === 'status') {
-    const newStatus = user.status === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-    const verb = newStatus === 'ACTIVO' ? 'activar' : 'desactivar';
-    if (!confirm(`¿Confirmas ${verb} a ${user.name}?`)) return;
-
-    showLoader('Actualizando usuario…');
+  async function iniciarDashboardV19() {
     try {
-      const result = await api('adminSetUserStatus', {
-        token: token(),
-        userId: user.id,
-        status: newStatus
-      });
-      if (!result.ok) throw new Error(result.error || 'No se pudo actualizar el estado.');
-      setMessage('adminMessage', result.message || 'Estado actualizado.', 'success');
-      await loadUsers();
-    } catch (err) {
-      setMessage('adminMessage', err.message);
-    } finally {
-      hideLoader();
-    }
-  }
-});
+      const $v19 = (id) => document.getElementById(id);
+      if (!$v19('performanceDashboardPanel')) return;
 
-$('refreshUsersButton').addEventListener('click', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
-$('searchUsersButton').addEventListener('click', () => loadUsers().catch(err => setMessage('adminMessage', err.message)));
+      const ESTADO = {
+        metadata: new Map(),
+        seedLoaded: false,
+        catalogTried: false,
+        totalCache: new Map(),
+        lastData: null
+      };
 
-$('clearUsersButton').addEventListener('click', () => {
-  $('userSearch').value = '';
-  $('dniFilter').value = '';
-  $('profileFilter').value = '';
-  $('statusFilter').value = '';
-  loadUsers().catch(err => setMessage('adminMessage', err.message));
-});
+      const pick = (obj, ...keys) => {
+        if (!obj) return '';
+        for (const key of keys) {
+          if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];
+        }
+        return '';
+      };
 
-['userSearch', 'dniFilter'].forEach(id => {
-  $(id).addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      loadUsers().catch(err => setMessage('adminMessage', err.message));
-    }
-  });
-});
+      const norm = (value) => String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
 
-/* =========================
-   CUADRILLAS
-   ========================= */
+      const html = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 
-function renderCrews() {
-  const q = normalizeText($('crewSearch').value);
-  const platform = normalizeText($('crewPlatformFilter').value);
-  const supervision = $('crewSupervisorFilter').value;
-
-  let crews = [...(adminCatalogs?.crews || [])];
-
-  if (q) {
-    crews = crews.filter(c => normalizeText([
-      c.code, c.name, c.platform, c.supervisor,
-      c.technician1, c.technician2
-    ].join(' ')).includes(q));
-  }
-
-  if (platform) crews = crews.filter(c => normalizeText(c.platform) === platform);
-  if (supervision === 'GG') crews = crews.filter(c => c.directManagement);
-
-  $('crewResultCount').textContent = `${crews.length} cuadrilla${crews.length === 1 ? '' : 's'}`;
-
-  $('crewsList').innerHTML = crews.length
-    ? crews.map(crewCard).join('')
-    : '<p class="empty">No se encontraron cuadrillas.</p>';
-}
-
-function crewCard(c) {
-  const supervisor = c.directManagement ? 'GG' : (c.supervisor || 'Sin supervisor');
-  const tech1 = c.technician1 || 'Sin técnico';
-  const tech2 = c.technician2 || 'Sin segundo técnico';
-
-  return `
-    <article class="crew-admin-card">
-      <div class="crew-admin-head">
-        <div>
-          <strong>${escapeHtml(c.code || c.id)} · ${escapeHtml(c.platform || 'SIN PLATAFORMA')}</strong>
-          <p>${escapeHtml(c.name || '')}</p>
-        </div>
-        <span class="supervision-pill ${c.directManagement ? 'gg' : ''}">${escapeHtml(supervisor)}</span>
-      </div>
-      <div class="crew-tech-lines">
-        <span><b>T1:</b> ${escapeHtml(tech1)}</span>
-        <span><b>T2:</b> ${escapeHtml(tech2)}</span>
-      </div>
-      <div class="user-actions">
-        <button type="button" class="ghost compact" data-crew-action="edit" data-crew-id="${escapeHtml(c.id)}">Editar cuadrilla</button>
-      </div>
-    </article>
-  `;
-}
-
-['crewSearch', 'crewPlatformFilter', 'crewSupervisorFilter'].forEach(id => {
-  $(id).addEventListener(id === 'crewSearch' ? 'input' : 'change', renderCrews);
-});
-
-$('refreshCrewsButton').addEventListener('click', async () => {
-  showLoader('Actualizando cuadrillas…');
-  try {
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    renderCrews();
-  } catch (err) {
-    alert(err.message || 'No se pudieron actualizar las cuadrillas.');
-  } finally {
-    hideLoader();
-  }
-});
-
-$('crewsList').addEventListener('click', (e) => {
-  const button = e.target.closest('[data-crew-action="edit"]');
-  if (!button) return;
-  const crew = (adminCatalogs?.crews || []).find(c => c.id === button.dataset.crewId);
-  if (crew) openCrewEditModal(crew);
-});
-
-
-/* =========================
-   ADMIN - GESTIÓN DE DATOS / IMPORTACIÓN
-   ========================= */
-
-let performanceImportState = null;
-let xlsxLoadPromise = null;
-
-async function loadDataStatus() {
-  try {
-    const data = await api('adminDataStatus', { token: token() });
-    if (!data.ok) throw new Error(data.error || 'No se pudo consultar el estado de datos.');
-
-    $('dataCatalogCount').textContent = data.catalogCount ?? 0;
-    $('dataRecableCount').textContent = data.recableRulesCount ?? 0;
-    $('dataOrdersCount').textContent = data.ordersCount ?? 0;
-
-    const hasOrders = Number(data.ordersCount || 0) > 0;
-    $('dataOrdersStatus').textContent = hasOrders ? 'Datos disponibles' : 'Pendiente de carga';
-    $('dataOrdersStatus').classList.toggle('active', hasOrders);
-
-    if (data.lastLoad) {
-      $('dataLastLoad').textContent =
-        `${data.lastLoad.periodLabel || data.lastLoad.period || ''} · ${data.lastLoad.status || ''}`.trim();
-      $('dataLastLoadDetail').textContent =
-        `${data.lastLoad.file || 'Carga registrada'} · ${data.lastLoad.validRows || 0} filas válidas`;
-    } else {
-      $('dataLastLoad').textContent = 'Sin cargas registradas';
-      $('dataLastLoadDetail').textContent = 'Todavía no se ha procesado una base de órdenes.';
-    }
-  } catch (err) {
-    $('dataLastLoad').textContent = 'No se pudo consultar';
-    $('dataLastLoadDetail').textContent = err.message || 'Error de conexión.';
-  }
-}
-
-$('refreshDataStatusButton').addEventListener('click', loadDataStatus);
-
-function loadXlsxReader() {
-  if (window.XLSX?.read) return Promise.resolve(window.XLSX);
-  if (xlsxLoadPromise) return xlsxLoadPromise;
-
-  xlsxLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-    script.async = true;
-
-    script.onload = () => {
-      if (window.XLSX?.read) resolve(window.XLSX);
-      else reject(new Error('No se pudo iniciar el lector de Excel.'));
-    };
-
-    script.onerror = () => reject(new Error('No se pudo cargar el lector de Excel. Revisa tu conexión.'));
-
-    document.head.appendChild(script);
-  }).finally(() => {
-    if (!window.XLSX?.read) xlsxLoadPromise = null;
-  });
-
-  return xlsxLoadPromise;
-}
-
-function importNorm(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-}
-
-function importDateIso(value) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return [
-      value.getFullYear(),
-      String(value.getMonth() + 1).padStart(2, '0'),
-      String(value.getDate()).padStart(2, '0')
-    ].join('-');
-  }
-
-  if (typeof value === 'number' && window.XLSX?.SSF) {
-    const d = window.XLSX.SSF.parse_date_code(value);
-    if (d) {
-      return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
-    }
-  }
-
-  const text = String(value ?? '').trim();
-
-  let m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-
-  m = text.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-
-  return '';
-}
-
-function importWorksheetMatrix(ws) {
-  if (!ws?.['!ref']) return [];
-
-  const range = window.XLSX.utils.decode_range(ws['!ref']);
-  const rows = [];
-
-  for (let r = range.s.r; r <= range.e.r; r++) {
-    const row = [];
-
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[window.XLSX.utils.encode_cell({ r, c })];
-      row.push(cell?.v ?? cell?.w ?? '');
-    }
-
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-const IMPORT_ALIASES = {
-  sourceOrderCode: ['CODIGO DE ORDEN', 'CODIGO ORDEN'],
-  crew: ['CUADRILLA', 'CUADRILLA EJECUTORA'],
-  date: ['FECHA DE ATENCION', 'FECHA ATENCION', 'FECHA'],
-  state: ['ESTADO'],
-  typePartida: ['TIPO DE PARTIDA', 'TIPO_PARTIDA'],
-  typeAtencion: [
-    'TIPO DE ATENCION / PAQUETE DE SERVICIO',
-    'TIPO DE ATENCION/PAQUETE DE SERVICIO',
-    'TIPO DE ATENCION',
-    'TIPO_ATENCION'
-  ],
-  clientCode: [
-    'CODIGO CLIENTE',
-    'CODIGO DE CLIENTE',
-    'CODIGO DEL CLIENTE',
-    'CODIGO DE PEDIDO',
-    'CODIGO'
-  ],
-  site: ['SEDE']
-};
-
-function findImportIndex(headers, aliases) {
-  for (const alias of aliases) {
-    const index = headers.indexOf(alias);
-    if (index >= 0) return index;
-  }
-  return -1;
-}
-
-function detectImportSheet(workbook) {
-  const required = ['crew', 'date', 'state', 'typePartida'];
-  let best = null;
-
-  for (const name of workbook.SheetNames) {
-    const rows = importWorksheetMatrix(workbook.Sheets[name]);
-    const maxHeaderRows = Math.min(rows.length, 25);
-
-    for (let row = 0; row < maxHeaderRows; row++) {
-      const headers = (rows[row] || []).map(importNorm);
-      const indexes = {};
-
-      Object.keys(IMPORT_ALIASES).forEach(key => {
-        indexes[key] = findImportIndex(headers, IMPORT_ALIASES[key]);
-      });
-
-      // Fallback estructural confirmado para la base Lima:
-      // Código Orden A, Cuadrilla D, Estado G, Código pedido S y Tipo atención T.
-      if (indexes.sourceOrderCode < 0 && headers.length >= 1) indexes.sourceOrderCode = 0;
-      if (indexes.crew < 0 && headers.length >= 4) indexes.crew = 3;
-      if (indexes.state < 0 && headers.length >= 7) indexes.state = 6;
-      if (indexes.clientCode < 0 && headers.length >= 19) indexes.clientCode = 18;
-      if (indexes.typeAtencion < 0 && headers.length >= 20) indexes.typeAtencion = 19;
-
-      const score = required.filter(key => indexes[key] >= 0).length;
-
-      if (!best || score > best.score || (score === best.score && rows.length > best.rows.length)) {
-        best = { name, rows, headerRow: row, headers, indexes, score };
+      function normalizarTipoVisual(value) {
+        const n = norm(value);
+        if (!n) return '';
+        if (n === 'PLAME' || n === 'PLANILLA') return 'PLANILLA';
+        if (n === 'PRODUCCION' || n.includes('COMISIONISTA')) return 'PRODUCCION';
+        if (n.includes('DISPONIBILIDAD')) return 'DISPONIBILIDAD';
+        if (n === 'PDG') return 'PDG';
+        return n;
       }
-    }
-  }
 
-  if (!best || best.score < 4) {
-    throw new Error(
-      'No encuentro las columnas obligatorias: Cuadrilla, Fecha de atención/Fecha, Estado y Tipo de Partida.'
-    );
-  }
+      function normalizarPlataforma(value, display = '') {
+        const n = norm(`${value || ''} ${display || ''}`);
+        if (n.includes('POSTMOTOWIN') || (n.includes('MOTOWIN') && n.includes('POST'))) return 'POSTMOTOWIN';
+        if (/\bSGI\b/.test(n)) return 'SGI';
+        if (/\bSGA\b/.test(n)) return 'SGA';
+        if (n.includes('TRASLADO')) return 'TRASLADO';
+        return norm(value);
+      }
 
-  return best;
-}
+      function normalizarComposicion(value, tech2 = '') {
+        const n = norm(value);
+        if (n === 'DOBLE' || n === '2' || n.includes('DOS')) return 'DOBLE';
+        if (n === 'SOLO' || n === 'INDIVIDUAL' || n === '1') return 'SOLO';
+        return norm(tech2) ? 'DOBLE' : 'SOLO';
+      }
 
-function extractImportRecords(selection) {
-  const { rows, headerRow, indexes } = selection;
-  const records = [];
-  let omitted = 0;
+      function normalizarEstado(value) {
+        const n = norm(value);
+        if (n === 'ACTIVE' || n === 'ACTIVA' || n === 'ACTIVO') return 'ACTIVO';
+        if (n.includes('SUSPEND')) return 'SUSPENDIDA';
+        if (n === 'BAJA' || n === 'INACTIVO' || n === 'INACTIVA') return 'BAJA';
+        return n || 'ACTIVO';
+      }
 
-  for (let i = headerRow + 1; i < rows.length; i++) {
-    const row = rows[i] || [];
+      function crewIdOf(c) {
+        return String(pick(c, 'id', 'crewId', 'ID_CUADRILLA') || '').trim();
+      }
 
-    const date = importDateIso(row[indexes.date]);
-    const crew = String(row[indexes.crew] ?? '').trim();
-    const state = String(row[indexes.state] ?? '').trim();
-    const typePartida = String(row[indexes.typePartida] ?? '').trim();
+      function normalizarCrew(c) {
+        const id = crewIdOf(c);
+        const display = String(pick(c, 'display', 'name', 'crewDisplay', 'NOMBRE_CUADRILLA') || '');
+        const directRaw = pick(c, 'directManagement', 'supervisionDirectaGerencia', 'SUPERVISION_DIRECTA_GERENCIA');
+        const direct = directRaw === true || ['SI', 'SÍ', 'TRUE', '1', 'GG'].includes(norm(directRaw));
+        const tech2 = pick(c, 'technician2', 'tech2', 'TECNICO_2');
+        const compositionRaw = pick(c, 'composition', 'composicion', 'COMPOSICION_CUADRILLA');
+        const stateRaw = pick(c, 'state', 'status', 'estado', 'ESTADO');
+        const hasDirectValue = directRaw !== '';
+        const supervisorName = direct
+          ? 'GG'
+          : String(pick(c, 'supervisor', 'supervisorName', 'SUPERVISOR') || '');
 
-    if (!date || !crew || !state || !typePartida) {
-      if (row.some(v => String(v ?? '').trim() !== '')) omitted++;
-      continue;
-    }
+        return {
+          id,
+          code: String(pick(c, 'code', 'crewCode', 'CODIGO_CUADRILLA') || ''),
+          name: display,
+          platform: normalizarPlataforma(
+            pick(c, 'platform', 'winPlatform', 'plataforma', 'plataformaCuadrilla', 'PLATAFORMA_CUADRILLA'),
+            display
+          ),
+          visualType: normalizarTipoVisual(
+            pick(c, 'visualType', 'tipoVisual', 'modality', 'modalidad', 'modalidadOperativa', 'MODALIDAD_OPERATIVA')
+          ),
+          composition: (compositionRaw !== '' || tech2 !== '')
+            ? normalizarComposicion(compositionRaw, tech2)
+            : '',
+          supervisorId: direct ? '__GG__' : String(pick(c, 'supervisorId', 'ID_SUPERVISOR') || ''),
+          supervisor: supervisorName,
+          directManagement: hasDirectValue ? direct : undefined,
+          state: stateRaw !== '' ? normalizarEstado(stateRaw) : '',
+          technician1: String(pick(c, 'technician1', 'tech1', 'TECNICO_1') || ''),
+          technician2: String(tech2 || '')
+        };
+      }
 
-    records.push({
-      rowNumber: i + 1,
-      sourceOrderCode: indexes.sourceOrderCode >= 0 ? String(row[indexes.sourceOrderCode] ?? '').trim() : '',
-      date,
-      crew,
-      state,
-      typePartida,
-      typeAtencion: indexes.typeAtencion >= 0 ? String(row[indexes.typeAtencion] ?? '').trim() : '',
-      clientCode: indexes.clientCode >= 0 ? String(row[indexes.clientCode] ?? '').trim() : '',
-      site: indexes.site >= 0 ? String(row[indexes.site] ?? '').trim() : ''
-    });
-  }
+      function mergeCrew(c) {
+        const incoming = normalizarCrew(c);
+        if (!incoming.id) return;
+        const prev = ESTADO.metadata.get(incoming.id) || {};
+        const merged = { ...prev };
+        Object.entries(incoming).forEach(([key, value]) => {
+          if (value !== '' && value !== null && value !== undefined) merged[key] = value;
+        });
+        ESTADO.metadata.set(incoming.id, merged);
+      }
 
-  if (!records.length) throw new Error('No se encontraron filas válidas en el archivo.');
+      async function cargarSeed() {
+        if (ESTADO.seedLoaded) return;
+        ESTADO.seedLoaded = true;
+        try {
+          const response = await fetch('./data/cuadrillas-v19.json', { cache: 'no-store' });
+          if (!response.ok) throw new Error('No disponible');
+          const data = await response.json();
+          Object.values(data.crews || {}).forEach(mergeCrew);
+        } catch (err) {
+          console.warn('[V1.9] No se pudo cargar data/cuadrillas-v19.json.', err);
+        }
+      }
 
-  const finalizedDates = records
-    .filter(r => importNorm(r.state) === 'FINALIZADA')
-    .map(r => r.date)
-    .sort();
+      async function enriquecerMetadata(data) {
+        await cargarSeed();
 
-  if (!finalizedDates.length) {
-    throw new Error('El archivo no contiene órdenes FINALIZADAS.');
-  }
+        try {
+          (sessionData?.scope?.crews || []).forEach(mergeCrew);
+        } catch (_) {}
 
-  const cutoff = finalizedDates[finalizedDates.length - 1];
-  const period = cutoff.slice(0, 7);
+        (data?.filters?.crews || []).forEach(mergeCrew);
+        (data?.rows || []).forEach(r => mergeCrew({
+          id: r.crewId,
+          display: r.crewDisplay,
+          supervisor: r.supervisor,
+          supervisorId: r.supervisorId,
+          platform: r.platform,
+          visualType: r.visualType,
+          composition: r.composition,
+          state: r.state
+        }));
 
-  return {
-    records,
-    omitted,
-    finalized: finalizedDates.length,
-    cutoff,
-    period
-  };
-}
+        if (!ESTADO.catalogTried) {
+          ESTADO.catalogTried = true;
+          try {
+            const cat = await api('adminCatalogs', { token: token() });
+            if (cat?.ok) (cat.crews || []).forEach(mergeCrew);
+          } catch (_) {
+            // Perfiles sin Administración continúan con scope + seed.
+          }
+        }
+      }
 
-function importColumnDescription(indexes) {
-  const items = [
-    `Código Orden: ${indexes.sourceOrderCode + 1}`,
-    `Cuadrilla: ${indexes.crew + 1}`,
-    `Fecha: ${indexes.date + 1}`,
-    `Estado: ${indexes.state + 1}`,
-    `Tipo de Partida: ${indexes.typePartida + 1}`
-  ];
+      function metadataForRow(row) {
+        const id = String(row?.crewId || '');
+        const base = ESTADO.metadata.get(id) || {};
+        const rowMeta = normalizarCrew({
+          id,
+          display: row?.crewDisplay,
+          supervisor: row?.supervisor,
+          supervisorId: row?.supervisorId,
+          platform: row?.platform,
+          visualType: row?.visualType,
+          composition: row?.composition,
+          state: row?.state
+        });
+        return { ...base, ...Object.fromEntries(Object.entries(rowMeta).filter(([,v]) => v !== '')) };
+      }
 
-  if (indexes.clientCode >= 0) items.push(`Cod. Pedido: ${indexes.clientCode + 1}`);
-  if (indexes.typeAtencion >= 0) items.push(`Tipo de Atención: ${indexes.typeAtencion + 1}`);
+      function insertarEstilos() {
+        if ($v19('mvlDashboardV19Styles')) return;
+        const style = document.createElement('style');
+        style.id = 'mvlDashboardV19Styles';
+        style.textContent = `
+          .dashboard-v19-summary{margin:4px 0 22px}
+          .dashboard-v19-summary-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:10px}
+          .dashboard-v19-summary-head h3{margin:0}
+          .dashboard-v19-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+          .dashboard-v19-total-card{border:1px solid var(--border,#dce3eb);border-radius:14px;padding:14px;background:var(--card,#fff);min-width:0}
+          .dashboard-v19-total-card span{display:block;font-size:.78rem;color:var(--muted,#687386);margin-bottom:6px}
+          .dashboard-v19-total-card strong{display:block;font-size:1.15rem;line-height:1.2;word-break:break-word}
+          .dashboard-v19-total-card small{display:block;margin-top:5px;color:var(--muted,#687386)}
+          .dashboard-v19-filter-title{grid-column:1/-1;margin:2px 0 -2px}
+          .dashboard-v19-filter-title strong{display:block}
+          .dashboard-v19-filter-title small{color:var(--muted,#687386)}
+          .dashboard-v19-active-filters{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 18px;min-height:6px}
+          .dashboard-v19-chip{border-radius:999px;padding:6px 9px;font-size:.74rem;font-weight:700;background:#eef5ff;color:#0758b7;border:1px solid #cfe1fb}
+          .dashboard-v19-rank-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+          .dashboard-v19-meta-pill{font-size:.67rem;line-height:1;border:1px solid #dce3eb;border-radius:999px;padding:4px 6px;color:#536174;background:#f8fafc}
+          .dashboard-v19-meta-pill.gg{background:#fff7e6;color:#8a5a00;border-color:#f4d79c}
+          .dashboard-v19-ranking-note{margin:0 0 10px;color:var(--muted,#687386);font-size:.82rem}
+          @media (max-width:760px){.dashboard-v19-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+          @media (max-width:420px){.dashboard-v19-summary-grid{grid-template-columns:1fr 1fr}.dashboard-v19-total-card{padding:11px}.dashboard-v19-total-card strong{font-size:1rem}}
+        `;
+        document.head.appendChild(style);
+      }
 
-  return items.join(' · ');
-}
+      function asegurarEstructura() {
+        insertarEstilos();
+        const panel = $v19('performanceDashboardPanel');
+        const grid = panel?.querySelector('.dashboard-filter-grid');
+        if (!panel || !grid) return;
 
-$('readPerformanceFileButton').addEventListener('click', async () => {
-  const file = $('performanceImportFile').files?.[0];
+        if (!$v19('dashboardTotalSummaryV19')) {
+          const section = document.createElement('section');
+          section.id = 'dashboardTotalSummaryV19';
+          section.className = 'dashboard-v19-summary';
+          section.innerHTML = `
+            <div class="dashboard-v19-summary-head">
+              <div>
+                <h3>Resumen total</h3>
+                <p class="section-subtitle">Resultado general del periodo antes de aplicar filtros.</p>
+              </div>
+            </div>
+            <div class="dashboard-v19-summary-grid">
+              <article class="dashboard-v19-total-card"><span>Cuadrillas con datos</span><strong id="dashboardTotalCrewsV19">0</strong><small>alcance del usuario</small></article>
+              <article class="dashboard-v19-total-card"><span>Producción total</span><strong id="dashboardTotalPointsV19">0.00 pts</strong><small id="dashboardTotalFinalizedV19">—</small></article>
+              <article class="dashboard-v19-total-card"><span>Efectividad total</span><strong id="dashboardTotalEffectivenessV19">—</strong><small id="dashboardTotalEffectivenessHelpV19">Periodo seleccionado</small></article>
+              <article class="dashboard-v19-total-card"><span>% Recableado total</span><strong id="dashboardTotalRecableV19">—</strong><small id="dashboardTotalRecableHelpV19">Periodo seleccionado</small></article>
+            </div>`;
+          grid.parentNode.insertBefore(section, grid);
+        }
 
-  if (!file) {
-    setMessage('performanceImportMessage', 'Selecciona primero el archivo Excel.');
-    return;
-  }
+        if (!$v19('dashboardFilterTitleV19')) {
+          const title = document.createElement('div');
+          title.id = 'dashboardFilterTitleV19';
+          title.className = 'dashboard-v19-filter-title';
+          title.innerHTML = '<strong>Filtros combinables</strong><small>Puedes usar uno, dos o varios filtros a la vez.</small>';
+          grid.insertBefore(title, grid.firstChild);
+        }
 
-  setMessage('performanceImportMessage');
-  $('performanceImportPreview').classList.add('hidden');
-  $('readPerformanceFileButton').disabled = true;
-  showLoader('Leyendo Excel…');
+        const insertSelect = (id, label, options, beforeId = 'dashboardCrew') => {
+          if ($v19(id)) return;
+          const labelEl = document.createElement('label');
+          labelEl.className = 'filter-field';
+          labelEl.innerHTML = `${html(label)}<select id="${id}">${options}</select>`;
+          const before = $v19(beforeId)?.closest('label');
+          grid.insertBefore(labelEl, before || grid.querySelector('button') || null);
+        };
 
-  try {
-    await loadXlsxReader();
+        insertSelect('dashboardVisualTypeV19', 'Tipo de cuadrilla Visual', `
+          <option value="">Todos</option>
+          <option value="PDG">PDG</option>
+          <option value="PRODUCCION">PRODUCCIÓN</option>
+          <option value="PLANILLA">PLANILLA</option>
+          <option value="DISPONIBILIDAD">DISPONIBILIDAD</option>`);
 
-    const buffer = await file.arrayBuffer();
-    const workbook = window.XLSX.read(buffer, {
-      type: 'array',
-      cellDates: true
-    });
+        insertSelect('dashboardPlatformV19', 'Plataforma WIN', `
+          <option value="">Todas</option>
+          <option value="SGI">SGI</option>
+          <option value="SGA">SGA</option>
+          <option value="TRASLADO">TRASLADO</option>
+          <option value="POSTMOTOWIN">POSTMOTOWIN</option>`);
 
-    const selection = detectImportSheet(workbook);
-    const result = extractImportRecords(selection);
+        insertSelect('dashboardCompositionV19', 'Composición', `
+          <option value="">Todas</option>
+          <option value="DOBLE">DOBLE · 2 técnicos</option>
+          <option value="SOLO">INDIVIDUAL · 1 técnico</option>`);
 
-    performanceImportState = {
-      file,
-      sheetName: selection.name,
-      indexes: selection.indexes,
-      ...result
-    };
+        insertSelect('dashboardStateV19', 'Estado', `
+          <option value="">Todos</option>
+          <option value="ACTIVO">ACTIVA</option>
+          <option value="SUSPENDIDA">SUSPENDIDA</option>
+          <option value="BAJA">BAJA</option>`);
 
-    $('importSheetName').textContent = selection.name;
-    $('importValidRows').textContent = result.records.length;
-    $('importFinalizedRows').textContent = result.finalized;
-    $('importPeriod').textContent = result.period;
-    $('importColumnsDetected').textContent = importColumnDescription(selection.indexes);
+        const indicator = $v19('dashboardIndicator');
+        if (indicator) {
+          indicator.innerHTML = `
+            <option value="PRODUCCION">Producción</option>
+            <option value="EFECTIVIDAD">Efectividad</option>
+            <option value="RECABLEADO">% Recableado</option>`;
+          if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator.value)) indicator.value = 'PRODUCCION';
+        }
 
-    $('performanceImportPreview').classList.remove('hidden');
+        if (!$v19('dashboardActiveFiltersV19')) {
+          const chips = document.createElement('div');
+          chips.id = 'dashboardActiveFiltersV19';
+          chips.className = 'dashboard-v19-active-filters';
+          grid.insertAdjacentElement('afterend', chips);
+        }
+      }
 
-    const omittedText = result.omitted
-      ? ` · ${result.omitted} fila(s) incompleta(s) omitidas`
-      : '';
+      function filtrosSeleccionados() {
+        return {
+          visualType: $v19('dashboardVisualTypeV19')?.value || '',
+          platform: $v19('dashboardPlatformV19')?.value || '',
+          composition: $v19('dashboardCompositionV19')?.value || '',
+          state: $v19('dashboardStateV19')?.value || '',
+          supervisor: $v19('dashboardSupervisor')?.value || '',
+          crew: $v19('dashboardCrew')?.value || ''
+        };
+      }
 
-    setMessage(
-      'performanceImportMessage',
-      `Lectura correcta: ${result.records.length} filas válidas${omittedText}. Pulsa “Actualizar datos” para continuar.`,
-      'success'
-    );
-  } catch (err) {
-    performanceImportState = null;
-    setMessage('performanceImportMessage', err.message || 'No se pudo leer el archivo.');
-  } finally {
-    $('readPerformanceFileButton').disabled = false;
-    hideLoader();
-  }
-});
+      function coincide(row, filtros, ignoreCrew = false) {
+        const m = metadataForRow(row);
+        if (filtros.visualType && normalizarTipoVisual(m.visualType) !== filtros.visualType) return false;
+        if (filtros.platform && normalizarPlataforma(m.platform, m.name) !== filtros.platform) return false;
+        if (filtros.composition && normalizarComposicion(m.composition, m.technician2) !== filtros.composition) return false;
+        if (filtros.state && normalizarEstado(m.state) !== filtros.state) return false;
 
-$('processPerformanceFileButton').addEventListener('click', async () => {
-  if (!performanceImportState?.records?.length) {
-    setMessage('performanceImportMessage', 'Primero usa “Leer y validar”.');
-    return;
-  }
+        if (filtros.supervisor) {
+          if (filtros.supervisor === '__GG__') {
+            if (!m.directManagement && norm(m.supervisor) !== 'GG') return false;
+          } else if (String(m.supervisorId || '') !== String(filtros.supervisor)) {
+            return false;
+          }
+        }
+        if (!ignoreCrew && filtros.crew && String(row.crewId) !== String(filtros.crew)) return false;
+        return true;
+      }
 
-  if (!confirm(
-    `¿Actualizar los indicadores del periodo ${performanceImportState.period} con ${performanceImportState.records.length} filas válidas?`
-  )) return;
+      function llenarSupervisores(data, reset) {
+        const select = $v19('dashboardSupervisor');
+        if (!select || (typeof isSupervisorSession === 'function' && isSupervisorSession())) return;
+        const previous = reset ? '' : select.value;
+        const map = new Map();
 
-  await sendPerformanceImport();
-});
-
-async function sendPerformanceImport() {
-  const button = $('processPerformanceFileButton');
-  const loading = $('importLoading');
-  const progress = $('importProgressText');
-
-  button.disabled = true;
-  loading.classList.remove('hidden');
-  $('missingCatalogPanel').classList.add('hidden');
-  setMessage('performanceImportMessage');
-  setMessage('catalogSaveMessage');
-
-  try {
-    // Si todavía no existe importId, enviar el Excel por bloques.
-    if (!performanceImportState.importId) {
-      const start = await api('adminImportStart', {
-        token: token(),
-        fileName: performanceImportState.file.name,
-        totalRows: performanceImportState.records.length
-      });
-
-      if (!start.ok) throw new Error(start.error || 'No se pudo iniciar la actualización.');
-
-      performanceImportState.importId = start.importId;
-
-      const chunkSize = 150;
-      const total = performanceImportState.records.length;
-
-      for (let i = 0; i < total; i += chunkSize) {
-        const chunk = performanceImportState.records.slice(i, i + chunkSize);
-
-        progress.textContent = `Enviando ${Math.min(i + chunk.length, total)} de ${total}…`;
-
-        const result = await api('adminImportChunk', {
-          token: token(),
-          importId: performanceImportState.importId,
-          chunk: JSON.stringify(chunk)
+        (data?.filters?.supervisors || []).forEach(s => {
+          if (s?.id) map.set(String(s.id), String(s.name || s.id));
+        });
+        ESTADO.metadata.forEach(m => {
+          if (m.directManagement || norm(m.supervisor) === 'GG') return;
+          if (m.supervisorId) map.set(String(m.supervisorId), String(m.supervisor || m.supervisorId));
         });
 
-        if (!result.ok) throw new Error(result.error || 'Falló un bloque de datos.');
+        const hasGG = [...ESTADO.metadata.values()].some(m => m.directManagement || norm(m.supervisor) === 'GG');
+        select.innerHTML = '<option value="">Todos los supervisores</option>' +
+          [...map.entries()]
+            .sort((a,b) => a[1].localeCompare(b[1], 'es'))
+            .map(([id,name]) => `<option value="${html(id)}">${html(name.toUpperCase())}</option>`)
+            .join('') +
+          (hasGG ? '<option value="__GG__">GG · Supervisión directa de Gerencia</option>' : '');
+        if ([...select.options].some(o => o.value === previous)) select.value = previous;
       }
-    }
-
-    progress.textContent = 'Validando catálogo y cuadrillas…';
-
-    const finish = await api('adminImportFinish', {
-      token: token(),
-      importId: performanceImportState.importId,
-      fileName: performanceImportState.file.name
-    });
-
-    if (!finish.ok) {
-      performanceImportState.importId = '';
-      throw new Error(finish.error || 'No se pudo actualizar la base.');
-    }
-
-    if (finish.needsCatalog) {
-      performanceImportState.missingCatalog = finish.missingCatalog || [];
-      performanceImportState.period = finish.period || performanceImportState.period;
-
-      await showMissingCatalog(finish);
-
-      setMessage(
-        'performanceImportMessage',
-        `${finish.message} Completa los datos de las partidas y luego continúa.`,
-        'success'
-      );
-      return;
-    }
-
-    completePerformanceImportSuccess(finish);
-  } catch (err) {
-    setMessage(
-      'performanceImportMessage',
-      err.message || 'No se pudo actualizar. No se reemplazaron los indicadores.'
-    );
-  } finally {
-    button.disabled = false;
-    loading.classList.add('hidden');
-    progress.textContent = 'Procesando…';
-  }
-}
-
-async function showMissingCatalog(result) {
-  const missing = result.missingCatalog || [];
-  if (!missing.length) return;
-
-  let meta = { platforms: ['POSVENTA', 'VISITA TECNICA', 'INSTALACION'], groups: [] };
-
-  try {
-    const response = await api('adminCatalogMeta', { token: token() });
-    if (response.ok) meta = response;
-  } catch (_) {}
-
-  const platforms = (meta.platforms || []).length
-    ? meta.platforms
-    : ['POSVENTA', 'VISITA TECNICA', 'INSTALACION'];
-
-  $('catalogGroupOptions').innerHTML = (meta.groups || [])
-    .map(g => `<option value="${escapeHtml(g)}"></option>`)
-    .join('');
-
-  $('missingCatalogSummary').textContent =
-    `Se detectaron ${missing.length} partida(s) FINALIZADA(s) no configurada(s). ` +
-    `No se han modificado los indicadores.`;
-
-  $('missingCatalogList').innerHTML = missing.map((item, index) => `
-    <article class="missing-catalog-item" data-catalog-index="${index}">
-      <div class="missing-catalog-title">
-        <div>
-          <strong>${escapeHtml(item.typePartida || '')}</strong>
-          <small>${Number(item.occurrences || 0)} orden(es) FINALIZADA(s) detectada(s)</small>
-        </div>
-        <span class="catalog-item-number">${index + 1}</span>
-      </div>
-
-      <input type="hidden" data-field="typePartida" value="${escapeHtml(item.typePartida || '')}">
-
-      <div class="catalog-form-grid">
-        <label>
-          Código referencial
-          <input data-field="code" placeholder="Ej. TRMESH3" autocomplete="off">
-        </label>
-
-        <label>
-          Plataforma de la orden
-          <select data-field="platform">
-            <option value="">Seleccionar</option>
-            ${platforms.map(p =>
-              `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`
-            ).join('')}
-          </select>
-        </label>
-
-        <label>
-          Puntaje
-          <input data-field="points" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-
-        <label>
-          Grupo
-          <input data-field="group" list="catalogGroupOptions" placeholder="Ej. TRASLADO">
-        </label>
-
-        <label>
-          Monto interno (S/)
-          <input data-field="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-
-        <label class="catalog-check">
-          <input data-field="isRecable" type="checkbox">
-          <span>Cuenta como recableado para LOS ROJO</span>
-        </label>
-      </div>
-
-      <label class="catalog-observation">
-        Observación
-        <input data-field="observation" placeholder="Opcional">
-      </label>
-    </article>
-  `).join('');
-
-  $('missingCatalogPanel').classList.remove('hidden');
-  $('missingCatalogPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function collectMissingCatalogItems() {
-  const cards = [...document.querySelectorAll('.missing-catalog-item')];
-
-  return cards.map((card, index) => {
-    const get = field => card.querySelector(`[data-field="${field}"]`);
-
-    const typePartida = get('typePartida').value.trim();
-    const code = get('code').value.trim();
-    const platform = get('platform').value.trim();
-    const points = Number(get('points').value);
-    const group = get('group').value.trim();
-    const amountRaw = get('amount').value.trim();
-    const amount = Number(amountRaw);
-    const isRecable = get('isRecable').checked;
-    const observation = get('observation').value.trim();
-
-    if (!code) throw new Error(`Partida ${index + 1}: ingresa el Código referencial.`);
-    if (!platform) throw new Error(`Partida ${index + 1}: selecciona la Plataforma.`);
-    if (!Number.isFinite(points) || points <= 0) {
-      throw new Error(`Partida ${index + 1}: ingresa un Puntaje válido mayor a 0.`);
-    }
-    if (!group) throw new Error(`Partida ${index + 1}: ingresa el Grupo.`);
-    if (amountRaw === '' || !Number.isFinite(amount) || amount < 0) {
-      throw new Error(`Partida ${index + 1}: ingresa el Monto interno.`);
-    }
-
-    return {
-      typePartida,
-      code,
-      platform,
-      points,
-      group,
-      amount,
-      isRecable,
-      observation
-    };
-  });
-}
-
-$('saveCatalogAndContinueButton').addEventListener('click', async () => {
-  if (!performanceImportState?.importId) {
-    setMessage('catalogSaveMessage', 'La carga temporal ya no está disponible. Vuelve a leer el Excel.');
-    return;
-  }
-
-  let items;
-  try {
-    items = collectMissingCatalogItems();
-  } catch (err) {
-    setMessage('catalogSaveMessage', err.message || 'Completa las partidas.');
-    return;
-  }
-
-  if (!confirm(
-    `¿Guardar ${items.length} partida(s) nueva(s) en CATALOGO_ORDENES y continuar con la actualización?`
-  )) return;
-
-  const button = $('saveCatalogAndContinueButton');
-  const loading = $('catalogSaveLoading');
-  const progress = $('catalogSaveProgressText');
-
-  button.disabled = true;
-  loading.classList.remove('hidden');
-  progress.textContent = 'Guardando catálogo…';
-  setMessage('catalogSaveMessage');
-
-  try {
-    const created = await api('adminCatalogCreateBatch', {
-      token: token(),
-      items: JSON.stringify(items)
-    });
-
-    if (!created.ok) {
-      throw new Error(created.error || 'No se pudieron registrar las partidas.');
-    }
-
-    setMessage('catalogSaveMessage', created.message, 'success');
-    progress.textContent = 'Reprocesando el mismo Excel…';
-
-    const finish = await api('adminImportFinish', {
-      token: token(),
-      importId: performanceImportState.importId,
-      fileName: performanceImportState.file.name
-    });
-
-    if (!finish.ok) {
-      performanceImportState.importId = '';
-      throw new Error(finish.error || 'Las partidas se guardaron, pero no se pudo terminar la actualización.');
-    }
-
-    if (finish.needsCatalog) {
-      performanceImportState.missingCatalog = finish.missingCatalog || [];
-      await showMissingCatalog(finish);
-      throw new Error('Todavía existen partidas sin configurar.');
-    }
-
-    $('missingCatalogPanel').classList.add('hidden');
-    completePerformanceImportSuccess(finish);
-  } catch (err) {
-    setMessage('catalogSaveMessage', err.message || 'No se pudo continuar.');
-  } finally {
-    button.disabled = false;
-    loading.classList.add('hidden');
-    progress.textContent = 'Guardando catálogo…';
-  }
-});
-
-function completePerformanceImportSuccess(finish) {
-  setMessage(
-    'performanceImportMessage',
-    `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} órdenes consolidadas en el periodo.`,
-    'success'
-  );
-
-  performanceImportState = null;
-  $('performanceImportFile').value = '';
-  $('performanceImportPreview').classList.add('hidden');
-  $('missingCatalogPanel').classList.add('hidden');
-  loadDataStatus();
-}
-
-
-/* =========================
-   EDITAR USUARIO
-   ========================= */
-
-$('closeUserModal').addEventListener('click', closeUserModal);
-$('cancelUserButton').addEventListener('click', closeUserModal);
-
-function openUserModal(user) {
-  setMessage('userFormMessage');
-  $('userForm').reset();
-
-  $('editUserId').value = user.id;
-  $('userModalTitle').textContent = `Editar ${user.id}`;
-  $('fNombreCompleto').value = user.name || '';
-  $('fDni').value = user.dni || '';
-  $('fPerfil').value = user.profile || '';
-  $('fCelular').value = user.phone || '';
-  $('fCorreo').value = user.email || '';
-  $('fUsuario').value = user.username || '';
-  $('fEstado').value = user.status || 'ACTIVO';
-  $('fObservacion').value = user.observation || '';
-
-  $('userModal').classList.remove('hidden');
-}
-
-function closeUserModal() {
-  $('userModal').classList.add('hidden');
-}
-
-$('userForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('userFormMessage');
-
-  const payload = {
-    token: token(),
-    userId: $('editUserId').value,
-    name: $('fNombreCompleto').value.trim(),
-    dni: $('fDni').value.trim(),
-    profile: $('fPerfil').value,
-    phone: $('fCelular').value.trim(),
-    email: $('fCorreo').value.trim(),
-    username: $('fUsuario').value.trim(),
-    status: $('fEstado').value,
-    observation: $('fObservacion').value.trim()
-  };
-
-  $('saveUserButton').disabled = true;
-
-  try {
-    const result = await api('adminUpdateUser', payload);
-    if (!result.ok) throw new Error(result.error || 'No se pudo guardar el usuario.');
-    closeUserModal();
-    setMessage('adminMessage', result.message || 'Usuario actualizado.', 'success');
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    await loadUsers();
-    if (adminActiveTab === 'crews') renderCrews();
-  } catch (err) {
-    setMessage('userFormMessage', err.message);
-  } finally {
-    $('saveUserButton').disabled = false;
-  }
-});
-
-/* =========================
-   NUEVA CUADRILLA
-   ========================= */
-
-$('newCrewButton').addEventListener('click', () => {
-  $('crewCreateForm').reset();
-  setMessage('crewCreateMessage');
-  $('ncComposicion').value = 'SOLO';
-  toggleCrewTech2();
-  fillAdminSelectors();
-  $('crewCreateModal').classList.remove('hidden');
-});
-
-$('closeCrewCreateModal').addEventListener('click', closeCrewCreateModal);
-$('cancelCrewCreateButton').addEventListener('click', closeCrewCreateModal);
-$('ncComposicion').addEventListener('change', toggleCrewTech2);
-
-function toggleCrewTech2() {
-  const double = $('ncComposicion').value === 'DOBLE';
-  $('crewTech2Block').classList.toggle('hidden', !double);
-  $('ncT2Nombre').required = double;
-}
-
-function closeCrewCreateModal() {
-  $('crewCreateModal').classList.add('hidden');
-}
-
-function technicianPayload(prefix) {
-  return {
-    name: $(`${prefix}Nombre`).value.trim(),
-    dni: $(`${prefix}Dni`).value.trim(),
-    phone: $(`${prefix}Celular`).value.trim(),
-    email: $(`${prefix}Correo`).value.trim(),
-    username: $(`${prefix}Usuario`).value.trim(),
-    temporaryPassword: $(`${prefix}Clave`).value,
-    observation: $(`${prefix}Observacion`).value.trim()
-  };
-}
-
-$('crewCreateForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('crewCreateMessage');
-
-  const double = $('ncComposicion').value === 'DOBLE';
-  const payload = {
-    token: token(),
-    code: $('ncCodigo').value.trim(),
-    platform: $('ncPlataforma').value,
-    name: $('ncNombre').value.trim(),
-    supervisorId: $('ncSupervisor').value,
-    composition: $('ncComposicion').value,
-    priorityWorkType: $('ncTipoTrabajo').value.trim(),
-    tech1: JSON.stringify(technicianPayload('ncT1')),
-    tech2: double ? JSON.stringify(technicianPayload('ncT2')) : ''
-  };
-
-  $('saveCrewCreateButton').disabled = true;
-  showLoader('Creando cuadrilla…');
-
-  try {
-    const result = await api('adminCreateCrew', payload);
-    if (!result.ok) throw new Error(result.error || 'No se pudo crear la cuadrilla.');
-    closeCrewCreateModal();
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    await loadUsers();
-    setAdminTab('crews');
-    setMessage('adminMessage', result.message || 'Cuadrilla creada.', 'success');
-  } catch (err) {
-    setMessage('crewCreateMessage', err.message);
-  } finally {
-    $('saveCrewCreateButton').disabled = false;
-    hideLoader();
-  }
-});
-
-/* =========================
-   NUEVO SUPERVISOR
-   ========================= */
-
-$('newSupervisorButton').addEventListener('click', () => {
-  $('supervisorCreateForm').reset();
-  setMessage('supervisorCreateMessage');
-  $('supervisorCreateModal').classList.remove('hidden');
-});
-$('closeSupervisorCreateModal').addEventListener('click', closeSupervisorCreateModal);
-$('cancelSupervisorCreateButton').addEventListener('click', closeSupervisorCreateModal);
-
-function closeSupervisorCreateModal() {
-  $('supervisorCreateModal').classList.add('hidden');
-}
-
-$('supervisorCreateForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('supervisorCreateMessage');
-  $('saveSupervisorCreateButton').disabled = true;
-  showLoader('Creando supervisor…');
-
-  try {
-    const result = await api('adminCreateSupervisor', {
-      token: token(),
-      name: $('nsNombre').value.trim(),
-      dni: $('nsDni').value.trim(),
-      supervisorCode: $('nsCodigo').value.trim(),
-      phone: $('nsCelular').value.trim(),
-      email: $('nsCorreo').value.trim(),
-      username: $('nsUsuario').value.trim(),
-      temporaryPassword: $('nsClave').value,
-      observation: $('nsObservacion').value.trim()
-    });
-
-    if (!result.ok) throw new Error(result.error || 'No se pudo crear el supervisor.');
-    closeSupervisorCreateModal();
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    await loadUsers();
-    setMessage('adminMessage', result.message || 'Supervisor creado.', 'success');
-  } catch (err) {
-    setMessage('supervisorCreateMessage', err.message);
-  } finally {
-    $('saveSupervisorCreateButton').disabled = false;
-    hideLoader();
-  }
-});
-
-/* =========================
-   NUEVO PERSONAL
-   ========================= */
-
-$('newStaffButton').addEventListener('click', () => {
-  $('staffCreateForm').reset();
-  setMessage('staffCreateMessage');
-  fillAdminSelectors();
-  $('staffCreateModal').classList.remove('hidden');
-});
-$('closeStaffCreateModal').addEventListener('click', closeStaffCreateModal);
-$('cancelStaffCreateButton').addEventListener('click', closeStaffCreateModal);
-
-function closeStaffCreateModal() {
-  $('staffCreateModal').classList.add('hidden');
-}
-
-$('staffCreateForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('staffCreateMessage');
-  $('saveStaffCreateButton').disabled = true;
-  showLoader('Creando usuario…');
-
-  try {
-    const result = await api('adminCreateStaff', {
-      token: token(),
-      name: $('npNombre').value.trim(),
-      dni: $('npDni').value.trim(),
-      profile: $('npPerfil').value,
-      phone: $('npCelular').value.trim(),
-      email: $('npCorreo').value.trim(),
-      username: $('npUsuario').value.trim(),
-      temporaryPassword: $('npClave').value,
-      observation: $('npObservacion').value.trim()
-    });
-
-    if (!result.ok) throw new Error(result.error || 'No se pudo crear el usuario.');
-    closeStaffCreateModal();
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    await loadUsers();
-    setMessage('adminMessage', result.message || 'Usuario creado.', 'success');
-  } catch (err) {
-    setMessage('staffCreateMessage', err.message);
-  } finally {
-    $('saveStaffCreateButton').disabled = false;
-    hideLoader();
-  }
-});
-
-/* =========================
-   EDITAR CUADRILLA
-   ========================= */
-
-let editingCrew = null;
-
-function openCrewEditModal(crew) {
-  editingCrew = crew;
-  setMessage('crewEditMessage');
-
-  $('ecId').value = crew.id;
-  $('crewEditTitle').textContent = `${crew.code || crew.id} · ${crew.platform || ''}`;
-  $('ecCodigo').value = crew.code || '';
-  $('ecPlataforma').value = crew.platform || 'SGA';
-  $('ecNombre').value = crew.name || '';
-  $('ecSupervisor').value = crew.directManagement ? '__GG__' : (crew.supervisorId || '');
-  $('ecEstado').value = crew.status || 'ACTIVO';
-  $('ecTipoTrabajo').value = crew.priorityWorkType || '';
-
-  $('ecTech1').textContent = crew.technician1 || 'Sin técnico';
-  $('ecTech2').textContent = crew.technician2 || 'Sin segundo técnico';
-
-  $('crewEditModal').classList.remove('hidden');
-}
-
-$('closeCrewEditModal').addEventListener('click', closeCrewEditModal);
-$('cancelCrewEditButton').addEventListener('click', closeCrewEditModal);
-
-function closeCrewEditModal() {
-  $('crewEditModal').classList.add('hidden');
-}
-
-$('crewEditForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('crewEditMessage');
-  $('saveCrewEditButton').disabled = true;
-  showLoader('Guardando cuadrilla…');
-
-  try {
-    const result = await api('adminUpdateCrew', {
-      token: token(),
-      crewId: $('ecId').value,
-      code: $('ecCodigo').value.trim(),
-      platform: $('ecPlataforma').value,
-      name: $('ecNombre').value.trim(),
-      supervisorId: $('ecSupervisor').value,
-      status: $('ecEstado').value,
-      priorityWorkType: $('ecTipoTrabajo').value.trim()
-    });
-
-    if (!result.ok) throw new Error(result.error || 'No se pudo actualizar la cuadrilla.');
-    closeCrewEditModal();
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    renderCrews();
-    await loadUsers();
-    setMessage('adminMessage', result.message || 'Cuadrilla actualizada.', 'success');
-  } catch (err) {
-    setMessage('crewEditMessage', err.message);
-  } finally {
-    $('saveCrewEditButton').disabled = false;
-    hideLoader();
-  }
-});
-
-/* =========================
-   AGREGAR / REEMPLAZAR TÉCNICO
-   ========================= */
-
-$('replaceTech1Button').addEventListener('click', () => openReplaceTechModal(1));
-$('replaceTech2Button').addEventListener('click', () => openReplaceTechModal(2));
-$('closeReplaceTechModal').addEventListener('click', closeReplaceTechModal);
-$('cancelReplaceTechButton').addEventListener('click', closeReplaceTechModal);
-
-function openReplaceTechModal(slot) {
-  if (!editingCrew) return;
-
-  $('replaceTechForm').reset();
-  setMessage('replaceTechMessage');
-  $('rtCrewId').value = editingCrew.id;
-  $('rtSlot').value = String(slot);
-
-  const currentName = slot === 1 ? editingCrew.technician1 : editingCrew.technician2;
-  const currentId = slot === 1 ? editingCrew.technician1Id : editingCrew.technician2Id;
-
-  $('replaceTechTitle').textContent = currentId ? `Reemplazar Técnico ${slot}` : `Agregar Técnico ${slot}`;
-  $('replaceTechCurrent').textContent = currentId ? `Técnico actual: ${currentName}` : 'La posición está libre.';
-  $('deactivateOutgoingWrap').classList.toggle('hidden', !currentId);
-  $('rtDeactivateOutgoing').checked = Boolean(currentId);
-
-  $('replaceTechModal').classList.remove('hidden');
-}
-
-function closeReplaceTechModal() {
-  $('replaceTechModal').classList.add('hidden');
-}
-
-$('replaceTechForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('replaceTechMessage');
-  $('saveReplaceTechButton').disabled = true;
-  showLoader('Actualizando técnico…');
-
-  try {
-    const result = await api('adminReplaceCrewTechnician', {
-      token: token(),
-      crewId: $('rtCrewId').value,
-      slot: $('rtSlot').value,
-      deactivateOutgoing: $('rtDeactivateOutgoing').checked ? 'SI' : 'NO',
-      technician: JSON.stringify({
-        name: $('rtNombre').value.trim(),
-        dni: $('rtDni').value.trim(),
-        phone: $('rtCelular').value.trim(),
-        email: $('rtCorreo').value.trim(),
-        username: $('rtUsuario').value.trim(),
-        temporaryPassword: $('rtClave').value,
-        observation: $('rtObservacion').value.trim()
-      })
-    });
-
-    if (!result.ok) throw new Error(result.error || 'No se pudo actualizar el técnico.');
-    closeReplaceTechModal();
-    closeCrewEditModal();
-    await refreshAdminCatalogs();
-    fillAdminSelectors();
-    renderCrews();
-    await loadUsers();
-    setMessage('adminMessage', result.message || 'Técnico actualizado.', 'success');
-  } catch (err) {
-    setMessage('replaceTechMessage', err.message);
-  } finally {
-    $('saveReplaceTechButton').disabled = false;
-    hideLoader();
-  }
-});
-
-/* =========================
-   MODAL CLAVE TEMPORAL
-   ========================= */
-
-$('closePasswordModal').addEventListener('click', closePasswordModal);
-$('cancelPasswordButton').addEventListener('click', closePasswordModal);
-
-function openPasswordModal(user) {
-  setMessage('passwordResetMessage');
-  $('passwordResetForm').reset();
-  $('passwordUserId').value = user.id;
-  $('passwordUserName').textContent = `${user.name} · ${user.id}`;
-  $('passwordModal').classList.remove('hidden');
-}
-
-function closePasswordModal() {
-  $('passwordModal').classList.add('hidden');
-}
-
-$('passwordResetForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  setMessage('passwordResetMessage');
-
-  const clave = $('temporaryPassword').value;
-  const repetir = $('temporaryPasswordRepeat').value;
-
-  if (clave !== repetir) {
-    setMessage('passwordResetMessage', 'Las claves no coinciden.');
-    return;
-  }
-
-  try {
-    const result = await api('adminResetPassword', {
-      token: token(),
-      userId: $('passwordUserId').value,
-      temporaryPassword: clave
-    });
-
-    if (!result.ok) throw new Error(result.error || 'No se pudo restablecer la clave.');
-
-    closePasswordModal();
-    setMessage('adminMessage', result.message || 'Clave temporal actualizada.', 'success');
-    await loadUsers();
-  } catch (err) {
-    setMessage('passwordResetMessage', err.message);
-  }
-});
-
-/* =========================
-   RESTAURAR SESIÓN
-   ========================= */
-
-
-/* =========================
-   MI DESEMPEÑO / DASHBOARD DESEMPEÑO
-   ========================= */
-
-let performanceCrewId = '';
-let dashboardFilterData = null;
-
-function currentProfileNorm() {
-  return normalizeText(sessionData?.user?.profile);
-}
-
-function isTechnicianSession() {
-  return currentProfileNorm() === 'TECNICO';
-}
-
-function isSupervisorSession() {
-  return currentProfileNorm() === 'SUPERVISOR';
-}
-
-function compactCrewDisplay(c) {
-  const code = String(c?.code || c?.crewCode || '').trim();
-  const platform = String(c?.platform || '').trim();
-  const name = String(c?.name || c?.crewName || '').trim();
-
-  const normalizeKey = (value) => String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9]/g, '')
-    .toUpperCase();
-
-  if (name) {
-    const nameKey = normalizeKey(name);
-    const codeKey = normalizeKey(code);
-    const platformKey = normalizeKey(platform);
-
-    if (
-      (!codeKey || nameKey.includes(codeKey)) &&
-      (!platformKey || nameKey.includes(platformKey))
-    ) {
-      return name.toUpperCase();
-    }
-
-    return `${[code, platform].filter(Boolean).join(' ')} — ${name}`.trim().toUpperCase();
-  }
-
-  return [code, platform].filter(Boolean).join(' ').toUpperCase();
-}
-
-function crewDisplayFrontend(c) {
-  return compactCrewDisplay(c);
-}
-
-async function openPerformance() {
-  const technical = isTechnicianSession();
-
-  $('performanceTechPanel').classList.toggle('hidden', !technical);
-  $('performanceDashboardPanel').classList.toggle('hidden', technical);
-
-  $('performanceViewLabel').textContent =
-    technical ? 'MI DESEMPEÑO' : 'DASHBOARD DESEMPEÑO';
-
-  $('performanceSubtitle').textContent =
-    technical
-      ? 'Indicadores operativos de tu cuadrilla desde agosto 2026'
-      : 'Ranking e indicadores de las cuadrillas dentro de tu alcance';
-
-  showView('performance');
-
-  if (technical) {
-    await openTechnicianPerformance();
-  } else {
-    $('performanceCrewTitle').textContent = 'RESUMEN DE CUADRILLAS';
-    await openPerformanceDashboard();
-  }
-}
-
-/* -------- Técnico -------- */
-
-async function openTechnicianPerformance() {
-  const scopeCrews = sessionData?.scope?.crews || [];
-  $('performancePeriod').value = '2026-08';
-
-  if (scopeCrews.length === 1) {
-    performanceCrewId = scopeCrews[0].id;
-    $('performanceCrewSelectWrap').classList.add('hidden');
-  } else {
-    performanceCrewId = scopeCrews[0]?.id || '';
-    $('performanceCrewSelectWrap').classList.remove('hidden');
-    $('performanceCrewSelect').innerHTML = scopeCrews
-      .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(crewDisplayFrontend(c))}</option>`)
-      .join('');
-    $('performanceCrewSelect').value = performanceCrewId;
-  }
-
-  await loadPerformance();
-}
-
-async function loadPerformance() {
-  const period = $('performancePeriod').value || '2026-08';
-  const crewId = performanceCrewId || $('performanceCrewSelect').value || '';
-
-  if (!crewId) {
-    $('performanceNoData').classList.remove('hidden');
-    $('performanceNoData').textContent = 'No hay una cuadrilla disponible en tu alcance.';
-    return;
-  }
-
-  showLoader('Cargando desempeño…');
-
-  try {
-    const data = await api('performanceSummary', {
-      token: token(),
-      period,
-      crewId
-    });
-
-    if (!data.ok) {
-      if (data.expired) return clearSession();
-      throw new Error(data.error || 'No se pudo cargar Mi Desempeño.');
-    }
-
-    renderPerformance(data);
-  } catch (err) {
-    $('performanceNoData').classList.remove('hidden');
-    $('performanceNoData').textContent = err.message || 'No se pudo cargar el desempeño.';
-  } finally {
-    hideLoader();
-  }
-}
-
-function renderPerformance(data) {
-  const crew = data.crew || {};
-  const summary = data.summary || {};
-  const daily = data.daily || [];
-
-  $('performanceCrewTitle').textContent =
-    (crew.display || crewDisplayFrontend(crew) || 'CUADRILLA').toUpperCase();
-
-  $('perfPoints').textContent = `${Number(summary.points || 0).toFixed(2)} pts`;
-  $('perfFinalized').textContent = summary.finalized ?? 0;
-
-  const eff = summary.effectiveness;
-  $('perfEffectiveness').textContent =
-    eff == null ? '—' : `${(Number(eff) * 100).toFixed(1)}%`;
-
-  setEffectivenessSignal($('effectivenessCard'), eff);
-
-  const rec = summary.recablePercent;
-  $('perfRecable').textContent =
-    rec == null ? '—' : `${(Number(rec) * 100).toFixed(1)}%`;
-  $('perfLosRojo').textContent = summary.losRojo ?? 0;
-  $('perfRecables').textContent = summary.recables ?? 0;
-
-  $('performanceNoData').classList.toggle('hidden', Boolean(data.hasData));
-
-  if (!daily.length) {
-    $('performanceDailyList').innerHTML =
-      '<p class="empty">No hay detalle diario para este periodo.</p>';
-    return;
-  }
-
-  $('performanceDailyList').innerHTML = daily.map(d => {
-    const effText = d.effectiveness == null ? '—' : `${(Number(d.effectiveness) * 100).toFixed(1)}%`;
-    const signal = d.effectiveness == null ? 'neutral' : (Number(d.effectiveness) >= 0.70 ? 'green' : 'red');
-
-    return `
-      <button type="button" class="daily-performance-row" data-performance-date="${escapeHtml(d.date)}">
-        <div>
-          <strong>${escapeHtml(d.dateLabel)}</strong>
-          <small>${d.finalized || 0} finalizadas · ${Number(d.points || 0).toFixed(2)} pts</small>
-        </div>
-        <span class="daily-eff ${signal}">${effText}</span>
-        <span class="module-arrow">›</span>
-      </button>
-    `;
-  }).join('');
-}
-
-function setEffectivenessSignal(card, value) {
-  if (!card) return;
-
-  card.classList.remove('signal-green', 'signal-red', 'signal-neutral');
-
-  if (value == null || value === '') card.classList.add('signal-neutral');
-  else if (Number(value) >= 0.70) card.classList.add('signal-green');
-  else card.classList.add('signal-red');
-}
-
-$('performanceCrewSelect').addEventListener('change', () => {
-  performanceCrewId = $('performanceCrewSelect').value;
-  loadPerformance();
-});
-
-$('performancePeriod').addEventListener('change', loadPerformance);
-$('refreshPerformanceButton').addEventListener('click', loadPerformance);
-
-/* -------- Dashboard -------- */
-
-async function openPerformanceDashboard() {
-  $('dashboardPeriod').value = '2026-08';
-
-  $('dashboardSiteWrap').classList.toggle('hidden', isSupervisorSession());
-  $('dashboardSupervisorWrap').classList.toggle('hidden', isSupervisorSession());
-
-  await loadPerformanceDashboard(true);
-}
-
-async function loadPerformanceDashboard(resetFilters = false) {
-  const loading = $('dashboardLoading');
-  loading.classList.remove('hidden');
-
-  if (resetFilters) {
-    $('dashboardSite').value = 'LIMA';
-    $('dashboardSupervisor').value = '';
-    $('dashboardCrew').value = '';
-    $('dashboardIndicator').value = 'ALL';
-  }
-
-  try {
-    const data = await api('performanceDashboard', {
-      token: token(),
-      period: $('dashboardPeriod').value || '2026-08',
-      indicator: $('dashboardIndicator').value || 'PRODUCCION',
-      site: isSupervisorSession() ? '' : $('dashboardSite').value,
-      supervisorId: isSupervisorSession() ? '' : $('dashboardSupervisor').value,
-      crewId: $('dashboardCrew').value
-    });
-
-    if (!data.ok) {
-      if (data.expired) return clearSession();
-      throw new Error(data.error || 'No se pudo cargar el Dashboard.');
-    }
-
-    dashboardFilterData = data;
-    fillDashboardFilters(data, resetFilters);
-    renderDashboardRanking(data);
-
-    const selectedCrew = $('dashboardCrew').value;
-    if (selectedCrew && !data.indicator?.construction) {
-      await loadDashboardCrewDetail(selectedCrew);
-    } else {
-      $('dashboardCrewDetail').classList.add('hidden');
-    }
-  } catch (err) {
-    $('dashboardRankingList').innerHTML =
-      `<p class="empty">${escapeHtml(err.message || 'No se pudo cargar el Dashboard.')}</p>`;
-    $('dashboardCrewDetail').classList.add('hidden');
-  } finally {
-    loading.classList.add('hidden');
-  }
-}
-
-function fillDashboardFilters(data, resetFilters) {
-  const filters = data.filters || {};
-
-  if (!isSupervisorSession()) {
-    const currentSupervisor = resetFilters ? '' : $('dashboardSupervisor').value;
-
-    $('dashboardSupervisor').innerHTML =
-      '<option value="">Todos los supervisores</option>' +
-      (filters.supervisors || []).map(s =>
-        `<option value="${escapeHtml(s.id)}">${escapeHtml(String(s.name || '').toUpperCase())}</option>`
-      ).join('');
-
-    if ([...$('dashboardSupervisor').options].some(o => o.value === currentSupervisor)) {
-      $('dashboardSupervisor').value = currentSupervisor;
+
+      function llenarCuadrillas(data, reset) {
+        const select = $v19('dashboardCrew');
+        if (!select) return;
+        const previous = reset ? '' : select.value;
+        const baseFilters = { ...filtrosSeleccionados(), crew: '' };
+        const unique = new Map();
+
+        (data?.rows || []).forEach(r => {
+          if (!coincide(r, baseFilters, true)) return;
+          const m = metadataForRow(r);
+          unique.set(String(r.crewId), String(r.crewDisplay || m.name || m.code || r.crewId));
+        });
+
+        select.innerHTML = '<option value="">Todas las cuadrillas</option>' +
+          [...unique.entries()]
+            .sort((a,b) => a[1].localeCompare(b[1], 'es', { numeric: true }))
+            .map(([id,name]) => `<option value="${html(id)}">${html(name)}</option>`)
+            .join('');
+
+        if ([...select.options].some(o => o.value === previous)) select.value = previous;
+        else select.value = '';
+      }
+
+      function pintarChips() {
+        const box = $v19('dashboardActiveFiltersV19');
+        if (!box) return;
+        const f = filtrosSeleccionados();
+        const supervisorText = f.supervisor
+          ? ($v19('dashboardSupervisor')?.selectedOptions?.[0]?.textContent || '')
+          : '';
+        const crewText = f.crew
+          ? ($v19('dashboardCrew')?.selectedOptions?.[0]?.textContent || '')
+          : '';
+        const chips = [
+          f.visualType && `Visual: ${f.visualType}`,
+          f.platform && `WIN: ${f.platform}`,
+          supervisorText && `Supervisor: ${supervisorText}`,
+          f.composition && `Composición: ${f.composition}`,
+          f.state && `Estado: ${f.state}`,
+          crewText && `Cuadrilla: ${crewText}`
+        ].filter(Boolean);
+        box.innerHTML = chips.length
+          ? chips.map(x => `<span class="dashboard-v19-chip">${html(x)}</span>`).join('')
+          : '<span class="dashboard-v19-chip">Sin filtros · total del alcance</span>';
+      }
+
+      function ratioOrNull(num, den) {
+        num = Number(num); den = Number(den);
+        if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) return null;
+        return num / den;
+      }
+
+      function promedio(values) {
+        const valid = values.map(Number).filter(Number.isFinite);
+        return valid.length ? valid.reduce((a,b)=>a+b,0) / valid.length : null;
+      }
+
+      function valorPorcentaje(v) {
+        return v === null || v === undefined || !Number.isFinite(Number(v))
+          ? '—'
+          : `${(Number(v) * 100).toFixed(1)}%`;
+      }
+
+      function resumenDeAll(data) {
+        const rows = data?.rows || [];
+        const s = data?.summary || data?.resumen || {};
+        const points = Number(pick(s, 'points', 'totalPoints', 'productionPoints')) ||
+          rows.reduce((acc,r) => acc + (Number(r.points) || 0), 0);
+        const finalized = Number(pick(s, 'finalized', 'totalFinalized')) ||
+          rows.reduce((acc,r) => acc + (Number(r.finalized) || 0), 0);
+
+        const finalizadasRows = rows.reduce((a,r)=>a+(Number(r.finalized)||0),0);
+        const totalGeneralRows = rows.reduce((a,r)=>a+(Number(pick(r,'totalGeneral','total','ordersTotal'))||0),0);
+        const weightedEff = ratioOrNull(finalizadasRows, totalGeneralRows);
+        const effectivenessRaw = pick(s, 'effectiveness', 'efectividad');
+        const effectiveness = effectivenessRaw !== ''
+          ? Number(effectivenessRaw)
+          : (weightedEff ?? promedio(rows.map(r => r.effectiveness)));
+
+        const recablesRows = rows.reduce((a,r)=>a+(Number(r.recables)||0),0);
+        const losRows = rows.reduce((a,r)=>a+(Number(r.losRojo)||0),0);
+        const weightedRec = ratioOrNull(recablesRows, losRows);
+        const recRaw = pick(s, 'recablePercent', 'recableado');
+        const recablePercent = recRaw !== ''
+          ? Number(recRaw)
+          : (weightedRec ?? promedio(rows.map(r => r.recablePercent)));
+
+        return {
+          crews: Number(pick(s, 'crews', 'totalCrews')) || rows.length,
+          points,
+          finalized,
+          effectiveness,
+          recablePercent,
+          effectivenessWeighted: effectivenessRaw !== '' || weightedEff !== null,
+          recableWeighted: recRaw !== '' || weightedRec !== null,
+          recables: recablesRows,
+          losRojo: losRows
+        };
+      }
+
+      async function cargarResumenTotal(period) {
+        const key = `${period}|${typeof isSupervisorSession === 'function' && isSupervisorSession() ? 'SUP' : 'ALL'}`;
+        let data = ESTADO.totalCache.get(key);
+        if (!data) {
+          data = await api('performanceDashboard', {
+            token: token(),
+            period,
+            indicator: 'ALL',
+            site: (typeof isSupervisorSession === 'function' && isSupervisorSession()) ? '' : ($v19('dashboardSite')?.value || 'LIMA'),
+            supervisorId: '',
+            crewId: ''
+          });
+          if (data?.ok) ESTADO.totalCache.set(key, data);
+        }
+        if (!data?.ok) return;
+        await enriquecerMetadata(data);
+        const r = resumenDeAll(data);
+        $v19('dashboardTotalCrewsV19').textContent = String(r.crews || 0);
+        $v19('dashboardTotalPointsV19').textContent = `${Number(r.points || 0).toFixed(2)} pts`;
+        $v19('dashboardTotalFinalizedV19').textContent = r.finalized ? `${r.finalized} órdenes finalizadas` : 'Producción del periodo';
+        $v19('dashboardTotalEffectivenessV19').textContent = valorPorcentaje(r.effectiveness);
+        $v19('dashboardTotalRecableV19').textContent = valorPorcentaje(r.recablePercent);
+        $v19('dashboardTotalEffectivenessHelpV19').textContent = r.effectivenessWeighted ? 'Resultado total del periodo' : 'Promedio de cuadrillas con datos';
+        $v19('dashboardTotalRecableHelpV19').textContent = r.recableWeighted
+          ? (r.losRojo ? `${r.losRojo} LOS ROJO · ${r.recables} recableados` : 'Resultado total del periodo')
+          : 'Promedio de cuadrillas con datos';
+      }
+
+      function valueFor(row, indicator) {
+        if (indicator === 'PRODUCCION') return Number(row.points ?? row.value ?? 0);
+        if (indicator === 'EFECTIVIDAD') return row.effectiveness ?? row.value;
+        if (indicator === 'RECABLEADO') return row.recablePercent ?? row.value;
+        return row.value;
+      }
+
+      function ordenarRows(rows, indicator) {
+        return [...rows].sort((a,b) => {
+          const ar = Number(a.rank); const br = Number(b.rank);
+          if (Number.isFinite(ar) && Number.isFinite(br) && ar !== br) return ar - br;
+          const av = Number(valueFor(a, indicator));
+          const bv = Number(valueFor(b, indicator));
+          if (Number.isFinite(av) && Number.isFinite(bv)) return bv - av;
+          return String(a.crewDisplay || '').localeCompare(String(b.crewDisplay || ''), 'es', { numeric: true });
+        });
+      }
+
+      function renderRanking(data) {
+        const indicator = $v19('dashboardIndicator')?.value || 'PRODUCCION';
+        const labels = {
+          PRODUCCION: ['Producción','Mayor puntaje primero.'],
+          EFECTIVIDAD: ['Efectividad','Mejor efectividad primero.'],
+          RECABLEADO: ['% Recableado','Ranking según el criterio vigente del indicador.']
+        };
+        const f = filtrosSeleccionados();
+        let rows = (data?.rows || []).filter(r => coincide(r, f));
+        rows = ordenarRows(rows, indicator);
+
+        $v19('dashboardRankingTitle').textContent = `Ranking de ${labels[indicator]?.[0] || 'indicador'}`;
+        $v19('dashboardRankingHelp').textContent = `${labels[indicator]?.[1] || ''} ${rows.length} cuadrilla${rows.length === 1 ? '' : 's'} en el filtro.`;
+        $v19('dashboardConstruction')?.classList.add('hidden');
+
+        const list = $v19('dashboardRankingList');
+        if (!rows.length) {
+          list.innerHTML = '<p class="empty">No hay cuadrillas con esta combinación de filtros.</p>';
+          return;
+        }
+
+        list.innerHTML = rows.map((r, idx) => {
+          const m = metadataForRow(r);
+          const value = valueFor(r, indicator);
+          const valueText = indicator === 'PRODUCCION'
+            ? `${Number(value || 0).toFixed(2)} pts`
+            : valorPorcentaje(value == null || value === '' ? null : Number(value));
+          let detail = '';
+          if (indicator === 'PRODUCCION') detail = `${Number(r.finalized || 0)} finalizadas`;
+          if (indicator === 'EFECTIVIDAD') {
+            const total = Number(pick(r,'totalGeneral','total','ordersTotal')) || 0;
+            detail = total ? `${Number(r.finalized || 0)} finalizadas de ${total}` : '';
+          }
+          if (indicator === 'RECABLEADO') detail = `${Number(r.losRojo || 0)} LOS ROJO · ${Number(r.recables || 0)} recableados`;
+          const sup = m.directManagement || norm(m.supervisor) === 'GG' ? 'GG' : (m.supervisor || r.supervisor || '');
+          const pills = [m.visualType, m.platform, sup, m.composition, m.state].filter(Boolean);
+
+          return `
+            <button type="button" class="dashboard-rank-row dashboard-rank-button" data-dashboard-crew="${html(r.crewId)}">
+              <div class="dashboard-rank-position">#${idx + 1}</div>
+              <div class="dashboard-rank-copy">
+                <strong>${html(r.crewDisplay || m.name || m.code || '')}</strong>
+                ${detail ? `<small>${html(detail)}</small>` : ''}
+                <div class="dashboard-v19-rank-meta">
+                  ${pills.map(p => `<span class="dashboard-v19-meta-pill ${norm(p)==='GG'?'gg':''}">${html(p)}</span>`).join('')}
+                </div>
+              </div>
+              <div class="dashboard-rank-value">${html(valueText)}</div>
+            </button>`;
+        }).join('');
+      }
+
+      async function loadDashboardV19(resetFilters = false) {
+        asegurarEstructura();
+        const loading = $v19('dashboardLoading');
+        loading?.classList.remove('hidden');
+
+        if (resetFilters) {
+          if ($v19('dashboardSite')) $v19('dashboardSite').value = 'LIMA';
+          if ($v19('dashboardSupervisor')) $v19('dashboardSupervisor').value = '';
+          if ($v19('dashboardCrew')) $v19('dashboardCrew').value = '';
+          if ($v19('dashboardIndicator')) $v19('dashboardIndicator').value = 'PRODUCCION';
+          ['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19'].forEach(id => {
+            if ($v19(id)) $v19(id).value = '';
+          });
+        }
+
+        const period = $v19('dashboardPeriod')?.value || '2026-08';
+        try {
+          const indicator = $v19('dashboardIndicator')?.value || 'PRODUCCION';
+          const data = await api('performanceDashboard', {
+            token: token(),
+            period,
+            indicator,
+            site: (typeof isSupervisorSession === 'function' && isSupervisorSession()) ? '' : ($v19('dashboardSite')?.value || 'LIMA'),
+            // V1.9 trae todo el alcance autorizado y mezcla filtros en el navegador.
+            supervisorId: '',
+            crewId: ''
+          });
+
+          if (!data?.ok) {
+            if (data?.expired && typeof clearSession === 'function') return clearSession();
+            throw new Error(data?.error || 'No se pudo cargar el Dashboard.');
+          }
+
+          ESTADO.lastData = data;
+          await enriquecerMetadata(data);
+          llenarSupervisores(data, resetFilters);
+          llenarCuadrillas(data, resetFilters);
+          pintarChips();
+          renderRanking(data);
+          await cargarResumenTotal(period);
+
+          const selectedCrew = $v19('dashboardCrew')?.value || '';
+          if (selectedCrew && typeof loadDashboardCrewDetail === 'function') {
+            await loadDashboardCrewDetail(selectedCrew);
+          } else {
+            $v19('dashboardCrewDetail')?.classList.add('hidden');
+          }
+        } catch (err) {
+          const list = $v19('dashboardRankingList');
+          if (list) list.innerHTML = `<p class="empty">${html(err.message || 'No se pudo cargar el Dashboard.')}</p>`;
+          $v19('dashboardCrewDetail')?.classList.add('hidden');
+        } finally {
+          loading?.classList.add('hidden');
+        }
+      }
+
+      async function openDashboardV19() {
+        asegurarEstructura();
+        if ($v19('dashboardPeriod') && !$v19('dashboardPeriod').value) $v19('dashboardPeriod').value = '2026-08';
+        if ($v19('dashboardSiteWrap') && typeof isSupervisorSession === 'function') {
+          $v19('dashboardSiteWrap').classList.toggle('hidden', isSupervisorSession());
+        }
+        if ($v19('dashboardSupervisorWrap') && typeof isSupervisorSession === 'function') {
+          $v19('dashboardSupervisorWrap').classList.toggle('hidden', isSupervisorSession());
+        }
+        await loadDashboardV19(true);
+      }
+
+      // Sustituye solo las dos funciones del Dashboard. El resto de V1.8 queda intacto.
+      try { window.loadPerformanceDashboard = loadDashboardV19; } catch (_) {}
+      try { window.openPerformanceDashboard = openDashboardV19; } catch (_) {}
+      try { loadPerformanceDashboard = loadDashboardV19; } catch (_) {}
+      try { openPerformanceDashboard = openDashboardV19; } catch (_) {}
+
+      asegurarEstructura();
+
+      const reloadWithCrewRefresh = () => {
+        if (ESTADO.lastData) llenarCuadrillas(ESTADO.lastData, false);
+        pintarChips();
+        return loadDashboardV19(false);
+      };
+
+      ['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19']
+        .forEach(id => $v19(id)?.addEventListener('change', reloadWithCrewRefresh));
+
+      // Al cambiar periodo/sede se invalida únicamente el resumen total cacheado.
+      $v19('dashboardPeriod')?.addEventListener('change', () => ESTADO.totalCache.clear(), { capture: true });
+      $v19('dashboardSite')?.addEventListener('change', () => ESTADO.totalCache.clear(), { capture: true });
+
+      console.info('[MI VISUAL LIMA] Dashboard V1.9 cargado: resumen + filtros combinables + ranking.');
+    } catch (err) {
+      console.error('[MI VISUAL LIMA V1.9] Error al iniciar la mejora del Dashboard:', err);
     }
   }
-
-  const currentCrew = resetFilters ? '' : $('dashboardCrew').value;
-  const selectedSupervisor = isSupervisorSession() ? '' : $('dashboardSupervisor').value;
-
-  const crews = (filters.crews || []).filter(c =>
-    !selectedSupervisor || c.supervisorId === selectedSupervisor
-  );
-
-  $('dashboardCrew').innerHTML =
-    '<option value="">Todas las cuadrillas</option>' +
-    crews.map(c =>
-      `<option value="${escapeHtml(c.id)}">${escapeHtml(c.display)}</option>`
-    ).join('');
-
-  if ([...$('dashboardCrew').options].some(o => o.value === currentCrew)) {
-    $('dashboardCrew').value = currentCrew;
-  }
-}
-
-function renderDashboardRanking(data) {
-  const meta = data.indicator || {};
-  const rows = data.rows || [];
-
-  $('dashboardRankingTitle').textContent =
-    meta.key === 'ALL'
-      ? 'Resumen por cuadrilla'
-      : `Ranking de ${meta.label || 'Indicador'}`;
-
-  $('dashboardRankingHelp').textContent = meta.help || '';
-  $('dashboardConstruction').classList.toggle('hidden', !meta.construction);
-
-  if (meta.construction) {
-    $('dashboardConstruction').textContent =
-      `${meta.label || 'Indicador'} está en construcción. Se mantiene visible para integrarlo cuando definamos su fuente.`;
-    $('dashboardRankingList').innerHTML = '';
-    return;
-  }
-
-  if (!rows.length) {
-    $('dashboardRankingList').innerHTML =
-      '<p class="empty">No hay cuadrillas con esos filtros.</p>';
-    return;
-  }
-
-  if (meta.key === 'ALL') {
-    $('dashboardRankingList').innerHTML = rows.map(r => {
-      const eff = r.effectiveness == null
-        ? '—'
-        : `${(Number(r.effectiveness) * 100).toFixed(1)}%`;
-
-      const rec = r.recablePercent == null
-        ? '—'
-        : `${(Number(r.recablePercent) * 100).toFixed(1)}%`;
-
-      return `
-        <button type="button" class="dashboard-all-card" data-dashboard-crew="${escapeHtml(r.crewId)}">
-          <div class="dashboard-all-head">
-            <div>
-              <strong>${escapeHtml(r.crewDisplay || '')}</strong>
-              <small>${escapeHtml(r.supervisor || '')}</small>
-            </div>
-            <span class="module-arrow">›</span>
-          </div>
-
-          <div class="dashboard-kpi-mini-grid">
-            <div><span>Producción</span><b>${Number(r.points || 0).toFixed(2)} pts</b></div>
-            <div><span>Efectividad</span><b>${eff}</b></div>
-            <div><span>% Recableado</span><b>${rec}</b></div>
-            <div class="kpi-building"><span>VTR / GAR</span><b>En construcción</b></div>
-            <div class="kpi-building"><span>SLA</span><b>En construcción</b></div>
-            <div class="kpi-building"><span>Observaciones</span><b>En construcción</b></div>
-          </div>
-        </button>
-      `;
-    }).join('');
-    return;
-  }
-
-  $('dashboardRankingList').innerHTML = rows.map(r => {
-    const value = formatDashboardIndicatorValue(meta.key, r.value);
-    const rank = r.rank == null ? '—' : `#${r.rank}`;
-
-    let detail = '';
-    if (meta.key === 'PRODUCCION') {
-      detail = `${Number(r.finalized || 0)} finalizadas`;
-    } else if (meta.key === 'EFECTIVIDAD') {
-      detail = `${Number(r.finalized || 0)} finalizadas`;
-    } else if (meta.key === 'RECABLEADO') {
-      detail = `${Number(r.losRojo || 0)} LOS ROJO · ${Number(r.recables || 0)} recableados`;
-    }
-
-    return `
-      <button type="button" class="dashboard-rank-row dashboard-rank-button" data-dashboard-crew="${escapeHtml(r.crewId)}">
-        <div class="dashboard-rank-position">${rank}</div>
-        <div class="dashboard-rank-copy">
-          <strong>${escapeHtml(r.crewDisplay || '')}</strong>
-          <small>${escapeHtml(r.supervisor || '')}${detail ? ' · ' + escapeHtml(detail) : ''}</small>
-        </div>
-        <div class="dashboard-rank-value">${escapeHtml(value)}</div>
-      </button>
-    `;
-  }).join('');
-}
-
-function formatDashboardIndicatorValue(key, value) {
-  if (value == null || value === '') return 'Sin datos';
-
-  if (key === 'PRODUCCION') return `${Number(value).toFixed(2)} pts`;
-  if (key === 'EFECTIVIDAD' || key === 'RECABLEADO') {
-    return `${(Number(value) * 100).toFixed(1)}%`;
-  }
-
-  return String(value);
-}
-
-async function loadDashboardCrewDetail(crewId) {
-  const data = await api('performanceSummary', {
-    token: token(),
-    period: $('dashboardPeriod').value || '2026-08',
-    crewId
-  });
-
-  if (!data.ok) {
-    $('dashboardCrewDetail').classList.add('hidden');
-    return;
-  }
-
-  const crew = data.crew || {};
-  const summary = data.summary || {};
-
-  $('dashboardCrewDetailTitle').textContent =
-    (crew.display || crewDisplayFrontend(crew) || 'CUADRILLA').toUpperCase();
-
-  $('dashDetailPoints').textContent = `${Number(summary.points || 0).toFixed(2)} pts`;
-  $('dashDetailFinalized').textContent = Number(summary.finalized || 0);
-
-  const eff = summary.effectiveness;
-  $('dashDetailEffectiveness').textContent =
-    eff == null ? '—' : `${(Number(eff) * 100).toFixed(1)}%`;
-  setEffectivenessSignal($('dashDetailEffectivenessCard'), eff);
-
-  const rec = summary.recablePercent;
-  $('dashDetailRecable').textContent =
-    rec == null ? '—' : `${(Number(rec) * 100).toFixed(1)}%`;
-  $('dashDetailLos').textContent = Number(summary.losRojo || 0);
-  $('dashDetailRecables').textContent = Number(summary.recables || 0);
-
-  $('dashboardCrewDetail').classList.remove('hidden');
-}
-
-$('dashboardRankingList').addEventListener('click', async (e) => {
-  const row = e.target.closest('[data-dashboard-crew]');
-  if (!row) return;
-
-  const crewId = row.dataset.dashboardCrew;
-  if (!crewId) return;
-
-  if ([...$('dashboardCrew').options].some(o => o.value === crewId)) {
-    $('dashboardCrew').value = crewId;
-  }
-
-  showLoader('Cargando detalle de cuadrilla…');
-  try {
-    await loadDashboardCrewDetail(crewId);
-    $('dashboardCrewDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } finally {
-    hideLoader();
-  }
-});
-
-$('dashboardSupervisor').addEventListener('change', () => {
-  $('dashboardCrew').value = '';
-  loadPerformanceDashboard(false);
-});
-
-$('dashboardCrew').addEventListener('change', () => loadPerformanceDashboard(false));
-$('dashboardIndicator').addEventListener('change', () => loadPerformanceDashboard(false));
-$('dashboardPeriod').addEventListener('change', () => loadPerformanceDashboard(false));
-$('dashboardSite').addEventListener('change', () => loadPerformanceDashboard(false));
-$('refreshDashboardButton').addEventListener('click', () => loadPerformanceDashboard(false));
-
-/* -------- Detalle diario Técnico -------- */
-
-$('performanceDailyList').addEventListener('click', async (e) => {
-  const button = e.target.closest('[data-performance-date]');
-  if (!button) return;
-
-  const date = button.dataset.performanceDate;
-  showLoader('Cargando detalle…');
-
-  try {
-    const data = await api('performanceDayDetail', {
-      token: token(),
-      crewId: performanceCrewId || $('performanceCrewSelect').value || '',
-      date
-    });
-
-    if (!data.ok) throw new Error(data.error || 'No se pudo cargar el detalle del día.');
-
-    $('performanceDayTitle').textContent = data.dateLabel || date;
-    $('performanceDaySummary').textContent =
-      `${data.orders?.length || 0} órdenes finalizadas · ${Number(data.totalPoints || 0).toFixed(2)} puntos`;
-
-    $('performanceDayOrders').innerHTML = (data.orders || []).length
-      ? data.orders.map(o => `
-          <article class="day-order-row">
-            <strong>${escapeHtml(o.clientCode || 'Sin código')}</strong>
-            <span>${escapeHtml(o.typePartida || 'Sin tipo de partida')}</span>
-            <b>${Number(o.points || 0).toFixed(2)} pts</b>
-          </article>
-        `).join('')
-      : '<p class="empty">No hay órdenes finalizadas para este día.</p>';
-
-    $('performanceDayModal').classList.remove('hidden');
-  } catch (err) {
-    alert(err.message || 'No se pudo cargar el detalle.');
-  } finally {
-    hideLoader();
-  }
-});
-
-$('closePerformanceDayModal').addEventListener('click', () => {
-  $('performanceDayModal').classList.add('hidden');
-});
-
-async function restoreSession() {
-  showLoader('Cargando aplicación…');
-
-  if (!token()) {
-    showView('login');
-    hideLoader();
-    return;
-  }
-
-  try {
-    const data = await api('session', { token: token() });
-    if (!data.ok) return clearSession();
-    renderHome(data);
-  } catch (_) {
-    clearSession();
-  } finally {
-    hideLoader();
-  }
-}
-
-restoreSession();
+})();
