@@ -1,0 +1,48 @@
+MI VISUAL LIMA - V1.17
+CORRECCIONES DE SEMÁFOROS + GUARDADO + FILTROS
+
+1. EFECTIVIDAD
+- CRÍTICO: desde 0% hasta antes del inicio MODERADO.
+- MODERADO: desde el inicio MODERADO hasta antes del inicio ÓPTIMO.
+- ÓPTIMO: desde el inicio ÓPTIMO, inclusive.
+Ejemplo 50 / 70:
+  ROJO: 0% a <50%
+  AMARILLO: 50% a <70%
+  VERDE: >=70% a 100%
+Por eso 73.4% ahora será ÓPTIMO.
+
+2. RANGOS VISIBLES EN PONER INDICADORES
+Cada nivel muestra a la derecha el rango real:
+- Producción
+- Efectividad
+- % Recableado
+- VTR / GAR
+Los rangos cambian en pantalla mientras editas los porcentajes.
+
+3. VALIDACIÓN
+No permite guardar si:
+- Inicio MODERADO >= Inicio ÓPTIMO.
+- Máximo ÓPTIMO >= Máximo MODERADO en indicadores negativos.
+- Solo se llena uno de los dos límites de Recableado o VTR/GAR.
+
+4. GUARDAR INDICADORES
+- Al guardar aparece la pantalla compacta de carga.
+- Guarda la configuración.
+- Actualiza el Dashboard.
+- Cuando termina, se cierra automáticamente PONER INDICADORES.
+- Quedas viendo el Dashboard con el resultado actualizado.
+
+5. FILTROS
+Se acomodan en varias filas para evitar palabras y selects entrecortados:
+- 3 columnas en pantalla amplia.
+- 2 columnas en pantalla mediana.
+- 1 columna en móvil.
+
+ORDEN
+1. Reemplazar Code.gs por Code_V1_17.gs.
+2. Guardar Apps Script.
+3. Implementar una NUEVA VERSIÓN de la implementación existente.
+4. En GitHub reemplazar app.js.
+5. Ctrl+F5 para probar.
+
+NO SE MODIFICAN LAS HOJAS DE GOOGLE SHEETS EN ESTA ACTUALIZACIÓN.

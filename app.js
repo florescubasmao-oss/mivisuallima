@@ -1265,7 +1265,8 @@
       .mvl-v114-scope select { min-height:42px; border:1px solid #c7d7e9; border-radius:10px; padding:8px 10px; background:#fff; font:inherit; color:#10213d; }
       .mvl-v114-source { margin-top:7px; font-size:.70rem; color:#607086; font-weight:700; }
       .mvl-v114-levels { display:grid; gap:7px; margin-top:10px; }
-      .mvl-v114-level { display:grid; grid-template-columns:118px 1fr; gap:8px; align-items:center; border-radius:10px; padding:8px 10px; font-size:.73rem; }
+      .mvl-v114-level { display:grid; grid-template-columns:118px minmax(0,1fr) auto; gap:8px; align-items:center; border-radius:10px; padding:8px 10px; font-size:.73rem; }
+      .mvl-v117-range { white-space:nowrap; font-size:.72rem; font-weight:900; padding:4px 7px; border-radius:999px; background:rgba(255,255,255,.68); border:1px solid currentColor; }
       .mvl-v114-level strong { font-size:.72rem; }
       .mvl-v114-level.red { background:#fff1f0; color:#a32118; }
       .mvl-v114-level.yellow { background:#fff8e8; color:#925400; }
@@ -1490,9 +1491,9 @@
             <label class="mvl-v113-field">Inicio ÓPTIMO · % de la meta<input id="cfgProdGreenV113" type="number" min="0" max="200" step="1"></label>
           </div>
           <div class="mvl-v114-levels">
-            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Por debajo del inicio Moderado.</span></div>
-            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Entre Moderado y antes de Óptimo.</span></div>
-            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Desde el porcentaje Óptimo.</span></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Por debajo del inicio Moderado.</span><b class="mvl-v117-range" id="cfgProdRangeCriticalV117">—</b></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Entre Moderado y antes de Óptimo.</span><b class="mvl-v117-range" id="cfgProdRangeModerateV117">—</b></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Desde el porcentaje Óptimo.</span><b class="mvl-v117-range" id="cfgProdRangeOptimalV117">—</b></div>
           </div>
         </section>
 
@@ -1503,9 +1504,9 @@
             <label class="mvl-v113-field">Inicio ÓPTIMO · %<input id="cfgEffGreenV113" type="number" min="0" max="100" step="1"></label>
           </div>
           <div class="mvl-v114-levels">
-            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Menor al inicio Moderado.</span></div>
-            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Desde Moderado hasta el límite Óptimo.</span></div>
-            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Mayor al límite Óptimo.</span></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Menor al inicio Moderado.</span><b class="mvl-v117-range" id="cfgEffRangeCriticalV117">—</b></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Desde Moderado hasta antes del inicio Óptimo.</span><b class="mvl-v117-range" id="cfgEffRangeModerateV117">—</b></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Desde el inicio Óptimo.</span><b class="mvl-v117-range" id="cfgEffRangeOptimalV117">—</b></div>
           </div>
         </section>
 
@@ -1516,9 +1517,9 @@
             <label class="mvl-v113-field">Máximo MODERADO · %<input id="cfgRecModerateV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Por encima será crítico.</span></label>
           </div>
           <div class="mvl-v114-levels">
-            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span></div>
-            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span></div>
-            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span><b class="mvl-v117-range" id="cfgRecRangeOptimalV117">—</b></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span><b class="mvl-v117-range" id="cfgRecRangeModerateV117">—</b></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span><b class="mvl-v117-range" id="cfgRecRangeCriticalV117">—</b></div>
           </div>
           <div class="mvl-v114-pending">Puedes dejar ambos campos vacíos mientras aún no se defina la meta.</div>
         </section>
@@ -1530,9 +1531,9 @@
             <label class="mvl-v113-field">Máximo MODERADO · %<input id="cfgVtrModerateV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Por encima será crítico.</span></label>
           </div>
           <div class="mvl-v114-levels">
-            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span></div>
-            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span></div>
-            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span><b class="mvl-v117-range" id="cfgVtrRangeOptimalV117">—</b></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span><b class="mvl-v117-range" id="cfgVtrRangeModerateV117">—</b></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span><b class="mvl-v117-range" id="cfgVtrRangeCriticalV117">—</b></div>
           </div>
           <div class="mvl-v114-pending">La meta puede configurarse ahora; el cálculo seguirá en construcción hasta integrar la fuente VTR/GAR.</div>
         </section>
@@ -1570,6 +1571,101 @@
         modalMessage113(err.message || 'No se pudo cargar la configuración.', 'error');
       }
     });
+
+    [
+      'cfgProdAttentionV113','cfgProdGreenV113',
+      'cfgEffCriticalV113','cfgEffGreenV113',
+      'cfgRecOptimalV114','cfgRecModerateV114',
+      'cfgVtrOptimalV114','cfgVtrModerateV114'
+    ].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', updateRangeLabels117);
+    });
+  }
+
+  function updateRangeLabels117() {
+    const raw = id => {
+      const el = document.getElementById(id);
+      const n = Number(el?.value);
+      return el && String(el.value).trim() !== '' && Number.isFinite(n) ? n : null;
+    };
+    const put = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+    const fmt = n => Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(1);
+
+    const prodModerate = raw('cfgProdAttentionV113');
+    const prodOptimal = raw('cfgProdGreenV113');
+    put('cfgProdRangeCriticalV117', prodModerate == null ? 'Pendiente' : `0% a <${fmt(prodModerate)}%`);
+    put('cfgProdRangeModerateV117',
+      prodModerate == null || prodOptimal == null ? 'Pendiente' : `${fmt(prodModerate)}% a <${fmt(prodOptimal)}%`);
+    put('cfgProdRangeOptimalV117', prodOptimal == null ? 'Pendiente' : `≥${fmt(prodOptimal)}%`);
+
+    const effModerate = raw('cfgEffCriticalV113');
+    const effOptimal = raw('cfgEffGreenV113');
+    put('cfgEffRangeCriticalV117', effModerate == null ? 'Pendiente' : `0% a <${fmt(effModerate)}%`);
+    put('cfgEffRangeModerateV117',
+      effModerate == null || effOptimal == null ? 'Pendiente' : `${fmt(effModerate)}% a <${fmt(effOptimal)}%`);
+    put('cfgEffRangeOptimalV117', effOptimal == null ? 'Pendiente' : `≥${fmt(effOptimal)}% a 100%`);
+
+    const negative = (prefix, optimalId, moderateId) => {
+      const optimal = raw(optimalId);
+      const moderate = raw(moderateId);
+      put(`${prefix}RangeOptimalV117`, optimal == null ? 'Pendiente' : `0% a ${fmt(optimal)}%`);
+      put(`${prefix}RangeModerateV117`,
+        optimal == null || moderate == null ? 'Pendiente' : `>${fmt(optimal)}% a ${fmt(moderate)}%`);
+      put(`${prefix}RangeCriticalV117`, moderate == null ? 'Pendiente' : `>${fmt(moderate)}% a 100%`);
+    };
+    negative('cfgRec', 'cfgRecOptimalV114', 'cfgRecModerateV114');
+    negative('cfgVtr', 'cfgVtrOptimalV114', 'cfgVtrModerateV114');
+  }
+
+  function validateConfigRanges117() {
+    const number = id => {
+      const raw = document.getElementById(id)?.value ?? '';
+      if (String(raw).trim() === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    };
+    const pairs = [
+      ['Producción', number('cfgProdAttentionV113'), number('cfgProdGreenV113')],
+      ['Efectividad', number('cfgEffCriticalV113'), number('cfgEffGreenV113')]
+    ];
+    for (const [label, moderate, optimal] of pairs) {
+      if (moderate == null || optimal == null) return `${label}: completa los dos límites.`;
+      if (moderate < 0 || optimal > 200 || moderate >= optimal) {
+        return `${label}: el inicio MODERADO debe ser menor que el inicio ÓPTIMO.`;
+      }
+    }
+    const negatives = [
+      ['% Recableado', number('cfgRecOptimalV114'), number('cfgRecModerateV114')],
+      ['VTR / GAR', number('cfgVtrOptimalV114'), number('cfgVtrModerateV114')]
+    ];
+    for (const [label, optimal, moderate] of negatives) {
+      if (optimal == null && moderate == null) continue;
+      if (optimal == null || moderate == null) return `${label}: completa ambos límites o deja ambos vacíos.`;
+      if (optimal < 0 || moderate > 100 || optimal >= moderate) {
+        return `${label}: el máximo ÓPTIMO debe ser menor que el máximo MODERADO.`;
+      }
+    }
+    return '';
+  }
+
+  async function waitDashboardRefresh117(timeoutMs = 15000) {
+    const start = Date.now();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    while (Date.now() - start < timeoutMs) {
+      const inline = document.getElementById('dashboardLoading');
+      const summary = document.getElementById('dashboardSummaryLoadingV112');
+      const inlineIdle = !inline || inline.classList.contains('hidden');
+      const summaryIdle = !summary || summary.classList.contains('hidden');
+      if (inlineIdle && summaryIdle) {
+        await new Promise(resolve => setTimeout(resolve, 120));
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return false;
   }
 
   function fillConfig113(config) {
@@ -1608,6 +1704,7 @@
 
     const inherit = document.getElementById('inheritIndicatorConfigV114');
     inherit?.classList.toggle('hidden', !c.visualType || c.visualType === 'TODOS' || c.source === 'GENERAL');
+    updateRangeLabels117();
   }
 
   function modalMessage113(text = '', type = '') {
@@ -1662,6 +1759,14 @@
       return Number.isFinite(n) ? n / 100 : null;
     };
 
+    if (!inheritGeneral) {
+      const rangeError = validateConfigRanges117();
+      if (rangeError) {
+        modalMessage113(rangeError, 'error');
+        return;
+      }
+    }
+
     const payload = {
       visualType,
       inheritGeneral,
@@ -1690,6 +1795,11 @@
       : document.getElementById('saveIndicatorConfigV113');
     if (button) button.disabled = true;
     modalMessage113(inheritGeneral ? 'Restableciendo metas generales…' : 'Guardando indicadores…');
+    try {
+      if (typeof showLoader === 'function') {
+        showLoader(inheritGeneral ? 'Restableciendo indicadores…' : 'Guardando indicadores…');
+      }
+    } catch (_) {}
 
     try {
       const res = await api('performanceIndicatorConfigSave', {
@@ -1702,15 +1812,26 @@
       STATE.config = res.config || STATE.config;
       STATE.configVisualType = res.config?.visualType || visualType;
       STATE.dashboards.clear();
+      try { if (typeof invalidateFastCache115 === 'function') invalidateFastCache115(); } catch (_) {}
       fillConfig113(STATE.config);
       modalMessage113(res.message || 'Indicadores actualizados correctamente.', 'ok');
 
       const apply = document.getElementById('refreshDashboardButton');
-      if (apply && !document.getElementById('performanceDashboardPanel')?.classList.contains('hidden')) {
-        window.setTimeout(() => apply.click(), 100);
+      const panelVisible = !document.getElementById('performanceDashboardPanel')?.classList.contains('hidden');
+      if (apply && panelVisible) {
+        try {
+          const label = document.getElementById('loaderText');
+          if (label) label.textContent = 'Actualizando Dashboard…';
+        } catch (_) {}
+        apply.click();
+        await waitDashboardRefresh117();
       }
+
+      document.getElementById('indicatorConfigModalV113')?.classList.add('hidden');
+      try { if (typeof hideLoader === 'function') hideLoader(); } catch (_) {}
     } catch (err) {
       modalMessage113(err.message || 'No se pudieron guardar los indicadores.', 'error');
+      try { if (typeof hideLoader === 'function') hideLoader(); } catch (_) {}
     } finally {
       if (button) button.disabled = false;
     }
@@ -1934,7 +2055,7 @@
 
 
 /* =========================
-   V1.16 - RESUMEN FILTRADO + COMPARAR POR SUPERVISOR
+   V1.17 - SEMÁFOROS CORREGIDOS + RANGOS + GUARDADO VISUAL + FILTROS RESPONSIVOS
    ========================= */
 (() => {
   const STATE116 = {
@@ -2046,7 +2167,7 @@
     const moderate = Number(cfg?.effectiveness?.moderateFrom ?? cfg?.effectiveness?.criticalBelow ?? 0.5);
     const optimal = Number(cfg?.effectiveness?.optimalFrom ?? cfg?.effectiveness?.greenAbove ?? 0.7);
     if (Number(value) < moderate) return 'CRITICO';
-    if (Number(value) > optimal) return 'CUMPLE';
+    if (Number(value) >= optimal) return 'CUMPLE';
     return 'ATENCION';
   }
 
@@ -2201,10 +2322,41 @@
       .mvl-v116-compare-value { text-align:right; font-weight:900; color:#10213d; }
       .mvl-v116-compare-value .mvl-v113-status { display:block; margin-top:5px; margin-left:auto; }
       .mvl-v116-summary-note { font-weight:700; color:#0758b7; }
+      #performanceDashboardPanel .dashboard-filter-grid {
+        display:grid !important;
+        grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+        gap:12px 14px !important;
+        align-items:end !important;
+      }
+      #performanceDashboardPanel .dashboard-filter-grid .filter-field {
+        min-width:0 !important;
+        width:100% !important;
+        line-height:1.25 !important;
+      }
+      #performanceDashboardPanel .dashboard-filter-grid .filter-field select,
+      #performanceDashboardPanel .dashboard-filter-grid .filter-field input {
+        min-width:0 !important;
+        width:100% !important;
+      }
+      #performanceDashboardPanel #refreshDashboardButton {
+        width:100% !important;
+        min-width:0 !important;
+        min-height:42px !important;
+      }
+      @media(max-width:720px){
+        #performanceDashboardPanel .dashboard-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+      }
+      @media(max-width:480px){
+        #performanceDashboardPanel .dashboard-filter-grid{grid-template-columns:1fr !important}
+      }
       @media(max-width:620px){
         .mvl-v116-compare-row{grid-template-columns:42px minmax(0,1fr);align-items:start}
         .mvl-v116-compare-value{grid-column:2;text-align:left}
         .mvl-v116-compare-value .mvl-v113-status{margin-left:0}
+      }
+      @media(max-width:520px){
+        .mvl-v114-level{grid-template-columns:1fr !important}
+        .mvl-v117-range{justify-self:start}
       }
     `;
     document.head.appendChild(style);
@@ -2464,3 +2616,5 @@
 
   window.setTimeout(init116, 0);
 })();
+
+console.info('[MI VISUAL LIMA] V1.17: efectividad óptima inclusiva, rangos visibles, guardado con carga y filtros responsivos.');
