@@ -1,5 +1,5 @@
 /**
- * MI VISUAL LIMA - Frontend V1.11 (actualización incremental)
+ * MI VISUAL LIMA - Frontend V1.12 (actualización incremental)
  *
  * OBJETIVO
  * - Mantener intacto el núcleo V1.8 ya probado.
@@ -14,6 +14,57 @@
  */
 
 (() => {
+  // V1.12: cargador compacto. Mantiene visible la pantalla actual y evita
+  // cambiar a una portada/splash de pantalla completa mientras carga.
+  function instalarLoaderCompactoV112() {
+    if (document.getElementById('mvlLoaderCompactoV112')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlLoaderCompactoV112';
+    style.textContent = `
+      .app-loader {
+        place-items: center !important;
+        background: rgba(238,245,255,.58) !important;
+        color: #10213d !important;
+        backdrop-filter: blur(2px) !important;
+        -webkit-backdrop-filter: blur(2px) !important;
+      }
+      .app-loader .loader-brand {
+        margin: 0 !important;
+        padding: 13px 17px !important;
+        border-radius: 16px !important;
+        background: rgba(255,255,255,.97) !important;
+        border: 1px solid #d7e3f1 !important;
+        box-shadow: 0 14px 38px rgba(15,42,77,.18) !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        min-width: 205px;
+      }
+      .app-loader .loader-logo,
+      .app-loader .loader-brand strong {
+        display: none !important;
+      }
+      .app-loader .loader-brand span {
+        color: #18385e !important;
+        font-size: .80rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0 !important;
+      }
+      .app-loader .spinner {
+        width: 18px !important;
+        height: 18px !important;
+        margin: 0 !important;
+        border: 2px solid #d5e4f5 !important;
+        border-top-color: #0758b7 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  instalarLoaderCompactoV112();
+
   const MVL_CORE_V18 =
     'https://cdn.jsdelivr.net/gh/florescubasmao-oss/mivisuallima@8f08004a72c45a7eda063aca6e64eb2ce1d3fe92/app.js';
 
@@ -26,7 +77,7 @@
     if (loaderText) {
       loaderText.textContent = 'No se pudo cargar el núcleo V1.8. Verifica la conexión e inténtalo nuevamente.';
     }
-    console.error('[MI VISUAL LIMA V1.11] No se pudo cargar el núcleo V1.8.');
+    console.error('[MI VISUAL LIMA V1.12] No se pudo cargar el núcleo V1.8.');
   };
   document.head.appendChild(core);
 
@@ -159,7 +210,7 @@
           const data = await response.json();
           Object.values(data.crews || {}).forEach(mergeCrew);
         } catch (err) {
-          console.warn('[V1.11] No se pudo cargar data/cuadrillas-v19.json.', err);
+          console.warn('[V1.12] No se pudo cargar data/cuadrillas-v19.json.', err);
         }
       }
 
@@ -217,6 +268,7 @@
           .dashboard-v19-summary{margin:4px 0 22px}
           .dashboard-v19-summary-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:10px}
           .dashboard-v19-summary-head h3{margin:0}
+          .dashboard-v112-summary-loading{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:#eef5ff;color:#0758b7;border:1px solid #cfe1fb;font-size:.72rem;font-weight:800;white-space:nowrap}
           .dashboard-v19-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
           .dashboard-v19-total-card{border:1px solid var(--border,#dce3eb);border-radius:14px;padding:14px;background:var(--card,#fff);min-width:0}
           .dashboard-v19-total-card span{display:block;font-size:.78rem;color:var(--muted,#687386);margin-bottom:6px}
@@ -260,12 +312,13 @@
                 <h3>Resumen total</h3>
                 <p class="section-subtitle">Resultado general del periodo antes de aplicar filtros.</p>
               </div>
+              <span id="dashboardSummaryLoadingV112" class="dashboard-v112-summary-loading"><span class="tiny-spinner"></span>Cargando indicadores…</span>
             </div>
             <div class="dashboard-v19-summary-grid">
-              <article class="dashboard-v19-total-card"><span>Cuadrillas con datos</span><strong id="dashboardTotalCrewsV19">0</strong><small>alcance del usuario</small></article>
-              <article class="dashboard-v19-total-card"><span>Producción total</span><strong id="dashboardTotalPointsV19">0.00 pts</strong><small id="dashboardTotalFinalizedV19">—</small></article>
-              <article class="dashboard-v19-total-card"><span>Efectividad total</span><strong id="dashboardTotalEffectivenessV19">—</strong><small id="dashboardTotalEffectivenessHelpV19">Periodo seleccionado</small></article>
-              <article class="dashboard-v19-total-card"><span>% Recableado total</span><strong id="dashboardTotalRecableV19">—</strong><small id="dashboardTotalRecableHelpV19">Periodo seleccionado</small></article>
+              <article class="dashboard-v19-total-card"><span>Cuadrillas con datos</span><strong id="dashboardTotalCrewsV19">—</strong><small>alcance del usuario</small></article>
+              <article class="dashboard-v19-total-card"><span>Producción total</span><strong id="dashboardTotalPointsV19">—</strong><small id="dashboardTotalFinalizedV19">Cargando datos…</small></article>
+              <article class="dashboard-v19-total-card"><span>Efectividad total</span><strong id="dashboardTotalEffectivenessV19">—</strong><small id="dashboardTotalEffectivenessHelpV19">Cargando datos…</small></article>
+              <article class="dashboard-v19-total-card"><span>% Recableado total</span><strong id="dashboardTotalRecableV19">—</strong><small id="dashboardTotalRecableHelpV19">Cargando datos…</small></article>
               <article class="dashboard-v19-total-card under-construction"><span>VTR / GAR</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
               <article class="dashboard-v19-total-card under-construction"><span>Tiempo de gestión / SLA</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
               <article class="dashboard-v19-total-card under-construction"><span>Observaciones</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
@@ -442,6 +495,24 @@
         box.innerHTML = chips.length
           ? chips.map(x => `<span class="dashboard-v19-chip">${html(x)}</span>`).join('')
           : '<span class="dashboard-v19-chip">Sin filtros · total del alcance</span>';
+      }
+
+      function setResumenCargandoV112(cargando) {
+        const badge = $v19('dashboardSummaryLoadingV112');
+        if (badge) badge.classList.toggle('hidden', !cargando);
+
+        if (!cargando) return;
+        const crews = $v19('dashboardTotalCrewsV19');
+        const points = $v19('dashboardTotalPointsV19');
+        const eff = $v19('dashboardTotalEffectivenessV19');
+        const rec = $v19('dashboardTotalRecableV19');
+        if (crews) crews.textContent = '—';
+        if (points) points.textContent = '—';
+        if (eff) eff.textContent = '—';
+        if (rec) rec.textContent = '—';
+        if ($v19('dashboardTotalFinalizedV19')) $v19('dashboardTotalFinalizedV19').textContent = 'Cargando datos…';
+        if ($v19('dashboardTotalEffectivenessHelpV19')) $v19('dashboardTotalEffectivenessHelpV19').textContent = 'Cargando datos…';
+        if ($v19('dashboardTotalRecableHelpV19')) $v19('dashboardTotalRecableHelpV19').textContent = 'Cargando datos…';
       }
 
       function ratioOrNull(num, den) {
@@ -665,6 +736,7 @@
         asegurarEstructura();
         const loading = $v19('dashboardLoading');
         loading?.classList.remove('hidden');
+        setResumenCargandoV112(true);
         const shouldRenderRanking = !resetFilters && ESTADO.applyRequested;
 
         if (resetFilters) {
@@ -701,6 +773,7 @@
           llenarCuadrillas(data, resetFilters);
           pintarChips();
           await cargarResumenTotal(period);
+          setResumenCargandoV112(false);
 
           if (shouldRenderRanking) {
             renderRanking(data);
@@ -718,6 +791,7 @@
 
           ESTADO.applyRequested = false;
         } catch (err) {
+          setResumenCargandoV112(false);
           const list = $v19('dashboardRankingList');
           if (list) list.innerHTML = `<p class="empty">${html(err.message || 'No se pudo cargar el Dashboard.')}</p>`;
           $v19('dashboardCrewDetail')?.classList.add('hidden');
@@ -776,9 +850,9 @@
         ESTADO.applyRequested = true;
       }, { capture: true });
 
-      console.info('[MI VISUAL LIMA] Dashboard V1.11 cargado: FILTRAR + ranking al aplicar + indicadores en construcción.');
+      console.info('[MI VISUAL LIMA] Dashboard V1.12 cargado: loader compacto + estado de carga de indicadores.');
     } catch (err) {
-      console.error('[MI VISUAL LIMA V1.10] Error al iniciar la mejora del Dashboard:', err);
+      console.error('[MI VISUAL LIMA V1.12] Error al iniciar la mejora del Dashboard:', err);
     }
   }
 })();
