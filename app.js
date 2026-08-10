@@ -1,5 +1,5 @@
 /**
- * MI VISUAL LIMA - Frontend V1.7
+ * MI VISUAL LIMA - Frontend V1.8
  * Login + Administración + Partidas dinámicas + Dashboard Desempeño
  */
 
@@ -633,7 +633,8 @@ async function loadDataStatus() {
     $('dataOrdersStatus').classList.toggle('active', hasOrders);
 
     if (data.lastLoad) {
-      $('dataLastLoad').textContent = `${data.lastLoad.period || ''} · ${data.lastLoad.status || ''}`.trim();
+      $('dataLastLoad').textContent =
+        `${data.lastLoad.periodLabel || data.lastLoad.period || ''} · ${data.lastLoad.status || ''}`.trim();
       $('dataLastLoadDetail').textContent =
         `${data.lastLoad.file || 'Carga registrada'} · ${data.lastLoad.validRows || 0} filas válidas`;
     } else {
@@ -729,6 +730,7 @@ function importWorksheetMatrix(ws) {
 }
 
 const IMPORT_ALIASES = {
+  sourceOrderCode: ['CODIGO DE ORDEN', 'CODIGO ORDEN'],
   crew: ['CUADRILLA', 'CUADRILLA EJECUTORA'],
   date: ['FECHA DE ATENCION', 'FECHA ATENCION', 'FECHA'],
   state: ['ESTADO'],
@@ -774,7 +776,8 @@ function detectImportSheet(workbook) {
       });
 
       // Fallback estructural confirmado para la base Lima:
-      // Cuadrilla D, Estado G, Código cliente S y Tipo atención T.
+      // Código Orden A, Cuadrilla D, Estado G, Código pedido S y Tipo atención T.
+      if (indexes.sourceOrderCode < 0 && headers.length >= 1) indexes.sourceOrderCode = 0;
       if (indexes.crew < 0 && headers.length >= 4) indexes.crew = 3;
       if (indexes.state < 0 && headers.length >= 7) indexes.state = 6;
       if (indexes.clientCode < 0 && headers.length >= 19) indexes.clientCode = 18;
@@ -817,6 +820,7 @@ function extractImportRecords(selection) {
 
     records.push({
       rowNumber: i + 1,
+      sourceOrderCode: indexes.sourceOrderCode >= 0 ? String(row[indexes.sourceOrderCode] ?? '').trim() : '',
       date,
       crew,
       state,
@@ -852,13 +856,14 @@ function extractImportRecords(selection) {
 
 function importColumnDescription(indexes) {
   const items = [
+    `Código Orden: ${indexes.sourceOrderCode + 1}`,
     `Cuadrilla: ${indexes.crew + 1}`,
     `Fecha: ${indexes.date + 1}`,
     `Estado: ${indexes.state + 1}`,
     `Tipo de Partida: ${indexes.typePartida + 1}`
   ];
 
-  if (indexes.clientCode >= 0) items.push(`Código cliente: ${indexes.clientCode + 1}`);
+  if (indexes.clientCode >= 0) items.push(`Cod. Pedido: ${indexes.clientCode + 1}`);
   if (indexes.typeAtencion >= 0) items.push(`Tipo de Atención: ${indexes.typeAtencion + 1}`);
 
   return items.join(' · ');
@@ -1210,7 +1215,7 @@ $('saveCatalogAndContinueButton').addEventListener('click', async () => {
 function completePerformanceImportSuccess(finish) {
   setMessage(
     'performanceImportMessage',
-    `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} registros procesados.`,
+    `${finish.message} Corte: ${finish.cutoff}. ${finish.processedRows} órdenes consolidadas en el periodo.`,
     'success'
   );
 
