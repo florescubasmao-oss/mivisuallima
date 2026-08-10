@@ -1,0 +1,40 @@
+MI VISUAL LIMA - V1.15 OPTIMIZACIÓN DE CARGA
+
+PROBLEMA ENCONTRADO
+La V1.14 volvía a leer CONFIG_DESEMPENO al calcular la configuración de cada cuadrilla.
+Con 34 cuadrillas esto multiplicaba las lecturas del Google Sheet y hacía lento el Dashboard.
+El frontend además pedía el Dashboard más de una vez para el mismo periodo.
+
+CAMBIOS V1.15
+
+BACKEND / APPS SCRIPT
+1. CONFIG_DESEMPENO se lee una sola vez por solicitud de Dashboard.
+2. La misma configuración en memoria se reutiliza para todas las cuadrillas.
+3. performanceDashboard, performanceSummary y performanceDayDetail dejan de ejecutar
+   el setup/migración de hojas en cada lectura.
+4. Se mantiene toda la lógica V1.14 de metas por Tipo Visual y semáforos.
+
+FRONTEND / GITHUB
+1. V1.12 y la capa V1.15 se entregan juntas en un solo app.js.
+2. Se elimina una descarga intermedia de JavaScript.
+3. El Dashboard se guarda temporalmente en memoria por 2 minutos.
+4. La segunda solicitud ALL usa la respuesta ya cargada.
+5. Mientras el Dashboard está abierto, no vuelve a pedir adminCatalogs solamente
+   para enriquecer datos que ya están disponibles localmente.
+6. La caché se limpia al guardar indicadores, cargar una nueva base o modificar cuadrillas.
+
+ORDEN DE ACTUALIZACIÓN
+1. Reemplazar Code.gs por Code_V1_15.gs.
+2. Guardar Apps Script.
+3. Crear una NUEVA VERSIÓN de la implementación existente.
+4. En GitHub reemplazar app.js por el app.js de esta carpeta.
+5. manifest.webmanifest y data/cuadrillas-v19.json no cambian, se incluyen como respaldo.
+6. Probar Dashboard en una pestaña nueva o con Ctrl+F5.
+
+NO CAMBIA
+- Las hojas de la base.
+- Las metas ya guardadas.
+- Los usuarios.
+- Las cuadrillas.
+- Las tarifas.
+- Los filtros y ranking.
