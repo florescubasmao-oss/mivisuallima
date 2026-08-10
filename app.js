@@ -1,5 +1,5 @@
 /**
- * MI VISUAL LIMA - Frontend V1.10 (actualización incremental)
+ * MI VISUAL LIMA - Frontend V1.11 (actualización incremental)
  *
  * OBJETIVO
  * - Mantener intacto el núcleo V1.8 ya probado.
@@ -26,7 +26,7 @@
     if (loaderText) {
       loaderText.textContent = 'No se pudo cargar el núcleo V1.8. Verifica la conexión e inténtalo nuevamente.';
     }
-    console.error('[MI VISUAL LIMA V1.10] No se pudo cargar el núcleo V1.8.');
+    console.error('[MI VISUAL LIMA V1.11] No se pudo cargar el núcleo V1.8.');
   };
   document.head.appendChild(core);
 
@@ -159,7 +159,7 @@
           const data = await response.json();
           Object.values(data.crews || {}).forEach(mergeCrew);
         } catch (err) {
-          console.warn('[V1.10] No se pudo cargar data/cuadrillas-v19.json.', err);
+          console.warn('[V1.11] No se pudo cargar data/cuadrillas-v19.json.', err);
         }
       }
 
@@ -266,6 +266,9 @@
               <article class="dashboard-v19-total-card"><span>Producción total</span><strong id="dashboardTotalPointsV19">0.00 pts</strong><small id="dashboardTotalFinalizedV19">—</small></article>
               <article class="dashboard-v19-total-card"><span>Efectividad total</span><strong id="dashboardTotalEffectivenessV19">—</strong><small id="dashboardTotalEffectivenessHelpV19">Periodo seleccionado</small></article>
               <article class="dashboard-v19-total-card"><span>% Recableado total</span><strong id="dashboardTotalRecableV19">—</strong><small id="dashboardTotalRecableHelpV19">Periodo seleccionado</small></article>
+              <article class="dashboard-v19-total-card under-construction"><span>VTR / GAR</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
+              <article class="dashboard-v19-total-card under-construction"><span>Tiempo de gestión / SLA</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
+              <article class="dashboard-v19-total-card under-construction"><span>Observaciones</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
             </div>`;
           grid.parentNode.insertBefore(section, grid);
         }
@@ -370,7 +373,15 @@
         const map = new Map();
 
         (data?.filters?.supervisors || []).forEach(s => {
-          if (s?.id) map.set(String(s.id), String(s.name || s.id));
+          if (!s?.id) return;
+          const id = String(s.id);
+          const name = String(s.name || s.id);
+          const nameNorm = norm(name);
+          const idNorm = norm(id);
+          // GG es una sola opción funcional. Evita duplicar "GG" y
+          // "GG · Supervisión directa de Gerencia" si ambos llegan del backend.
+          if (id === '__GG__' || idNorm === 'GG' || nameNorm === 'GG' || nameNorm.includes('SUPERVISION DIRECTA')) return;
+          map.set(id, name);
         });
         ESTADO.metadata.forEach(m => {
           if (m.directManagement || norm(m.supervisor) === 'GG') return;
@@ -522,13 +533,46 @@
         return row.value;
       }
 
+      function indicadorTieneDato(row, indicator) {
+        if (indicator === 'PRODUCCION') {
+          const points = Number(row.points ?? row.value);
+          return Number.isFinite(points);
+        }
+        if (indicator === 'EFECTIVIDAD') {
+          const total = Number(pick(row, 'totalGeneral', 'total', 'ordersTotal'));
+          const value = Number(row.effectiveness ?? row.value);
+          return Number.isFinite(value) && total > 0;
+        }
+        if (indicator === 'RECABLEADO') {
+          const los = Number(row.losRojo);
+          const value = Number(row.recablePercent ?? row.value);
+          return Number.isFinite(value) && los > 0;
+        }
+        return Number.isFinite(Number(valueFor(row, indicator)));
+      }
+
       function ordenarRows(rows, indicator) {
         return [...rows].sort((a,b) => {
-          const ar = Number(a.rank); const br = Number(b.rank);
-          if (Number.isFinite(ar) && Number.isFinite(br) && ar !== br) return ar - br;
+          const aHas = indicadorTieneDato(a, indicator);
+          const bHas = indicadorTieneDato(b, indicator);
+
+          // Una cuadrilla sin dato válido siempre va después de las que sí tienen dato.
+          if (aHas !== bHas) return aHas ? -1 : 1;
+
           const av = Number(valueFor(a, indicator));
           const bv = Number(valueFor(b, indicator));
-          if (Number.isFinite(av) && Number.isFinite(bv)) return bv - av;
+
+          if (aHas && bHas && av !== bv) {
+            // Producción y Efectividad: mayor resultado primero.
+            if (indicator === 'PRODUCCION' || indicator === 'EFECTIVIDAD') return bv - av;
+            // % Recableado es indicador negativo: menor porcentaje primero.
+            if (indicator === 'RECABLEADO') return av - bv;
+          }
+
+          // Desempate por producción finalizada y luego por nombre de cuadrilla.
+          const af = Number(a.finalized || 0);
+          const bf = Number(b.finalized || 0);
+          if (af !== bf) return bf - af;
           return String(a.crewDisplay || '').localeCompare(String(b.crewDisplay || ''), 'es', { numeric: true });
         });
       }
@@ -553,7 +597,7 @@
         const labels = {
           PRODUCCION: { label: 'Producción', help: 'Mayor puntaje primero.', construction: false },
           EFECTIVIDAD: { label: 'Efectividad', help: 'Mejor efectividad primero.', construction: false },
-          RECABLEADO: { label: '% Recableado', help: 'Ranking según el criterio vigente del indicador.', construction: false },
+          RECABLEADO: { label: '% Recableado', help: 'Menor porcentaje primero.', construction: false },
           VTR_GAR: { label: 'VTR / GAR', help: 'Indicador considerado para una siguiente etapa.', construction: true },
           SLA: { label: 'Tiempo de gestión / SLA', help: 'Indicador considerado para una siguiente etapa.', construction: true },
           OBSERVACIONES: { label: 'Observaciones', help: 'Indicador considerado para una siguiente etapa.', construction: true }
@@ -732,7 +776,7 @@
         ESTADO.applyRequested = true;
       }, { capture: true });
 
-      console.info('[MI VISUAL LIMA] Dashboard V1.10 cargado: FILTRAR + ranking al aplicar + indicadores en construcción.');
+      console.info('[MI VISUAL LIMA] Dashboard V1.11 cargado: FILTRAR + ranking al aplicar + indicadores en construcción.');
     } catch (err) {
       console.error('[MI VISUAL LIMA V1.10] Error al iniciar la mejora del Dashboard:', err);
     }
