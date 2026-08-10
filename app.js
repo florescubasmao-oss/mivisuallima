@@ -1,10 +1,12 @@
 /**
- * MI VISUAL LIMA - Frontend V1.9 (actualización incremental)
+ * MI VISUAL LIMA - Frontend V1.10 (actualización incremental)
  *
  * OBJETIVO
  * - Mantener intacto el núcleo V1.8 ya probado.
- * - Agregar Dashboard V1.9: resumen total + filtros combinables + ranking.
- * - Separar Tipo de cuadrilla Visual de Plataforma WIN.
+ * - Mantener Dashboard: resumen total + filtros + ranking.
+ * - Eliminar Sede del filtro (la aplicación corresponde solo a Lima).
+ * - Mostrar cuadrillas únicamente al presionar Aplicar.
+ * - Mantener visibles los indicadores pendientes como "En construcción".
  *
  * IMPORTANTE
  * Este archivo carga el núcleo V1.8 fijado al commit que estaba publicado al
@@ -24,7 +26,7 @@
     if (loaderText) {
       loaderText.textContent = 'No se pudo cargar el núcleo V1.8. Verifica la conexión e inténtalo nuevamente.';
     }
-    console.error('[MI VISUAL LIMA V1.9] No se pudo cargar el núcleo V1.8.');
+    console.error('[MI VISUAL LIMA V1.10] No se pudo cargar el núcleo V1.8.');
   };
   document.head.appendChild(core);
 
@@ -38,7 +40,8 @@
         seedLoaded: false,
         catalogTried: false,
         totalCache: new Map(),
-        lastData: null
+        lastData: null,
+        applyRequested: false
       };
 
       const pick = (obj, ...keys) => {
@@ -156,7 +159,7 @@
           const data = await response.json();
           Object.values(data.crews || {}).forEach(mergeCrew);
         } catch (err) {
-          console.warn('[V1.9] No se pudo cargar data/cuadrillas-v19.json.', err);
+          console.warn('[V1.10] No se pudo cargar data/cuadrillas-v19.json.', err);
         }
       }
 
@@ -240,6 +243,13 @@
         const grid = panel?.querySelector('.dashboard-filter-grid');
         if (!panel || !grid) return;
 
+        // Lima trabaja con una sola sede: este filtro no se muestra.
+        const siteWrap = $v19('dashboardSiteWrap');
+        if (siteWrap) {
+          siteWrap.classList.add('hidden');
+          siteWrap.style.display = 'none';
+        }
+
         if (!$v19('dashboardTotalSummaryV19')) {
           const section = document.createElement('section');
           section.id = 'dashboardTotalSummaryV19';
@@ -264,7 +274,7 @@
           const title = document.createElement('div');
           title.id = 'dashboardFilterTitleV19';
           title.className = 'dashboard-v19-filter-title';
-          title.innerHTML = '<strong>Filtros combinables</strong><small>Puedes usar uno, dos o varios filtros a la vez.</small>';
+          title.innerHTML = '<strong>FILTRAR</strong>';
           grid.insertBefore(title, grid.firstChild);
         }
 
@@ -307,8 +317,13 @@
           indicator.innerHTML = `
             <option value="PRODUCCION">Producción</option>
             <option value="EFECTIVIDAD">Efectividad</option>
-            <option value="RECABLEADO">% Recableado</option>`;
-          if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator.value)) indicator.value = 'PRODUCCION';
+            <option value="RECABLEADO">% Recableado</option>
+            <option value="VTR_GAR">VTR / GAR · En construcción</option>
+            <option value="SLA">Tiempo de gestión / SLA · En construcción</option>
+            <option value="OBSERVACIONES">Observaciones · En construcción</option>`;
+          if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO','VTR_GAR','SLA','OBSERVACIONES'].includes(indicator.value)) {
+            indicator.value = 'PRODUCCION';
+          }
         }
 
         if (!$v19('dashboardActiveFiltersV19')) {
@@ -518,22 +533,54 @@
         });
       }
 
+      function mostrarRankingPendiente() {
+        const title = $v19('dashboardRankingTitle');
+        const help = $v19('dashboardRankingHelp');
+        const construction = $v19('dashboardConstruction');
+        const list = $v19('dashboardRankingList');
+
+        if (title) title.textContent = 'Ranking';
+        if (help) help.textContent = 'Selecciona los filtros y presiona Aplicar para mostrar las cuadrillas.';
+        construction?.classList.add('hidden');
+        if (list) {
+          list.innerHTML = '<p class="empty">Los resultados aparecerán cuando presiones Aplicar.</p>';
+        }
+        $v19('dashboardCrewDetail')?.classList.add('hidden');
+      }
+
       function renderRanking(data) {
         const indicator = $v19('dashboardIndicator')?.value || 'PRODUCCION';
         const labels = {
-          PRODUCCION: ['Producción','Mayor puntaje primero.'],
-          EFECTIVIDAD: ['Efectividad','Mejor efectividad primero.'],
-          RECABLEADO: ['% Recableado','Ranking según el criterio vigente del indicador.']
+          PRODUCCION: { label: 'Producción', help: 'Mayor puntaje primero.', construction: false },
+          EFECTIVIDAD: { label: 'Efectividad', help: 'Mejor efectividad primero.', construction: false },
+          RECABLEADO: { label: '% Recableado', help: 'Ranking según el criterio vigente del indicador.', construction: false },
+          VTR_GAR: { label: 'VTR / GAR', help: 'Indicador considerado para una siguiente etapa.', construction: true },
+          SLA: { label: 'Tiempo de gestión / SLA', help: 'Indicador considerado para una siguiente etapa.', construction: true },
+          OBSERVACIONES: { label: 'Observaciones', help: 'Indicador considerado para una siguiente etapa.', construction: true }
         };
+        const meta = labels[indicator] || labels.PRODUCCION;
+        const list = $v19('dashboardRankingList');
+        const construction = $v19('dashboardConstruction');
+
+        if (meta.construction) {
+          $v19('dashboardRankingTitle').textContent = `${meta.label} · En construcción`;
+          $v19('dashboardRankingHelp').textContent = 'Este indicador ya está contemplado, pero todavía no participa en el ranking.';
+          if (construction) {
+            construction.textContent = `${meta.label}: En construcción. Se habilitará cuando integremos su fuente y regla de cálculo.`;
+            construction.classList.remove('hidden');
+          }
+          if (list) list.innerHTML = '';
+          $v19('dashboardCrewDetail')?.classList.add('hidden');
+          return;
+        }
+
         const f = filtrosSeleccionados();
         let rows = (data?.rows || []).filter(r => coincide(r, f));
         rows = ordenarRows(rows, indicator);
 
-        $v19('dashboardRankingTitle').textContent = `Ranking de ${labels[indicator]?.[0] || 'indicador'}`;
-        $v19('dashboardRankingHelp').textContent = `${labels[indicator]?.[1] || ''} ${rows.length} cuadrilla${rows.length === 1 ? '' : 's'} en el filtro.`;
-        $v19('dashboardConstruction')?.classList.add('hidden');
-
-        const list = $v19('dashboardRankingList');
+        $v19('dashboardRankingTitle').textContent = `Ranking de ${meta.label}`;
+        $v19('dashboardRankingHelp').textContent = `${meta.help} ${rows.length} cuadrilla${rows.length === 1 ? '' : 's'} en el filtro.`;
+        construction?.classList.add('hidden');
         if (!rows.length) {
           list.innerHTML = '<p class="empty">No hay cuadrillas con esta combinación de filtros.</p>';
           return;
@@ -574,6 +621,7 @@
         asegurarEstructura();
         const loading = $v19('dashboardLoading');
         loading?.classList.remove('hidden');
+        const shouldRenderRanking = !resetFilters && ESTADO.applyRequested;
 
         if (resetFilters) {
           if ($v19('dashboardSite')) $v19('dashboardSite').value = 'LIMA';
@@ -608,15 +656,23 @@
           llenarSupervisores(data, resetFilters);
           llenarCuadrillas(data, resetFilters);
           pintarChips();
-          renderRanking(data);
           await cargarResumenTotal(period);
 
-          const selectedCrew = $v19('dashboardCrew')?.value || '';
-          if (selectedCrew && typeof loadDashboardCrewDetail === 'function') {
-            await loadDashboardCrewDetail(selectedCrew);
+          if (shouldRenderRanking) {
+            renderRanking(data);
+            const selectedCrew = $v19('dashboardCrew')?.value || '';
+            const selectedIndicator = $v19('dashboardIndicator')?.value || 'PRODUCCION';
+            const constructionIndicator = ['VTR_GAR','SLA','OBSERVACIONES'].includes(selectedIndicator);
+            if (selectedCrew && !constructionIndicator && typeof loadDashboardCrewDetail === 'function') {
+              await loadDashboardCrewDetail(selectedCrew);
+            } else {
+              $v19('dashboardCrewDetail')?.classList.add('hidden');
+            }
           } else {
-            $v19('dashboardCrewDetail')?.classList.add('hidden');
+            mostrarRankingPendiente();
           }
+
+          ESTADO.applyRequested = false;
         } catch (err) {
           const list = $v19('dashboardRankingList');
           if (list) list.innerHTML = `<p class="empty">${html(err.message || 'No se pudo cargar el Dashboard.')}</p>`;
@@ -629,8 +685,9 @@
       async function openDashboardV19() {
         asegurarEstructura();
         if ($v19('dashboardPeriod') && !$v19('dashboardPeriod').value) $v19('dashboardPeriod').value = '2026-08';
-        if ($v19('dashboardSiteWrap') && typeof isSupervisorSession === 'function') {
-          $v19('dashboardSiteWrap').classList.toggle('hidden', isSupervisorSession());
+        if ($v19('dashboardSiteWrap')) {
+          $v19('dashboardSiteWrap').classList.add('hidden');
+          $v19('dashboardSiteWrap').style.display = 'none';
         }
         if ($v19('dashboardSupervisorWrap') && typeof isSupervisorSession === 'function') {
           $v19('dashboardSupervisorWrap').classList.toggle('hidden', isSupervisorSession());
@@ -646,22 +703,38 @@
 
       asegurarEstructura();
 
-      const reloadWithCrewRefresh = () => {
+      const onFilterChanged = () => {
         if (ESTADO.lastData) llenarCuadrillas(ESTADO.lastData, false);
         pintarChips();
-        return loadDashboardV19(false);
+        mostrarRankingPendiente();
       };
 
-      ['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19']
-        .forEach(id => $v19(id)?.addEventListener('change', reloadWithCrewRefresh));
+      // Los filtros solo preparan la selección. Las cuadrillas se muestran al presionar Aplicar.
+      ['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19',
+       'dashboardSupervisor','dashboardCrew','dashboardIndicator']
+        .forEach(id => {
+          const el = $v19(id);
+          if (!el) return;
+          el.addEventListener('change', (event) => {
+            event.stopImmediatePropagation();
+            onFilterChanged();
+          }, { capture: true });
+        });
 
-      // Al cambiar periodo/sede se invalida únicamente el resumen total cacheado.
-      $v19('dashboardPeriod')?.addEventListener('change', () => ESTADO.totalCache.clear(), { capture: true });
-      $v19('dashboardSite')?.addEventListener('change', () => ESTADO.totalCache.clear(), { capture: true });
+      $v19('dashboardPeriod')?.addEventListener('change', (event) => {
+        event.stopImmediatePropagation();
+        ESTADO.totalCache.clear();
+        mostrarRankingPendiente();
+      }, { capture: true });
 
-      console.info('[MI VISUAL LIMA] Dashboard V1.9 cargado: resumen + filtros combinables + ranking.');
+      // Aplicar habilita una sola actualización y recién entonces pinta el ranking.
+      $v19('refreshDashboardButton')?.addEventListener('click', () => {
+        ESTADO.applyRequested = true;
+      }, { capture: true });
+
+      console.info('[MI VISUAL LIMA] Dashboard V1.10 cargado: FILTRAR + ranking al aplicar + indicadores en construcción.');
     } catch (err) {
-      console.error('[MI VISUAL LIMA V1.9] Error al iniciar la mejora del Dashboard:', err);
+      console.error('[MI VISUAL LIMA V1.10] Error al iniciar la mejora del Dashboard:', err);
     }
   }
 })();
