@@ -1930,3 +1930,537 @@
   waitForCore113(0);
 
 })();
+
+
+
+/* =========================
+   V1.16 - RESUMEN FILTRADO + COMPARAR POR SUPERVISOR
+   ========================= */
+(() => {
+  const STATE116 = {
+    data: null,
+    wrappedApi: false,
+    initialized: false,
+    renderingSupervisor: false,
+    lastSupervisorSignature: ''
+  };
+
+  const norm116 = (value) => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+
+  const esc116 = (value) => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+
+  function visual116(value) {
+    const n = norm116(value);
+    if (!n || n === 'TODOS' || n === 'TODAS' || n === 'GENERAL') return 'TODOS';
+    if (n === 'PLAME' || n === 'PLANILLA') return 'PLANILLA';
+    if (n === 'PRODUCCION' || n.includes('COMISIONISTA')) return 'PRODUCCION';
+    if (n.includes('DISPONIBILIDAD')) return 'DISPONIBILIDAD';
+    if (n === 'PDG') return 'PDG';
+    return n;
+  }
+
+  function state116(value) {
+    const n = norm116(value);
+    if (['ACTIVO','ACTIVA','ACTIVE'].includes(n)) return 'ACTIVO';
+    if (n.includes('SUSPEND')) return 'SUSPENDIDA';
+    if (['BAJA','INACTIVO','INACTIVA'].includes(n)) return 'BAJA';
+    return n;
+  }
+
+  function filters116() {
+    return {
+      visualType: document.getElementById('dashboardVisualTypeV19')?.value || '',
+      platform: document.getElementById('dashboardPlatformV19')?.value || '',
+      composition: document.getElementById('dashboardCompositionV19')?.value || '',
+      status: document.getElementById('dashboardStateV19')?.value || '',
+      supervisor: document.getElementById('dashboardSupervisor')?.value || '',
+      crew: document.getElementById('dashboardCrew')?.value || ''
+    };
+  }
+
+  function rowMatches116(row, f, ignoreCrew = false) {
+    if (f.visualType && visual116(row.visualType) !== visual116(f.visualType)) return false;
+    if (f.platform && norm116(row.platform) !== norm116(f.platform)) return false;
+    if (f.composition && norm116(row.composition) !== norm116(f.composition)) return false;
+    if (f.status && state116(row.state) !== state116(f.status)) return false;
+
+    if (f.supervisor) {
+      if (f.supervisor === '__GG__') {
+        if (String(row.supervisorId || '') !== '__GG__' && norm116(row.supervisor) !== 'GG') return false;
+      } else if (String(row.supervisorId || '') !== String(f.supervisor)) {
+        return false;
+      }
+    }
+
+    if (!ignoreCrew && f.crew && String(row.crewId || '') !== String(f.crew)) return false;
+    return true;
+  }
+
+  function filteredRows116(ignoreCrew = false) {
+    const rows = STATE116.data?.rows || [];
+    const f = filters116();
+    return rows.filter(row => rowMatches116(row, f, ignoreCrew));
+  }
+
+  function ratio116(num, den) {
+    num = Number(num);
+    den = Number(den);
+    return Number.isFinite(num) && Number.isFinite(den) && den > 0 ? num / den : null;
+  }
+
+  function pct116(value) {
+    return value == null || !Number.isFinite(Number(value))
+      ? '—'
+      : `${(Number(value) * 100).toFixed(1)}%`;
+  }
+
+  function config116() {
+    const data = STATE116.data || {};
+    const selected = visual116(document.getElementById('dashboardVisualTypeV19')?.value || 'TODOS');
+    return data.indicatorConfigs?.[selected] ||
+      data.indicatorConfigs?.TODOS ||
+      data.indicatorConfig ||
+      {};
+  }
+
+  function productionStatus116(ratio, cfg) {
+    if (ratio == null || !Number.isFinite(Number(ratio))) return '';
+    const moderate = Number(cfg?.production?.moderateFromRatio ?? cfg?.production?.attentionRatio ?? 0.7);
+    const optimal = Number(cfg?.production?.optimalFromRatio ?? cfg?.production?.greenRatio ?? 1);
+    if (Number(ratio) < moderate) return 'CRITICO';
+    if (Number(ratio) < optimal) return 'ATENCION';
+    return 'CUMPLE';
+  }
+
+  function effectivenessStatus116(value, cfg) {
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    const moderate = Number(cfg?.effectiveness?.moderateFrom ?? cfg?.effectiveness?.criticalBelow ?? 0.5);
+    const optimal = Number(cfg?.effectiveness?.optimalFrom ?? cfg?.effectiveness?.greenAbove ?? 0.7);
+    if (Number(value) < moderate) return 'CRITICO';
+    if (Number(value) > optimal) return 'CUMPLE';
+    return 'ATENCION';
+  }
+
+  function negativeStatus116(value, rule) {
+    if (value == null || !Number.isFinite(Number(value)) || !rule?.configured) return '';
+    if (Number(value) <= Number(rule.optimalMax)) return 'CUMPLE';
+    if (Number(value) <= Number(rule.moderateMax)) return 'ATENCION';
+    return 'CRITICO';
+  }
+
+  function info116(status) {
+    const n = norm116(status);
+    if (n === 'CUMPLE' || n === 'OPTIMO') return { cls:'cumple', label:'Óptimo' };
+    if (n === 'ATENCION' || n === 'MODERADO') return { cls:'atencion', label:'Moderado' };
+    if (n === 'CRITICO') return { cls:'critico', label:'Crítico' };
+    return null;
+  }
+
+  function setBadge116(container, status, detail = '') {
+    if (!container) return;
+    let badge = container.querySelector(':scope > .mvl-v113-status');
+    const meta = info116(status);
+    if (!meta) {
+      badge?.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      container.appendChild(badge);
+    }
+    badge.className = `mvl-v113-status ${meta.cls}`;
+    badge.textContent = detail ? `${meta.label} · ${detail}` : meta.label;
+  }
+
+  function summary116(rows) {
+    const dataRows = rows.filter(r => r.hasData);
+    const points = dataRows.reduce((a,r)=>a + Number(r.points || 0), 0);
+    const finalized = dataRows.reduce((a,r)=>a + Number(r.finalized || 0), 0);
+    const totalGeneral = dataRows.reduce((a,r)=>a + Number(r.totalGeneral || 0), 0);
+    const losRojo = dataRows.reduce((a,r)=>a + Number(r.losRojo || 0), 0);
+    const recables = dataRows.reduce((a,r)=>a + Number(r.recables || 0), 0);
+    const target = dataRows.reduce(
+      (a,r)=>a + Number(r.productionDailyTarget || 0) * Number(r.productionDays || 0),
+      0
+    );
+
+    return {
+      crews: dataRows.length,
+      points,
+      finalized,
+      effectiveness: ratio116(finalized, totalGeneral),
+      losRojo,
+      recables,
+      recablePercent: ratio116(recables, losRojo),
+      productionTarget: target,
+      productionRatio: ratio116(points, target)
+    };
+  }
+
+  function summaryLabel116() {
+    const f = filters116();
+    const parts = [];
+
+    if (f.visualType) parts.push(`Visual ${f.visualType}`);
+    if (f.platform) parts.push(`WIN ${f.platform}`);
+    if (f.supervisor) {
+      const t = document.getElementById('dashboardSupervisor')?.selectedOptions?.[0]?.textContent || f.supervisor;
+      parts.push(`Supervisor ${t}`);
+    }
+    if (f.composition) parts.push(f.composition === 'SOLO' ? 'Individual' : 'Doble');
+    if (f.status) parts.push(f.status);
+    if (f.crew) {
+      const t = document.getElementById('dashboardCrew')?.selectedOptions?.[0]?.textContent || f.crew;
+      parts.push(t);
+    }
+
+    return parts;
+  }
+
+  function renderSummary116() {
+    if (!STATE116.data?.ok) return;
+
+    const rows = filteredRows116(false);
+    const s = summary116(rows);
+    const cfg = config116();
+
+    const set = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+
+    set('dashboardTotalCrewsV19', String(s.crews));
+    set('dashboardTotalPointsV19', `${Number(s.points || 0).toFixed(2)} pts`);
+    set(
+      'dashboardTotalFinalizedV19',
+      s.finalized ? `${s.finalized} órdenes finalizadas` : 'Sin órdenes finalizadas en el filtro'
+    );
+    set('dashboardTotalEffectivenessV19', pct116(s.effectiveness));
+    set(
+      'dashboardTotalEffectivenessHelpV19',
+      s.effectiveness == null ? 'Sin base de efectividad en el filtro' : 'Resultado del filtro seleccionado'
+    );
+    set('dashboardTotalRecableV19', pct116(s.recablePercent));
+    set(
+      'dashboardTotalRecableHelpV19',
+      s.losRojo ? `${s.losRojo} LOS ROJO · ${s.recables} recableados` : 'Sin LOS ROJO en el filtro'
+    );
+
+    const prodCard = document.getElementById('dashboardTotalPointsV19')?.closest('article');
+    const effCard = document.getElementById('dashboardTotalEffectivenessV19')?.closest('article');
+    const recCard = document.getElementById('dashboardTotalRecableV19')?.closest('article');
+
+    setBadge116(
+      prodCard,
+      productionStatus116(s.productionRatio, cfg),
+      s.productionRatio == null ? '' : `${(s.productionRatio * 100).toFixed(0)}% de meta`
+    );
+    setBadge116(effCard, effectivenessStatus116(s.effectiveness, cfg));
+    setBadge116(recCard, negativeStatus116(s.recablePercent, cfg?.recableado));
+
+    const subtitle = document.querySelector('#dashboardTotalSummaryV19 .dashboard-v19-summary-head .section-subtitle');
+    if (subtitle) {
+      const parts = summaryLabel116();
+      subtitle.textContent = parts.length
+        ? `Resumen filtrado: ${parts.join(' · ')}`
+        : 'Resultado general del periodo.';
+    }
+
+    const loading = document.getElementById('dashboardSummaryLoadingV112');
+    loading?.classList.add('hidden');
+  }
+
+  function ensureStyles116() {
+    if (document.getElementById('mvlV116Styles')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlV116Styles';
+    style.textContent = `
+      .mvl-v116-compare-row {
+        display: grid;
+        grid-template-columns: 54px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 13px 14px;
+        border: 1px solid #dce6f2;
+        border-radius: 14px;
+        background: #fff;
+        margin-bottom: 8px;
+      }
+      .mvl-v116-compare-copy strong { display:block; color:#073b78; }
+      .mvl-v116-compare-copy small { display:block; margin-top:3px; color:#65758a; }
+      .mvl-v116-compare-value { text-align:right; font-weight:900; color:#10213d; }
+      .mvl-v116-compare-value .mvl-v113-status { display:block; margin-top:5px; margin-left:auto; }
+      .mvl-v116-summary-note { font-weight:700; color:#0758b7; }
+      @media(max-width:620px){
+        .mvl-v116-compare-row{grid-template-columns:42px minmax(0,1fr);align-items:start}
+        .mvl-v116-compare-value{grid-column:2;text-align:left}
+        .mvl-v116-compare-value .mvl-v113-status{margin-left:0}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function ensureCompareSelect116() {
+    const grid = document.querySelector('#performanceDashboardPanel .dashboard-filter-grid');
+    if (!grid || document.getElementById('dashboardCompareByV116')) return;
+
+    const label = document.createElement('label');
+    label.className = 'filter-field';
+    label.innerHTML = `
+      Comparar por
+      <select id="dashboardCompareByV116">
+        <option value="CUADRILLA">Cuadrillas</option>
+        <option value="SUPERVISOR">Supervisores</option>
+      </select>`;
+
+    const apply = document.getElementById('refreshDashboardButton');
+    const applyParent = apply?.closest('label') || apply;
+    if (applyParent && applyParent.parentNode === grid) grid.insertBefore(label, applyParent);
+    else grid.appendChild(label);
+
+    const select = label.querySelector('select');
+    select.addEventListener('change', () => {
+      const crew = document.getElementById('dashboardCrew');
+      const compareSupervisor = select.value === 'SUPERVISOR';
+      if (crew) {
+        if (compareSupervisor) crew.value = '';
+        crew.disabled = compareSupervisor;
+        crew.title = compareSupervisor ? 'No se usa al comparar Supervisores.' : '';
+      }
+      renderSummary116();
+
+      // Si ya existen resultados visibles, cambiar la comparación sin pedir datos de nuevo.
+      const list = document.getElementById('dashboardRankingList');
+      if (compareSupervisor && list && !/presiona Aplicar/i.test(list.textContent || '')) {
+        window.setTimeout(renderSupervisorRanking116, 0);
+      }
+    });
+  }
+
+  function aggregateSupervisors116() {
+    const rows = filteredRows116(false).filter(r => r.hasData);
+    const map = new Map();
+
+    rows.forEach(row => {
+      const isGG = String(row.supervisorId || '') === '__GG__' || norm116(row.supervisor) === 'GG';
+      const key = isGG ? '__GG__' : String(row.supervisorId || row.supervisor || 'SIN_SUPERVISOR');
+      const name = isGG ? 'GG · Supervisión directa de Gerencia' : String(row.supervisor || 'Sin supervisor');
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key, name, crews: 0, points: 0, finalized: 0, totalGeneral: 0,
+          losRojo: 0, recables: 0, productionTarget: 0
+        });
+      }
+
+      const g = map.get(key);
+      g.crews++;
+      g.points += Number(row.points || 0);
+      g.finalized += Number(row.finalized || 0);
+      g.totalGeneral += Number(row.totalGeneral || 0);
+      g.losRojo += Number(row.losRojo || 0);
+      g.recables += Number(row.recables || 0);
+      g.productionTarget += Number(row.productionDailyTarget || 0) * Number(row.productionDays || 0);
+    });
+
+    return [...map.values()].map(g => ({
+      ...g,
+      effectiveness: ratio116(g.finalized, g.totalGeneral),
+      recablePercent: ratio116(g.recables, g.losRojo),
+      productionRatio: ratio116(g.points, g.productionTarget)
+    }));
+  }
+
+  function renderSupervisorRanking116() {
+    if (STATE116.renderingSupervisor) return;
+    const compare = document.getElementById('dashboardCompareByV116')?.value || 'CUADRILLA';
+    if (compare !== 'SUPERVISOR' || !STATE116.data?.ok) return;
+
+    const indicator = document.getElementById('dashboardIndicator')?.value || 'PRODUCCION';
+    if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator)) return;
+
+    const list = document.getElementById('dashboardRankingList');
+    const title = document.getElementById('dashboardRankingTitle');
+    const help = document.getElementById('dashboardRankingHelp');
+    if (!list) return;
+
+    const groups = aggregateSupervisors116();
+    const cfg = config116();
+
+    groups.sort((a,b) => {
+      if (indicator === 'PRODUCCION') {
+        const av = a.productionRatio == null ? -Infinity : a.productionRatio;
+        const bv = b.productionRatio == null ? -Infinity : b.productionRatio;
+        return bv - av || b.points - a.points || a.name.localeCompare(b.name, 'es');
+      }
+      if (indicator === 'EFECTIVIDAD') {
+        const av = a.effectiveness == null ? -Infinity : a.effectiveness;
+        const bv = b.effectiveness == null ? -Infinity : b.effectiveness;
+        return bv - av || a.name.localeCompare(b.name, 'es');
+      }
+      const av = a.recablePercent == null ? Infinity : a.recablePercent;
+      const bv = b.recablePercent == null ? Infinity : b.recablePercent;
+      return av - bv || a.name.localeCompare(b.name, 'es');
+    });
+
+    if (title) {
+      const label = indicator === 'PRODUCCION' ? 'Producción' : indicator === 'EFECTIVIDAD' ? 'Efectividad' : '% Recableado';
+      title.textContent = `Ranking de Supervisores · ${label}`;
+    }
+    if (help) {
+      help.textContent = indicator === 'PRODUCCION'
+        ? `Comparación por cumplimiento de meta para evitar favorecer a quien tenga más cuadrillas. ${groups.length} supervisor${groups.length === 1 ? '' : 'es'}.`
+        : `${groups.length} supervisor${groups.length === 1 ? '' : 'es'} dentro del filtro seleccionado.`;
+    }
+
+    STATE116.renderingSupervisor = true;
+    try {
+      list.innerHTML = groups.length ? groups.map((g, idx) => {
+        let valueText = '';
+        let detail = '';
+        let status = '';
+
+        if (indicator === 'PRODUCCION') {
+          valueText = g.productionRatio == null ? '—' : `${(g.productionRatio * 100).toFixed(0)}% meta`;
+          detail = `${g.points.toFixed(2)} pts · ${g.crews} cuadrilla${g.crews === 1 ? '' : 's'} · ${g.finalized} finalizadas`;
+          status = productionStatus116(g.productionRatio, cfg);
+        } else if (indicator === 'EFECTIVIDAD') {
+          valueText = pct116(g.effectiveness);
+          detail = `${g.finalized} finalizadas de ${g.totalGeneral} órdenes`;
+          status = effectivenessStatus116(g.effectiveness, cfg);
+        } else {
+          valueText = pct116(g.recablePercent);
+          detail = `${g.losRojo} LOS ROJO · ${g.recables} recableados · ${g.crews} cuadrilla${g.crews === 1 ? '' : 's'}`;
+          status = negativeStatus116(g.recablePercent, cfg?.recableado);
+        }
+
+        const meta = info116(status);
+        const badge = meta
+          ? `<span class="mvl-v113-status ${meta.cls}">${meta.label}</span>`
+          : '';
+
+        return `
+          <div class="mvl-v116-compare-row">
+            <div class="dashboard-rank-position">#${idx + 1}</div>
+            <div class="mvl-v116-compare-copy">
+              <strong>${esc116(g.name)}</strong>
+              <small>${esc116(detail)}</small>
+            </div>
+            <div class="mvl-v116-compare-value">
+              ${esc116(valueText)}
+              ${badge}
+            </div>
+          </div>`;
+      }).join('') : '<p class="empty">No hay Supervisores con datos para esta combinación de filtros.</p>';
+
+      list.dataset.v116Supervisor = '1';
+    } finally {
+      STATE116.renderingSupervisor = false;
+    }
+  }
+
+  function refresh116() {
+    renderSummary116();
+    const compare = document.getElementById('dashboardCompareByV116')?.value || 'CUADRILLA';
+    if (compare === 'SUPERVISOR') {
+      window.setTimeout(renderSupervisorRanking116, 0);
+    }
+  }
+
+  function wrapApi116() {
+    if (STATE116.wrappedApi || typeof api !== 'function') return;
+    STATE116.wrappedApi = true;
+
+    const previous = api;
+    api = async function(action, params = {}) {
+      const result = await previous(action, params);
+      if (action === 'performanceDashboard' && result?.ok) {
+        STATE116.data = result;
+        window.setTimeout(refresh116, 0);
+      }
+      return result;
+    };
+  }
+
+  function attachFilterEvents116() {
+    // V1.12 intercepta los change del filtro con stopImmediatePropagation().
+    // Escuchamos en document durante la fase CAPTURE para ejecutar antes de ese bloqueo.
+    if (document.documentElement.dataset.v116Events === '1') return;
+    document.documentElement.dataset.v116Events = '1';
+
+    const filterIds = new Set([
+      'dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19',
+      'dashboardStateV19','dashboardSupervisor','dashboardCrew'
+    ]);
+
+    document.addEventListener('change', (event) => {
+      const id = event.target?.id || '';
+
+      if (filterIds.has(id)) {
+        window.setTimeout(renderSummary116, 0);
+      }
+
+      if (id === 'dashboardIndicator') {
+        window.setTimeout(() => {
+          const compare = document.getElementById('dashboardCompareByV116')?.value || 'CUADRILLA';
+          if (compare === 'SUPERVISOR') renderSupervisorRanking116();
+        }, 0);
+      }
+    }, true);
+
+    document.addEventListener('click', (event) => {
+      if (event.target?.id !== 'refreshDashboardButton') return;
+      window.setTimeout(() => {
+        renderSummary116();
+        renderSupervisorRanking116();
+      }, 60);
+    }, true);
+  }
+
+  function observeRanking116() {
+    const list = document.getElementById('dashboardRankingList');
+    if (!list || list.dataset.v116Observed === '1') return;
+    list.dataset.v116Observed = '1';
+
+    new MutationObserver(() => {
+      if (STATE116.renderingSupervisor) return;
+      if ((document.getElementById('dashboardCompareByV116')?.value || '') !== 'SUPERVISOR') return;
+      if (list.dataset.v116Supervisor === '1' && list.querySelector('.mvl-v116-compare-row')) return;
+      window.setTimeout(renderSupervisorRanking116, 0);
+    }).observe(list, { childList: true, subtree: false });
+  }
+
+  function init116() {
+    ensureStyles116();
+    wrapApi116();
+    ensureCompareSelect116();
+    attachFilterEvents116();
+    observeRanking116();
+
+    // Si V1.15 ya recibió datos antes de instalar esta capa,
+    // la próxima interacción o llamada actualizará STATE116.
+  }
+
+  const timer = window.setInterval(() => {
+    init116();
+    if (
+      STATE116.wrappedApi &&
+      document.getElementById('dashboardCompareByV116') &&
+      document.getElementById('dashboardRankingList')
+    ) {
+      window.clearInterval(timer);
+    }
+  }, 120);
+
+  window.setTimeout(init116, 0);
+})();

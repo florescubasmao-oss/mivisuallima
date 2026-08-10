@@ -1,0 +1,44 @@
+MI VISUAL LIMA - V1.16
+RESUMEN FILTRADO + COMPARACIÓN POR SUPERVISOR
+
+CAMBIOS
+1. Al ingresar al Dashboard:
+   - El Resumen muestra TODOS los datos del periodo.
+
+2. Al seleccionar filtros:
+   - El Resumen se recalcula inmediatamente con la selección.
+   - Ejemplo: Visual = PDG -> arriba se muestran solo las cuadrillas PDG:
+     cantidad con datos, puntos, finalizadas, efectividad, recableado y semáforos.
+   - Se pueden combinar PDG + SGI + Supervisor + Composición + Estado, etc.
+
+3. Nuevo campo COMPARAR POR:
+   - Cuadrillas: mantiene el ranking actual.
+   - Supervisores: agrupa las cuadrillas por supervisor y genera ranking de supervisores.
+
+4. Comparación de Producción por Supervisor:
+   - Se ordena por % de cumplimiento de meta, NO por puntos totales.
+   - Esto evita favorecer a un supervisor solamente por tener más cuadrillas.
+   - También muestra puntos totales, número de cuadrillas y finalizadas.
+
+5. Efectividad por Supervisor:
+   - Usa efectividad total ponderada: Finalizadas / Total de órdenes del grupo.
+
+6. % Recableado por Supervisor:
+   - Usa Recableados / LOS ROJO del grupo.
+
+7. Metas y semáforos:
+   - Si se filtra PDG, usa la configuración PDG.
+   - Si se filtra PLANILLA, usa PLANILLA.
+   - Sin Tipo Visual seleccionado usa la configuración general.
+
+OPTIMIZACIÓN
+- El cambio de filtros recalcula el Resumen en el navegador.
+- No hace una llamada nueva a Apps Script por cada filtro.
+- El backend envía en una sola respuesta todas las configuraciones de metas Visual necesarias.
+
+ORDEN DE ACTUALIZACIÓN
+1. Reemplazar Code.gs por Code_V1_16.gs.
+2. Guardar Apps Script.
+3. Implementar una nueva versión de la implementación existente.
+4. En GitHub reemplazar app.js por el app.js de este paquete.
+5. Ctrl+F5 para probar.
