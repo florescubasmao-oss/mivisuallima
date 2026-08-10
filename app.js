@@ -1,11 +1,11 @@
 /**
- * MI VISUAL LIMA - Frontend V1.13 (actualización incremental)
+ * MI VISUAL LIMA - Frontend V1.14 (actualización incremental)
  *
  * Mantiene intacta la V1.12 publicada y agrega:
  * - Inicio más limpio y módulos más visibles.
  * - Botón PONER INDICADORES solo para Gerencia y Administrador.
- * - Metas y semáforos editables para Producción y Efectividad.
- * - Semáforos visibles en resumen y ranking.
+ * - Metas y semáforos por Tipo de Cuadrilla Visual.
+ * - Semáforos Crítico / Moderado / Óptimo para Producción, Efectividad y Recableado.
  */
 
 (() => {
@@ -14,6 +14,7 @@
 
   const STATE = {
     config: null,
+    configVisualType: 'TODOS',
     dashboards: new Map(),
     apiWrapped: false,
     initialized: false
@@ -379,6 +380,26 @@
         cursor: wait;
       }
 
+      .mvl-v114-scope {
+        border: 1px solid #b9d4f5;
+        background: #f5f9ff;
+        border-radius: 14px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .mvl-v114-scope label { display:flex; flex-direction:column; gap:6px; font-size:.75rem; font-weight:800; color:#294563; }
+      .mvl-v114-scope select { min-height:42px; border:1px solid #c7d7e9; border-radius:10px; padding:8px 10px; background:#fff; font:inherit; color:#10213d; }
+      .mvl-v114-source { margin-top:7px; font-size:.70rem; color:#607086; font-weight:700; }
+      .mvl-v114-levels { display:grid; gap:7px; margin-top:10px; }
+      .mvl-v114-level { display:grid; grid-template-columns:118px 1fr; gap:8px; align-items:center; border-radius:10px; padding:8px 10px; font-size:.73rem; }
+      .mvl-v114-level strong { font-size:.72rem; }
+      .mvl-v114-level.red { background:#fff1f0; color:#a32118; }
+      .mvl-v114-level.yellow { background:#fff8e8; color:#925400; }
+      .mvl-v114-level.green { background:#eef9f1; color:#14723a; }
+      .mvl-v114-pending { color:#758297; font-size:.72rem; margin-top:8px; }
+      .mvl-v114-inherit { margin-right:auto; }
+      .mvl-v114-field-note { font-size:.67rem; font-weight:600; color:#7a8799; }
+
       @media (max-width: 680px) {
         #homeView #moduleList.module-grid {
           grid-template-columns: 1fr !important;
@@ -427,8 +448,8 @@
 
   function statusInfo113(status) {
     const s = norm113(status);
-    if (s === 'CUMPLE') return { cls: 'cumple', label: 'Cumple' };
-    if (s === 'ATENCION') return { cls: 'atencion', label: 'Atención' };
+    if (s === 'CUMPLE' || s === 'OPTIMO') return { cls: 'cumple', label: 'Óptimo' };
+    if (s === 'ATENCION' || s === 'MODERADO') return { cls: 'atencion', label: 'Moderado' };
     if (s === 'CRITICO') return { cls: 'critico', label: 'Crítico' };
     return { cls: 'sin-dato', label: 'Sin dato' };
   }
@@ -470,6 +491,7 @@
     const summary = data.summary || {};
     const productionValue = document.getElementById('dashboardTotalPointsV19');
     const effectivenessValue = document.getElementById('dashboardTotalEffectivenessV19');
+    const recableValue = document.getElementById('dashboardTotalRecableV19');
 
     if (productionValue?.closest('article')) {
       const ratio = Number(summary.productionRatio);
@@ -484,10 +506,13 @@
     }
 
     if (effectivenessValue?.closest('article')) {
-      setStatusBadge113(
-        effectivenessValue.closest('article'),
-        summary.effectivenessStatus
-      );
+      setStatusBadge113(effectivenessValue.closest('article'), summary.effectivenessStatus);
+    }
+
+    if (recableValue?.closest('article')) {
+      const status = summary.recableadoStatus || '';
+      if (status) setStatusBadge113(recableValue.closest('article'), status);
+      else recableValue.closest('article')?.querySelector(':scope > .mvl-v113-status')?.remove();
     }
   }
 
@@ -496,11 +521,9 @@
     if (!data?.ok) return;
 
     const indicator = selectedIndicator113();
-    if (indicator !== 'PRODUCCION' && indicator !== 'EFECTIVIDAD') return;
+    if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator)) return;
 
-    const byCrew = new Map(
-      (data.rows || []).map(row => [String(row.crewId || ''), row])
-    );
+    const byCrew = new Map((data.rows || []).map(row => [String(row.crewId || ''), row]));
 
     document.querySelectorAll('#dashboardRankingList [data-dashboard-crew]').forEach(button => {
       const row = byCrew.get(String(button.dataset.dashboardCrew || ''));
@@ -523,21 +546,26 @@
         const avg = Number(row.productionDailyAverage);
         const target = Number(row.productionDailyTarget);
         const days = Number(row.productionDays || 0);
-
         const text = Number.isFinite(avg) && days > 0
-          ? `${avg.toFixed(2)} pts/día · Meta ${target.toFixed(target % 1 ? 1 : 0)} pts/día · ${days} día${days === 1 ? '' : 's'} con datos`
+          ? `${avg.toFixed(2)} pts/día · Meta ${target.toFixed(target % 1 ? 1 : 0)} pts/día · ${row.visualType || 'GENERAL'}`
           : 'Sin promedio diario disponible';
-
         if (extra.textContent !== text) extra.textContent = text;
         setStatusBadge113(value, row.productionStatus);
-      } else {
+      } else if (indicator === 'EFECTIVIDAD') {
         const eff = Number(row.effectiveness);
         const text = Number.isFinite(eff)
-          ? `Efectividad ${(eff * 100).toFixed(1)}%`
+          ? `Efectividad ${(eff * 100).toFixed(1)}% · ${row.visualType || 'GENERAL'}`
           : 'Sin efectividad disponible';
-
         if (extra.textContent !== text) extra.textContent = text;
         setStatusBadge113(value, row.effectivenessStatus);
+      } else {
+        const rec = Number(row.recablePercent);
+        const text = Number.isFinite(rec)
+          ? `% Recableado ${(rec * 100).toFixed(1)}% · ${row.visualType || 'GENERAL'}`
+          : 'Sin recableado disponible';
+        if (extra.textContent !== text) extra.textContent = text;
+        if (row.recableadoStatus) setStatusBadge113(value, row.recableadoStatus);
+        else value.querySelector(':scope > .mvl-v113-status')?.remove();
       }
     });
   }
@@ -560,96 +588,152 @@
         <div class="mvl-v113-modal-head">
           <div>
             <h3 id="indicatorConfigTitleV113">PONER INDICADORES</h3>
-            <p>Metas y límites del Dashboard de Desempeño.</p>
+            <p>Metas y semáforos por Tipo de Cuadrilla Visual.</p>
           </div>
           <button type="button" class="mvl-v113-close" id="closeIndicatorConfigV113" aria-label="Cerrar">×</button>
+        </div>
+
+        <div class="mvl-v114-scope">
+          <label>
+            Aplicar metas a
+            <select id="cfgVisualTypeV114">
+              <option value="TODOS">Todos los tipos de cuadrilla</option>
+              <option value="PDG">PDG</option>
+              <option value="PLANILLA">PLANILLA</option>
+              <option value="PRODUCCION">PRODUCCIÓN</option>
+              <option value="DISPONIBILIDAD">DISPONIBILIDAD</option>
+            </select>
+          </label>
+          <div id="cfgSourceV114" class="mvl-v114-source"></div>
         </div>
 
         <section class="mvl-v113-config-section">
           <h4>Producción</h4>
           <div class="mvl-v113-config-grid">
-            <label class="mvl-v113-field">
-              Meta DOBLE · puntos por día
-              <input id="cfgProdDoubleV113" type="number" min="0.1" step="0.1">
-            </label>
-            <label class="mvl-v113-field">
-              Meta INDIVIDUAL · puntos por día
-              <input id="cfgProdSoloV113" type="number" min="0.1" step="0.1">
-            </label>
-            <label class="mvl-v113-field">
-              Atención desde · % de la meta
-              <input id="cfgProdAttentionV113" type="number" min="0" max="100" step="1">
-            </label>
-            <label class="mvl-v113-field">
-              Cumple desde · % de la meta
-              <input id="cfgProdGreenV113" type="number" min="1" max="200" step="1">
-            </label>
+            <label class="mvl-v113-field">Meta DOBLE · puntos por día<input id="cfgProdDoubleV113" type="number" min="0.1" step="0.1"></label>
+            <label class="mvl-v113-field">Meta INDIVIDUAL · puntos por día<input id="cfgProdSoloV113" type="number" min="0.1" step="0.1"></label>
+            <label class="mvl-v113-field">Inicio MODERADO · % de la meta<input id="cfgProdAttentionV113" type="number" min="0" max="200" step="1"></label>
+            <label class="mvl-v113-field">Inicio ÓPTIMO · % de la meta<input id="cfgProdGreenV113" type="number" min="0" max="200" step="1"></label>
+          </div>
+          <div class="mvl-v114-levels">
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Por debajo del inicio Moderado.</span></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Entre Moderado y antes de Óptimo.</span></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Desde el porcentaje Óptimo.</span></div>
           </div>
         </section>
 
         <section class="mvl-v113-config-section">
           <h4>Efectividad</h4>
           <div class="mvl-v113-config-grid">
-            <label class="mvl-v113-field">
-              Crítico si es menor de · %
-              <input id="cfgEffCriticalV113" type="number" min="0" max="100" step="1">
-            </label>
-            <label class="mvl-v113-field">
-              Cumple si es mayor de · %
-              <input id="cfgEffGreenV113" type="number" min="0" max="100" step="1">
-            </label>
+            <label class="mvl-v113-field">Inicio MODERADO · %<input id="cfgEffCriticalV113" type="number" min="0" max="100" step="1"></label>
+            <label class="mvl-v113-field">Inicio ÓPTIMO · %<input id="cfgEffGreenV113" type="number" min="0" max="100" step="1"></label>
           </div>
+          <div class="mvl-v114-levels">
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Menor al inicio Moderado.</span></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Desde Moderado hasta el límite Óptimo.</span></div>
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Mayor al límite Óptimo.</span></div>
+          </div>
+        </section>
+
+        <section class="mvl-v113-config-section">
+          <h4>% Recableado</h4>
+          <div class="mvl-v113-config-grid">
+            <label class="mvl-v113-field">Máximo ÓPTIMO · %<input id="cfgRecOptimalV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Menor porcentaje es mejor.</span></label>
+            <label class="mvl-v113-field">Máximo MODERADO · %<input id="cfgRecModerateV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Por encima será crítico.</span></label>
+          </div>
+          <div class="mvl-v114-levels">
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span></div>
+          </div>
+          <div class="mvl-v114-pending">Puedes dejar ambos campos vacíos mientras aún no se defina la meta.</div>
+        </section>
+
+        <section class="mvl-v113-config-section">
+          <h4>VTR / GAR</h4>
+          <div class="mvl-v113-config-grid">
+            <label class="mvl-v113-field">Máximo ÓPTIMO · %<input id="cfgVtrOptimalV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Menor porcentaje es mejor.</span></label>
+            <label class="mvl-v113-field">Máximo MODERADO · %<input id="cfgVtrModerateV114" type="number" min="0" max="100" step="0.1"><span class="mvl-v114-field-note">Por encima será crítico.</span></label>
+          </div>
+          <div class="mvl-v114-levels">
+            <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Hasta el máximo Óptimo.</span></div>
+            <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Sobre Óptimo y hasta el máximo Moderado.</span></div>
+            <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Mayor al máximo Moderado.</span></div>
+          </div>
+          <div class="mvl-v114-pending">La meta puede configurarse ahora; el cálculo seguirá en construcción hasta integrar la fuente VTR/GAR.</div>
         </section>
 
         <section class="mvl-v113-config-section">
           <h4>Siguientes indicadores</h4>
           <div class="mvl-v113-construction-list">
-            <div class="mvl-v113-construction-item"><span>% Recableado</span><strong>PENDIENTE DE META</strong></div>
-            <div class="mvl-v113-construction-item"><span>VTR / GAR</span><strong>EN CONSTRUCCIÓN</strong></div>
             <div class="mvl-v113-construction-item"><span>Tiempo de gestión / SLA</span><strong>EN CONSTRUCCIÓN</strong></div>
             <div class="mvl-v113-construction-item"><span>Observaciones</span><strong>EN CONSTRUCCIÓN</strong></div>
           </div>
         </section>
 
         <div id="indicatorConfigMessageV113" class="mvl-v113-modal-message"></div>
-
         <div class="mvl-v113-modal-actions">
+          <button type="button" class="mvl-v113-secondary mvl-v114-inherit hidden" id="inheritIndicatorConfigV114">Usar metas generales</button>
           <button type="button" class="mvl-v113-secondary" id="cancelIndicatorConfigV113">Cancelar</button>
           <button type="button" class="mvl-v113-primary" id="saveIndicatorConfigV113">Guardar indicadores</button>
         </div>
-      </div>
-    `;
+      </div>`;
 
     document.body.appendChild(modal);
-
     const close = () => modal.classList.add('hidden');
-
     document.getElementById('closeIndicatorConfigV113')?.addEventListener('click', close);
     document.getElementById('cancelIndicatorConfigV113')?.addEventListener('click', close);
-
-    modal.addEventListener('click', event => {
-      if (event.target === modal) close();
+    modal.addEventListener('click', event => { if (event.target === modal) close(); });
+    document.getElementById('saveIndicatorConfigV113')?.addEventListener('click', () => saveConfig113(false));
+    document.getElementById('inheritIndicatorConfigV114')?.addEventListener('click', () => saveConfig113(true));
+    document.getElementById('cfgVisualTypeV114')?.addEventListener('change', async event => {
+      modalMessage113('Cargando metas…');
+      try {
+        const config = await getConfig113(true, event.target.value);
+        fillConfig113(config);
+        modalMessage113('');
+      } catch (err) {
+        modalMessage113(err.message || 'No se pudo cargar la configuración.', 'error');
+      }
     });
-
-    document.getElementById('saveIndicatorConfigV113')?.addEventListener('click', saveConfig113);
   }
 
   function fillConfig113(config) {
     const c = config || {};
     const p = c.production || {};
     const e = c.effectiveness || {};
+    const r = c.recableado || {};
+    const v = c.vtrGar || {};
 
     const set = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.value = value ?? '';
     };
 
+    const selector = document.getElementById('cfgVisualTypeV114');
+    if (selector && c.visualType) selector.value = c.visualType;
     set('cfgProdDoubleV113', Number(p.doubleDailyTarget ?? 5));
     set('cfgProdSoloV113', Number(p.soloDailyTarget ?? 1));
-    set('cfgProdAttentionV113', Number(p.attentionRatio ?? .7) * 100);
-    set('cfgProdGreenV113', Number(p.greenRatio ?? 1) * 100);
-    set('cfgEffCriticalV113', Number(e.criticalBelow ?? .5) * 100);
-    set('cfgEffGreenV113', Number(e.greenAbove ?? .7) * 100);
+    set('cfgProdAttentionV113', Number(p.moderateFromRatio ?? p.attentionRatio ?? .7) * 100);
+    set('cfgProdGreenV113', Number(p.optimalFromRatio ?? p.greenRatio ?? 1) * 100);
+    set('cfgEffCriticalV113', Number(e.moderateFrom ?? e.criticalBelow ?? .5) * 100);
+    set('cfgEffGreenV113', Number(e.optimalFrom ?? e.greenAbove ?? .7) * 100);
+    set('cfgRecOptimalV114', r.optimalMax == null ? '' : Number(r.optimalMax) * 100);
+    set('cfgRecModerateV114', r.moderateMax == null ? '' : Number(r.moderateMax) * 100);
+    set('cfgVtrOptimalV114', v.optimalMax == null ? '' : Number(v.optimalMax) * 100);
+    set('cfgVtrModerateV114', v.moderateMax == null ? '' : Number(v.moderateMax) * 100);
+
+    const source = document.getElementById('cfgSourceV114');
+    if (source) {
+      source.textContent = c.visualType === 'TODOS'
+        ? 'Configuración general para todos los tipos de cuadrilla.'
+        : (c.source === 'GENERAL'
+            ? `${c.visualType}: actualmente hereda las metas generales. Al guardar crearás una configuración propia.`
+            : `${c.visualType}: tiene una configuración propia.`);
+    }
+
+    const inherit = document.getElementById('inheritIndicatorConfigV114');
+    inherit?.classList.toggle('hidden', !c.visualType || c.visualType === 'TODOS' || c.source === 'GENERAL');
   }
 
   function modalMessage113(text = '', type = '') {
@@ -659,33 +743,32 @@
     el.className = `mvl-v113-modal-message ${type}`.trim();
   }
 
-  async function getConfig113(force = false) {
-    if (STATE.config && !force) return STATE.config;
-
-    if (typeof api !== 'function') {
-      throw new Error('La conexión con el sistema todavía no está disponible.');
-    }
+  async function getConfig113(force = false, visualType = 'TODOS') {
+    const type = visualType || 'TODOS';
+    if (STATE.config && !force && STATE.configVisualType === type) return STATE.config;
+    if (typeof api !== 'function') throw new Error('La conexión con el sistema todavía no está disponible.');
 
     const res = await api('performanceIndicatorConfigGet', {
-      token: tokenSafe113()
+      token: tokenSafe113(),
+      visualType: type
     });
-
     if (!res?.ok) throw new Error(res?.error || 'No se pudieron cargar los indicadores.');
-
     STATE.config = res.config || null;
+    STATE.configVisualType = res.config?.visualType || type;
     return STATE.config;
   }
 
   async function openConfig113() {
     if (!canEditIndicators113()) return;
-
     createModal113();
     const modal = document.getElementById('indicatorConfigModalV113');
+    const selector = document.getElementById('cfgVisualTypeV114');
+    if (selector) selector.value = 'TODOS';
     modal?.classList.remove('hidden');
     modalMessage113('Cargando configuración…');
 
     try {
-      const config = await getConfig113(true);
+      const config = await getConfig113(true, 'TODOS');
       fillConfig113(config);
       modalMessage113('');
     } catch (err) {
@@ -693,46 +776,64 @@
     }
   }
 
-  async function saveConfig113() {
+  async function saveConfig113(inheritGeneral = false) {
     if (!canEditIndicators113()) return;
 
-    const val = id => Number(document.getElementById(id)?.value);
+    const visualType = document.getElementById('cfgVisualTypeV114')?.value || 'TODOS';
+    const num = id => Number(document.getElementById(id)?.value);
+    const nullablePct = id => {
+      const raw = document.getElementById(id)?.value ?? '';
+      if (String(raw).trim() === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n / 100 : null;
+    };
+
     const payload = {
+      visualType,
+      inheritGeneral,
       production: {
-        doubleDailyTarget: val('cfgProdDoubleV113'),
-        soloDailyTarget: val('cfgProdSoloV113'),
-        attentionRatio: val('cfgProdAttentionV113') / 100,
-        greenRatio: val('cfgProdGreenV113') / 100
+        doubleDailyTarget: num('cfgProdDoubleV113'),
+        soloDailyTarget: num('cfgProdSoloV113'),
+        moderateFromRatio: num('cfgProdAttentionV113') / 100,
+        optimalFromRatio: num('cfgProdGreenV113') / 100
       },
       effectiveness: {
-        criticalBelow: val('cfgEffCriticalV113') / 100,
-        greenAbove: val('cfgEffGreenV113') / 100
+        moderateFrom: num('cfgEffCriticalV113') / 100,
+        optimalFrom: num('cfgEffGreenV113') / 100
+      },
+      recableado: {
+        optimalMax: nullablePct('cfgRecOptimalV114'),
+        moderateMax: nullablePct('cfgRecModerateV114')
+      },
+      vtrGar: {
+        optimalMax: nullablePct('cfgVtrOptimalV114'),
+        moderateMax: nullablePct('cfgVtrModerateV114')
       }
     };
 
-    const button = document.getElementById('saveIndicatorConfigV113');
+    const button = inheritGeneral
+      ? document.getElementById('inheritIndicatorConfigV114')
+      : document.getElementById('saveIndicatorConfigV113');
     if (button) button.disabled = true;
-    modalMessage113('Guardando indicadores…');
+    modalMessage113(inheritGeneral ? 'Restableciendo metas generales…' : 'Guardando indicadores…');
 
     try {
       const res = await api('performanceIndicatorConfigSave', {
         token: tokenSafe113(),
+        visualType,
         config: JSON.stringify(payload)
       });
-
       if (!res?.ok) throw new Error(res?.error || 'No se pudieron guardar los indicadores.');
 
       STATE.config = res.config || STATE.config;
+      STATE.configVisualType = res.config?.visualType || visualType;
       STATE.dashboards.clear();
-      modalMessage113('Indicadores actualizados correctamente.', 'ok');
-
-      window.setTimeout(() => {
-        document.getElementById('indicatorConfigModalV113')?.classList.add('hidden');
-      }, 550);
+      fillConfig113(STATE.config);
+      modalMessage113(res.message || 'Indicadores actualizados correctamente.', 'ok');
 
       const apply = document.getElementById('refreshDashboardButton');
       if (apply && !document.getElementById('performanceDashboardPanel')?.classList.contains('hidden')) {
-        apply.click();
+        window.setTimeout(() => apply.click(), 100);
       }
     } catch (err) {
       modalMessage113(err.message || 'No se pudieron guardar los indicadores.', 'error');
@@ -790,7 +891,12 @@
           const indicator = String(params?.indicator || result?.indicator?.key || 'ALL').toUpperCase();
           STATE.dashboards.set(indicator, result);
 
-          if (result.indicatorConfig) STATE.config = result.indicatorConfig;
+          if (result.indicatorConfig && !document.getElementById('indicatorConfigModalV113')?.classList.contains('hidden')) {
+            // El modal controla su propio alcance; no sobrescribirlo desde el Dashboard.
+          } else if (result.indicatorConfig) {
+            STATE.config = result.indicatorConfig;
+            STATE.configVisualType = result.indicatorConfig.visualType || 'TODOS';
+          }
           window.setTimeout(refreshSemaphores113, 0);
         }
 
@@ -801,9 +907,10 @@
           result.config
         ) {
           STATE.config = result.config;
+          STATE.configVisualType = result.config.visualType || STATE.configVisualType || 'TODOS';
         }
       } catch (err) {
-        console.warn('[MI VISUAL LIMA V1.13] No se pudo procesar la mejora de indicadores.', err);
+        console.warn('[MI VISUAL LIMA V1.14] No se pudo procesar la mejora de indicadores.', err);
       }
 
       return result;
@@ -849,7 +956,7 @@
       subtree: true
     });
 
-    console.info('[MI VISUAL LIMA] Frontend V1.13: inicio simplificado + metas y semáforos editables.');
+    console.info('[MI VISUAL LIMA] Frontend V1.14: metas por Tipo Visual + semáforos Crítico/Moderado/Óptimo.');
   }
 
   function waitForCore113(attempt = 0) {
@@ -859,7 +966,7 @@
     }
 
     if (attempt > 240) {
-      console.error('[MI VISUAL LIMA V1.13] El núcleo V1.12 no terminó de cargar.');
+      console.error('[MI VISUAL LIMA V1.14] El núcleo V1.12 no terminó de cargar.');
       return;
     }
 
@@ -875,7 +982,7 @@
     if (loaderText) {
       loaderText.textContent = 'No se pudo cargar la versión anterior. Verifica la conexión.';
     }
-    console.error('[MI VISUAL LIMA V1.13] No se pudo cargar Frontend V1.12.');
+    console.error('[MI VISUAL LIMA V1.14] No se pudo cargar Frontend V1.12.');
   };
 
   document.head.appendChild(core);
