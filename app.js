@@ -76,21 +76,206 @@
 
   instalarLoaderCompactoV112();
 
-  const MVL_CORE_V18 =
-    'https://cdn.jsdelivr.net/gh/florescubasmao-oss/mivisuallima@8f08004a72c45a7eda063aca6e64eb2ce1d3fe92/app.js';
+  /* ==========================================================
+     V2.01 - ARRANQUE ESTABLE
+     - No bloquea el Login mientras valida una sesión anterior.
+     - Cachea el núcleo V1.8 en localStorage después de la primera carga.
+     - Intenta GitHub Raw + jsDelivr en paralelo y usa el primero disponible.
+     - Si una sesión guardada tarda, la validación ocurre en segundo plano.
+     ========================================================== */
 
-  const core = document.createElement('script');
-  core.src = MVL_CORE_V18;
-  core.async = false;
-  core.onload = () => window.setTimeout(iniciarDashboardV19, 0);
-  core.onerror = () => {
-    const loaderText = document.getElementById('loaderText');
-    if (loaderText) {
-      loaderText.textContent = 'No se pudo cargar el núcleo V1.8. Verifica la conexión e inténtalo nuevamente.';
+  const MVL_CORE_COMMIT_V201 = '8f08004a72c45a7eda063aca6e64eb2ce1d3fe92';
+  const MVL_CORE_CACHE_KEY_V201 = 'mvl_core_v18_' + MVL_CORE_COMMIT_V201;
+  const MVL_TOKEN_KEY_V201 = 'mvl_session_token';
+  const MVL_CORE_URLS_V201 = [
+    'https://raw.githubusercontent.com/florescubasmao-oss/mivisuallima/' +
+      MVL_CORE_COMMIT_V201 + '/app.js',
+    'https://cdn.jsdelivr.net/gh/florescubasmao-oss/mivisuallima@' +
+      MVL_CORE_COMMIT_V201 + '/app.js'
+  ];
+
+  let mvlLoginInteractedV201 = false;
+  document.getElementById('loginForm')?.addEventListener(
+    'submit',
+    () => { mvlLoginInteractedV201 = true; },
+    true
+  );
+
+  // Mostrar Login de inmediato: nunca dejar una pantalla borrosa esperando red.
+  document.getElementById('loginView')?.classList.remove('hidden');
+  document.body.classList.add('login-mode');
+  document.getElementById('appLoader')?.classList.add('loader-hidden');
+
+  function setBootMessageV201(text, type = 'error') {
+    const el = document.getElementById('loginMessage');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('success-message', type === 'success');
+  }
+
+  async function fetchTextTimeoutV201(url, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await window.fetch(url, {
+        method: 'GET',
+        cache: 'force-cache',
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return await response.text();
+    } finally {
+      window.clearTimeout(timer);
     }
-    console.error('[MI VISUAL LIMA V1.12] No se pudo cargar el núcleo V1.8.');
-  };
-  document.head.appendChild(core);
+  }
+
+  async function getCoreTextV201() {
+    try {
+      const cached = localStorage.getItem(MVL_CORE_CACHE_KEY_V201);
+      if (cached && cached.includes('MI VISUAL LIMA - Frontend V1.8')) {
+        return cached;
+      }
+    } catch (_) {}
+
+    const attempts = MVL_CORE_URLS_V201.map(url =>
+      fetchTextTimeoutV201(url, 8000).then(text => {
+        if (!text || !text.includes('MI VISUAL LIMA - Frontend V1.8')) {
+          throw new Error('Núcleo inválido');
+        }
+        return text;
+      })
+    );
+
+    let text = '';
+    if (typeof Promise.any === 'function') {
+      text = await Promise.any(attempts);
+    } else {
+      // Compatibilidad: prueba secuencial si Promise.any no existe.
+      let lastError = null;
+      for (const attempt of attempts) {
+        try { text = await attempt; break; }
+        catch (err) { lastError = err; }
+      }
+      if (!text) throw lastError || new Error('No se pudo descargar el núcleo.');
+    }
+
+    try { localStorage.setItem(MVL_CORE_CACHE_KEY_V201, text); } catch (_) {}
+    return text;
+  }
+
+  function installApiTimeoutV201() {
+    if (window.__mvlApiTimeoutV201) return;
+    window.__mvlApiTimeoutV201 = true;
+    const nativeFetch = window.fetch.bind(window);
+
+    window.fetch = function(input, init = {}) {
+      const url = typeof input === 'string' ? input : String(input?.url || input || '');
+      if (!/script\.google\.com\/macros\/s\//i.test(url)) {
+        return nativeFetch(input, init);
+      }
+
+      // Una llamada API nunca debe dejar la APP bloqueada indefinidamente.
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 15000);
+      const originalSignal = init?.signal;
+
+      if (originalSignal) {
+        if (originalSignal.aborted) controller.abort();
+        else originalSignal.addEventListener('abort', () => controller.abort(), { once:true });
+      }
+
+      return nativeFetch(input, { ...init, signal: controller.signal })
+        .finally(() => window.clearTimeout(timer));
+    };
+  }
+
+  function executeCoreV201(source) {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.text = source + '\n//# sourceURL=mvl-core-v18-cached.js';
+    document.head.appendChild(script);
+    script.remove();
+
+    if (typeof api !== 'function' || typeof renderHome !== 'function') {
+      throw new Error('El núcleo no terminó de inicializarse.');
+    }
+  }
+
+  async function restoreSavedSessionBackgroundV201(savedToken) {
+    if (!savedToken || typeof api !== 'function') return;
+
+    // Restaurar el token después de que el núcleo haya mostrado el Login sin bloquear.
+    localStorage.setItem(MVL_TOKEN_KEY_V201, savedToken);
+
+    try {
+      const data = await api('session', { token: savedToken });
+
+      // Si el usuario ya intentó ingresar manualmente, no pisar esa acción.
+      if (mvlLoginInteractedV201) return;
+
+      if (data?.ok) {
+        renderHome(data);
+      } else if (localStorage.getItem(MVL_TOKEN_KEY_V201) === savedToken) {
+        localStorage.removeItem(MVL_TOKEN_KEY_V201);
+      }
+    } catch (_) {
+      // La APP queda utilizable en Login aunque el backend esté frío o temporalmente lento.
+    }
+  }
+
+  async function bootCoreV201() {
+    let savedToken = '';
+    try {
+      savedToken = localStorage.getItem(MVL_TOKEN_KEY_V201) || '';
+      // Evita que restoreSession() del núcleo bloquee el primer render.
+      if (savedToken) localStorage.removeItem(MVL_TOKEN_KEY_V201);
+    } catch (_) {}
+
+    installApiTimeoutV201();
+
+    const loginButton = document.getElementById('loginButton');
+    if (loginButton) {
+      loginButton.disabled = true;
+      loginButton.textContent = 'Preparando…';
+    }
+
+    try {
+      const source = await getCoreTextV201();
+      executeCoreV201(source);
+
+      if (loginButton) {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Ingresar';
+      }
+      setBootMessageV201('');
+
+      // Avisar a las capas nuevas que api()/renderHome ya existen.
+      document.dispatchEvent(new CustomEvent('mvl:core-ready'));
+      window.setTimeout(iniciarDashboardV19, 0);
+      window.setTimeout(() => restoreSavedSessionBackgroundV201(savedToken), 0);
+    } catch (err) {
+      if (savedToken) {
+        try { localStorage.setItem(MVL_TOKEN_KEY_V201, savedToken); } catch (_) {}
+      }
+
+      document.getElementById('appLoader')?.classList.add('loader-hidden');
+      if (loginButton) {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Reintentar';
+        loginButton.onclick = (event) => {
+          event.preventDefault();
+          location.reload();
+        };
+      }
+
+      setBootMessageV201(
+        'No se pudo preparar la aplicación. Revisa la conexión y pulsa Reintentar.'
+      );
+      console.error('[MI VISUAL LIMA V2.01] Error de arranque:', err);
+    }
+  }
+
+  bootCoreV201();
 
   async function iniciarDashboardV19() {
     try {
@@ -5141,7 +5326,7 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
     if (!list || list.dataset.v200MapObserved === '1') return;
     list.dataset.v200MapObserved = '1';
     activateMapCard200();
-    new MutationObserver(activateMapCard200).observe(list, { childList:true, subtree:true });
+    new MutationObserver(activateMapCard200).observe(list, { childList:true });
   }
 
   document.addEventListener('click', event => {
@@ -5359,7 +5544,8 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
     const canImport = Boolean(permission.permissions.registrar);
     $200('mvl200LoadGrid')?.classList.toggle('hidden', !canImport);
 
-    await Promise.allSettled([ensureLeaflet200(), ensureXlsx200()]);
+    // V2.01: XLSX solo se carga cuando realmente se selecciona un Excel.
+    await Promise.allSettled([ensureLeaflet200()]);
     await loadMapData200();
   }
 
@@ -6312,14 +6498,34 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
   /* -------------------------
      INIT
      ------------------------- */
+  let init200DoneV201 = false;
+
   function init200() {
+    if (init200DoneV201) return;
+    if (typeof api !== 'function' || typeof renderHome !== 'function') return;
+
+    init200DoneV201 = true;
     installStyles200();
     wrapApi200();
     watchMapCard200();
     activateMapCard200();
-    ensureSlaConfig200();
-    refreshSlaUi200();
+
+    // SLA/configuración secundaria se prepara sin bloquear el arranque.
+    const backgroundV201 = () => {
+      try {
+        ensureSlaConfig200();
+        refreshSlaUi200();
+      } catch (_) {}
+    };
+
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(backgroundV201, { timeout: 1800 });
+    } else {
+      window.setTimeout(backgroundV201, 500);
+    }
   }
+
+  document.addEventListener('mvl:core-ready', () => window.setTimeout(init200, 0));
 
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',()=>setTimeout(init200,0),{once:true});
@@ -6329,3 +6535,5 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 })();
 
 console.info('[MI VISUAL LIMA] V2.00: Mapa Operativo + Tiempo de gestión / SLA habilitados.');
+
+console.info('[MI VISUAL LIMA] V2.01 DEFINITIVA: arranque no bloqueante + núcleo cacheado + mapa diferido.');

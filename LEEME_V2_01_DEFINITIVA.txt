@@ -1,0 +1,57 @@
+MI VISUAL LIMA - V2.01 DEFINITIVA
+ARRANQUE ESTABLE + MAPA/SLA
+
+ESTA VERSION PARTE DEL ZIP REAL ENTREGADO POR EL USUARIO.
+
+GITHUB
+- app.js:
+  * Login visible inmediatamente.
+  * Ya no queda la pantalla bloqueada mientras valida sesión.
+  * El núcleo V1.8 se descarga una sola vez y queda cacheado en localStorage.
+  * Primera carga intenta GitHub Raw y jsDelivr en paralelo.
+  * Si ambos fallan, muestra un error y botón Reintentar; no queda cargando infinito.
+  * La sesión previa se valida en segundo plano.
+  * Las llamadas al Web App tienen timeout para evitar bloqueos indefinidos.
+  * Mapa Operativo carga Leaflet al entrar.
+  * XLSX/SheetJS solo carga al seleccionar un Excel.
+
+- index.html:
+  * POSTMOTOWIN agregado a filtro, Nueva cuadrilla y Editar cuadrilla.
+
+- Se mantienen:
+  index.html, styles.css, assets, data, manifest y toda la lógica Dashboard V1.27 + Mapa V2.00.
+
+APPS SCRIPT
+- No crea hojas nuevas.
+- Las hojas técnicas existentes solo se validan:
+  MAPA_ORDENES
+  CATALOGO_CTO
+  PARAMETROS_SLA
+  SLA_ORDENES_RESUMEN
+- Se corrige referencia a consolidatedV18 antes de su declaración.
+- POSTMOTOWIN permitido en creación y edición de cuadrilla.
+- doGet reporta V2.01_MAPA_SLA_ESTABLE.
+
+ORDEN DE ACTUALIZACION
+1. Apps Script:
+   reemplazar Code.gs por Code_V2_01_DEFINITIVO.gs
+   Guardar
+   Implementar > Administrar implementaciones > Editar > Nueva versión
+   Mantener la misma URL del Web App.
+
+2. GitHub:
+   subir TODO el contenido del ZIP MI_VISUAL_LIMA_V2_01_GITHUB_COMPLETO.zip
+   reemplazando los archivos existentes.
+   No borrar archivos que no estén dentro del ZIP.
+
+3. Esperar GitHub Pages = Exito.
+
+4. Cerrar por completo la pestaña anterior de MI VISUAL LIMA.
+   Abrir una pestaña nueva.
+   Si el navegador conserva una versión anterior: Ctrl + F5.
+
+PRUEBA ESPERADA
+- El Login aparece sin fondo borroso bloqueado.
+- Puede aparecer "Preparando..." brevemente en el botón.
+- Luego el botón cambia a "Ingresar".
+- Si había una sesión válida, puede entrar al Inicio automáticamente en segundo plano.
