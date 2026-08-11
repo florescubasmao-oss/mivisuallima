@@ -387,7 +387,7 @@
             <option value="EFECTIVIDAD">Efectividad</option>
             <option value="RECABLEADO">% Recableado</option>
             <option value="VTR_GAR">VTR / GAR · En construcción</option>
-            <option value="SLA">Tiempo de gestión / SLA · En construcción</option>
+            <option value="SLA">Tiempo de gestión / SLA</option>
             <option value="OBSERVACIONES">Observaciones · En construcción</option>`;
           if (!['ALL','PRODUCCION','EFECTIVIDAD','RECABLEADO','VTR_GAR','SLA','OBSERVACIONES'].includes(indicator.value)) {
             indicator.value = 'PRODUCCION';
@@ -613,6 +613,7 @@
         if (indicator === 'PRODUCCION') return Number(row.points ?? row.value ?? 0);
         if (indicator === 'EFECTIVIDAD') return row.effectiveness ?? row.value;
         if (indicator === 'RECABLEADO') return row.recablePercent ?? row.value;
+        if (indicator === 'SLA') return row.slaPercent ?? row.value;
         return row.value;
       }
 
@@ -631,6 +632,11 @@
           const value = Number(row.recablePercent ?? row.value);
           return Number.isFinite(value) && los > 0;
         }
+        if (indicator === 'SLA') {
+          const evaluables = Number(row.slaEvaluables || 0);
+          const value = Number(row.slaPercent ?? row.value);
+          return Number.isFinite(value) && evaluables > 0;
+        }
         return Number.isFinite(Number(valueFor(row, indicator)));
       }
 
@@ -647,7 +653,7 @@
 
           if (aHas && bHas && av !== bv) {
             // Producción y Efectividad: mayor resultado primero.
-            if (indicator === 'PRODUCCION' || indicator === 'EFECTIVIDAD') return bv - av;
+            if (indicator === 'PRODUCCION' || indicator === 'EFECTIVIDAD' || indicator === 'SLA') return bv - av;
             // % Recableado es indicador negativo: menor porcentaje primero.
             if (indicator === 'RECABLEADO') return av - bv;
           }
@@ -683,7 +689,7 @@
           EFECTIVIDAD: { label: 'Efectividad', help: 'Mejor efectividad primero.', construction: false },
           RECABLEADO: { label: '% Recableado', help: 'Menor porcentaje primero.', construction: false },
           VTR_GAR: { label: 'VTR / GAR', help: 'Indicador considerado para una siguiente etapa.', construction: true },
-          SLA: { label: 'Tiempo de gestión / SLA', help: 'Indicador considerado para una siguiente etapa.', construction: true },
+          SLA: { label: 'Tiempo de gestión / SLA', help: 'Mayor cumplimiento SLA primero.', construction: false },
           OBSERVACIONES: { label: 'Observaciones', help: 'Indicador considerado para una siguiente etapa.', construction: true }
         };
         const meta = labels[indicator] || labels.PRODUCCION;
@@ -1876,6 +1882,7 @@
     const e = c.effectiveness || {};
     const r = c.recableado || {};
     const v = c.vtrGar || {};
+    const s = c.sla || {};
 
     const set = (id, value) => {
       const el = document.getElementById(id);
@@ -1894,6 +1901,8 @@
     set('cfgRecModerateV114', r.moderateMax == null ? '' : Number(r.moderateMax) * 100);
     set('cfgVtrOptimalV114', v.optimalMax == null ? '' : Number(v.optimalMax) * 100);
     set('cfgVtrModerateV114', v.moderateMax == null ? '' : Number(v.moderateMax) * 100);
+    set('cfgSlaModerateV200', Number(s.moderateFrom ?? .8) * 100);
+    set('cfgSlaOptimalV200', Number(s.optimalFrom ?? .9) * 100);
 
     const source = document.getElementById('cfgSourceV114');
     if (source) {
@@ -2056,6 +2065,10 @@
       vtrGar: {
         optimalMax: nullablePct('cfgVtrOptimalV114'),
         moderateMax: nullablePct('cfgVtrModerateV114')
+      },
+      sla: {
+        moderateFrom: num('cfgSlaModerateV200') / 100,
+        optimalFrom: num('cfgSlaOptimalV200') / 100
       }
     };
 
@@ -2248,6 +2261,8 @@
 
         if (
           action === 'performanceIndicatorConfigSave' ||
+          action === 'mapImport' ||
+          action === 'mapRebuildSla' ||
           action === 'adminImportFinish' ||
           action === 'adminCreateCrew' ||
           action === 'adminUpdateCrew' ||
@@ -5039,3 +5054,1278 @@ console.info('[MI VISUAL LIMA] V1.26: Todos los indicadores restaurado.');
 })();
 
 console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Desplegar/Ocultar.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.00
+   MAPA OPERATIVO + SLA / TIEMPO DE GESTIÓN
+   ========================================================== */
+(() => {
+  const V200 = {
+    dashboard: null,
+    tech: null,
+    map: {
+      view: null,
+      leaflet: null,
+      layer: null,
+      ctoLayer: null,
+      markers: new Map(),
+      data: null,
+      loadType: '',
+      opened: false
+    },
+    configByType: new Map(),
+    apiWrapped: false
+  };
+
+  const $200 = id => document.getElementById(id);
+  const norm200 = value => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+  const key200 = value => norm200(value).replace(/[^A-Z0-9]/g, '');
+  const esc200 = value => String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+
+  function pct200(value, digits = 1) {
+    return value == null || !Number.isFinite(Number(value))
+      ? '—'
+      : `${(Number(value) * 100).toFixed(digits)}%`;
+  }
+
+  function statusInfo200(status) {
+    const n = norm200(status);
+    if (n === 'CUMPLE' || n === 'OPTIMO') return { cls:'cumple', label:'Óptimo' };
+    if (n === 'ATENCION' || n === 'MODERADO') return { cls:'atencion', label:'Moderado' };
+    if (n === 'CRITICO') return { cls:'critico', label:'Crítico' };
+    return { cls:'sin-dato', label:'Sin dato' };
+  }
+
+  function positiveStatus200(value, rule) {
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    const moderate = Number(rule?.moderateFrom ?? .8);
+    const optimal = Number(rule?.optimalFrom ?? .9);
+    if (Number(value) >= optimal) return 'CUMPLE';
+    if (Number(value) >= moderate) return 'ATENCION';
+    return 'CRITICO';
+  }
+
+  function modulePermission200(name) {
+    return (sessionData?.modules || []).find(m => norm200(m.module) === norm200(name)) || null;
+  }
+
+  /* -------------------------
+     ACTIVAR MÓDULO MAPA
+     ------------------------- */
+
+  function activateMapCard200() {
+    const card = document.querySelector('#moduleList [data-module="Mapa Operativo"]');
+    const permission = modulePermission200('Mapa Operativo');
+    if (!card || !permission?.permissions?.ver) return;
+
+    card.disabled = false;
+    card.classList.add('module-active');
+    const small = card.querySelector('.module-copy small');
+    if (small) small.textContent = 'Órdenes georreferenciadas y SLA';
+    const arrow = card.querySelector('.module-arrow');
+    if (arrow) arrow.textContent = '›';
+  }
+
+  function watchMapCard200() {
+    const list = $200('moduleList');
+    if (!list || list.dataset.v200MapObserved === '1') return;
+    list.dataset.v200MapObserved = '1';
+    activateMapCard200();
+    new MutationObserver(activateMapCard200).observe(list, { childList:true, subtree:true });
+  }
+
+  document.addEventListener('click', event => {
+    const card = event.target?.closest?.('#moduleList [data-module="Mapa Operativo"]');
+    if (!card || card.disabled) return;
+    openMap200();
+  });
+
+  /* -------------------------
+     VISTA MAPA
+     ------------------------- */
+
+  function installStyles200() {
+    if ($200('mvlV200Styles')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlV200Styles';
+    style.textContent = `
+      #mapViewV200{padding-bottom:18px}
+      .mvl200-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+      .mvl200-head h2{margin:4px 0 2px}
+      .mvl200-head-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+      .mvl200-last{font-size:.69rem;color:#62758b;margin-top:3px}
+      .mvl200-load-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0 12px}
+      .mvl200-load-btn{border:1px solid #c8ddf5;border-radius:12px;background:#f5faff;padding:11px;text-align:left;color:#073b78;cursor:pointer}
+      .mvl200-load-btn strong{display:block;font-size:.78rem}
+      .mvl200-load-btn small{display:block;margin-top:3px;color:#687b91;font-size:.64rem}
+      .mvl200-load-btn:hover{background:#edf6ff}
+      .mvl200-msg{margin:7px 0 11px;padding:8px 10px;border-radius:10px;background:#f7f9fc;color:#5e7085;font-size:.67rem;line-height:1.3}
+      .mvl200-msg.ok{background:#edf9f1;color:#16743c;border:1px solid #c7e8d2}
+      .mvl200-msg.error{background:#fff1f1;color:#ad2b23;border:1px solid #f0c8c6}
+      .mvl200-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+      .mvl200-kpi{border:1px solid #dce6f1;border-radius:12px;background:#fff;padding:9px 10px}
+      .mvl200-kpi span{display:block;color:#6d7d91;font-size:.61rem}
+      .mvl200-kpi strong{display:block;margin-top:2px;color:#0a315f;font-size:.94rem}
+      .mvl200-kpi small{display:block;margin-top:2px;color:#7b899a;font-size:.57rem}
+      .mvl200-filter-panel{border:1px solid #dbe6f2;border-radius:13px;background:#fff;margin-bottom:10px;overflow:hidden}
+      .mvl200-filter-head{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f7faff}
+      .mvl200-filter-head strong{font-size:.72rem;color:#0a315f}
+      .mvl200-filter-body{padding:9px 10px;border-top:1px solid #e4edf6}
+      .mvl200-filter-body.hidden{display:none}
+      .mvl200-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+      .mvl200-field{font-size:.62rem;font-weight:750;color:#425a75;min-width:0}
+      .mvl200-field select,.mvl200-field input{display:block;width:100%;margin-top:4px;min-height:38px;border:1px solid #cddbeb;border-radius:9px;padding:7px 8px;background:#fff;color:#102f55}
+      .mvl200-filter-actions{display:flex;gap:7px;margin-top:9px}
+      .mvl200-map-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:8px 0}
+      .mvl200-map-toolbar label{display:inline-flex;gap:6px;align-items:center;font-size:.67rem;color:#53677f}
+      #mvl200Map{height:470px;border:1px solid #d5e1ee;border-radius:14px;overflow:hidden;background:#eef3f8}
+      .mvl200-list{margin-top:11px}
+      .mvl200-order{border:1px solid #e0e8f1;border-radius:11px;background:#fff;padding:9px 10px;margin-bottom:6px;cursor:pointer}
+      .mvl200-order:hover{border-color:#aac9ed;background:#fbfdff}
+      .mvl200-order-head{display:flex;justify-content:space-between;gap:10px}
+      .mvl200-order strong{font-size:.72rem;color:#073b78}
+      .mvl200-order small{font-size:.60rem;color:#6f8094}
+      .mvl200-pills{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+      .mvl200-pill{border:1px solid #dde7f1;border-radius:999px;padding:3px 6px;font-size:.55rem;color:#53687f;background:#f8fafc}
+      .mvl200-pill.ok{background:#edf9f1;color:#13733a;border-color:#c8e7d2}
+      .mvl200-pill.bad{background:#fff1f1;color:#b22822;border-color:#efc9c7}
+      .mvl200-popup{min-width:230px;max-width:330px;font-family:inherit}
+      .mvl200-popup h4{margin:0 0 5px;color:#073b78}
+      .mvl200-popup-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 7px;font-size:.70rem}
+      .mvl200-popup-grid b{color:#405a75}
+      .mvl200-popup-grid span{color:#1e3550;word-break:break-word}
+      .mvl200-route{display:inline-block;margin-top:8px;font-weight:800;color:#0758b7}
+      .mvl200-sla-badge{display:inline-flex;margin-top:7px;border-radius:999px;padding:4px 7px;font-size:.62rem;font-weight:850}
+      .mvl200-sla-badge.ok{background:#eaf8ef;color:#14723a}
+      .mvl200-sla-badge.bad{background:#fff0f0;color:#b42318}
+      .mvl200-sla-badge.neutral{background:#f1f5f9;color:#64748b}
+      .mvl200-modal-file{position:fixed;inset:0;z-index:9999;background:rgba(18,39,64,.44);display:grid;place-items:center;padding:20px}
+      .mvl200-modal-file.hidden{display:none}
+      .mvl200-modal-card{width:min(480px,100%);background:#fff;border-radius:16px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+      .mvl200-modal-card h3{margin:0 0 6px;color:#0a315f}
+      .mvl200-modal-card p{font-size:.70rem;color:#65778c;line-height:1.4}
+      .mvl200-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+      .mvl200-mini-loader{display:inline-flex;gap:7px;align-items:center;color:#0758b7;font-weight:800;font-size:.67rem}
+      .mvl200-dot{width:12px;height:12px;border:2px solid #cfe0f5;border-top-color:#0758b7;border-radius:50%;animation:mvl200spin .8s linear infinite}
+      @keyframes mvl200spin{to{transform:rotate(360deg)}}
+      .mvl200-sla-active::before{background:#16a34a !important}
+      @media(max-width:760px){
+        .mvl200-kpis{grid-template-columns:1fr 1fr}
+        .mvl200-filter-grid{grid-template-columns:1fr 1fr}
+        #mvl200Map{height:420px}
+      }
+      @media(max-width:480px){
+        .mvl200-head{display:block}
+        .mvl200-head-actions{justify-content:flex-start;margin-top:8px}
+        .mvl200-load-grid{grid-template-columns:1fr}
+        .mvl200-filter-grid{grid-template-columns:1fr}
+        #mvl200Map{height:360px}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function createMapView200() {
+    if ($200('mapViewV200')) return $200('mapViewV200');
+    installStyles200();
+
+    const main = document.querySelector('main.shell') || document.querySelector('main') || document.body;
+    const view = document.createElement('section');
+    view.className = 'card app-card hidden';
+    view.id = 'mapViewV200';
+    view.innerHTML = `
+      <div class="mvl200-head">
+        <div>
+          <button type="button" class="back-link" id="mvl200Back">← Inicio</button>
+          <p class="eyebrow">MAPA OPERATIVO</p>
+          <h2>Mapa Operativo Lima</h2>
+          <p class="muted">Órdenes de Instalación y Visita Técnica · georreferencia y Tiempo de gestión / SLA</p>
+          <div class="mvl200-last" id="mvl200LastUpdate">Sin carga registrada</div>
+        </div>
+        <div class="mvl200-head-actions">
+          <button type="button" class="ghost small" id="mvl200Refresh">Actualizar</button>
+        </div>
+      </div>
+
+      <div class="mvl200-load-grid" id="mvl200LoadGrid">
+        <button type="button" class="mvl200-load-btn" id="mvl200LoadInst">
+          <strong>CARGA INSTALACIONES</strong>
+          <small>Excel de instalaciones · valida TipoTraba antes de registrar</small>
+        </button>
+        <button type="button" class="mvl200-load-btn" id="mvl200LoadVt">
+          <strong>CARGA VISITA TÉCNICA</strong>
+          <small>VT, Traslado, SGA y Post/MotoWIN</small>
+        </button>
+        <input type="file" id="mvl200FileInst" accept=".xlsx,.xls" hidden>
+        <input type="file" id="mvl200FileVt" accept=".xlsx,.xls" hidden>
+      </div>
+      <div class="mvl200-msg" id="mvl200Message">Las cargas actualizan órdenes existentes por OrdenId; no duplican el historial.</div>
+
+      <div class="mvl200-kpis">
+        <div class="mvl200-kpi"><span>Órdenes visibles</span><strong id="mvl200KpiTotal">0</strong><small>según filtros y alcance</small></div>
+        <div class="mvl200-kpi"><span>Georreferenciadas</span><strong id="mvl200KpiGeo">0</strong><small>con coordenadas válidas</small></div>
+        <div class="mvl200-kpi"><span>Finalizadas</span><strong id="mvl200KpiFinal">0</strong><small>órdenes cerradas</small></div>
+        <div class="mvl200-kpi"><span>Tiempo gestión / SLA</span><strong id="mvl200KpiSla">—</strong><small id="mvl200KpiSlaHelp">Sin órdenes evaluables</small></div>
+      </div>
+
+      <section class="mvl200-filter-panel">
+        <div class="mvl200-filter-head" id="mvl200FilterHead">
+          <strong>FILTRAR MAPA</strong>
+          <button type="button" class="ghost small" id="mvl200FilterToggle">Ocultar</button>
+        </div>
+        <div class="mvl200-filter-body" id="mvl200FilterBody">
+          <div class="mvl200-filter-grid">
+            <label class="mvl200-field">Periodo<input type="month" id="mvl200Period" min="2026-08"></label>
+            <label class="mvl200-field">Fecha<input type="date" id="mvl200Date"></label>
+            <label class="mvl200-field">Supervisor<select id="mvl200Supervisor"><option value="">Todos</option></select></label>
+            <label class="mvl200-field">Plataforma WIN<select id="mvl200Platform"><option value="">Todas</option></select></label>
+            <label class="mvl200-field">Tipo cuadrilla Visual<select id="mvl200Visual"><option value="">Todos</option></select></label>
+            <label class="mvl200-field">Tipo de trabajo<select id="mvl200Work"><option value="">Todos</option></select></label>
+            <label class="mvl200-field">Estado<select id="mvl200State"><option value="">Todos</option></select></label>
+            <label class="mvl200-field">Cuadrilla<select id="mvl200Crew"><option value="">Todas</option></select></label>
+            <label class="mvl200-field">Código orden<input type="search" id="mvl200Code" placeholder="Ej. 3349062"></label>
+          </div>
+          <div class="mvl200-filter-actions">
+            <button type="button" class="primary compact" id="mvl200Apply">Aplicar</button>
+            <button type="button" class="ghost compact" id="mvl200Clear">Limpiar</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="mvl200-map-toolbar">
+        <div id="mvl200Loading" class="mvl200-mini-loader hidden"><span class="mvl200-dot"></span> Actualizando mapa…</div>
+        <label><input type="checkbox" id="mvl200ShowCto"> Mostrar CTO con coordenadas</label>
+      </div>
+
+      <div id="mvl200Map"></div>
+      <div class="mvl200-list" id="mvl200List"></div>
+    `;
+    main.appendChild(view);
+
+    $200('mvl200Back')?.addEventListener('click', () => {
+      view.classList.add('hidden');
+      if (sessionData) renderHome(sessionData);
+      else if (typeof restoreSession === 'function') restoreSession();
+    });
+    $200('mvl200Refresh')?.addEventListener('click', loadMapData200);
+    $200('mvl200Apply')?.addEventListener('click', loadMapData200);
+    $200('mvl200Clear')?.addEventListener('click', () => {
+      ['mvl200Date','mvl200Supervisor','mvl200Platform','mvl200Visual','mvl200Work','mvl200State','mvl200Crew','mvl200Code']
+        .forEach(id => { if ($200(id)) $200(id).value = ''; });
+      loadMapData200();
+    });
+
+    $200('mvl200FilterToggle')?.addEventListener('click', () => {
+      const body = $200('mvl200FilterBody');
+      const hidden = body?.classList.toggle('hidden');
+      if ($200('mvl200FilterToggle')) $200('mvl200FilterToggle').textContent = hidden ? 'Desplegar' : 'Ocultar';
+    });
+
+    $200('mvl200LoadInst')?.addEventListener('click', () => $200('mvl200FileInst')?.click());
+    $200('mvl200LoadVt')?.addEventListener('click', () => $200('mvl200FileVt')?.click());
+    $200('mvl200FileInst')?.addEventListener('change', e => importMapFile200(e.target.files?.[0], 'INSTALACIONES'));
+    $200('mvl200FileVt')?.addEventListener('change', e => importMapFile200(e.target.files?.[0], 'VISITA_TECNICA'));
+    $200('mvl200ShowCto')?.addEventListener('change', renderCtoLayer200);
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2,'0');
+    $200('mvl200Period').value = `${y}-${m}`;
+
+    return view;
+  }
+
+  async function openMap200() {
+    const permission = modulePermission200('Mapa Operativo');
+    if (!permission?.permissions?.ver) return;
+
+    const view = createMapView200();
+    ['loginView','changePasswordView','homeView','adminView','performanceView']
+      .forEach(id => $200(id)?.classList.add('hidden'));
+    view.classList.remove('hidden');
+    document.body.classList.remove('login-mode');
+    window.scrollTo({ top:0, behavior:'instant' });
+
+    const canImport = Boolean(permission.permissions.registrar);
+    $200('mvl200LoadGrid')?.classList.toggle('hidden', !canImport);
+
+    await Promise.allSettled([ensureLeaflet200(), ensureXlsx200()]);
+    await loadMapData200();
+  }
+
+  function loadScript200(src, marker) {
+    return new Promise((resolve, reject) => {
+      if (window[marker]) return resolve();
+      const existing = document.querySelector(`script[data-mvl="${marker}"]`);
+      if (existing) {
+        existing.addEventListener('load', resolve, { once:true });
+        existing.addEventListener('error', reject, { once:true });
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.dataset.mvl = marker;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error(`No se pudo cargar ${marker}.`));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function ensureLeaflet200() {
+    if (window.L) return;
+    if (!$200('mvlLeafletCss200')) {
+      const link = document.createElement('link');
+      link.id = 'mvlLeafletCss200';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+    await loadScript200('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'L');
+  }
+
+  async function ensureXlsx200() {
+    if (window.XLSX) return;
+    await loadScript200('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'XLSX');
+  }
+
+  function initLeaflet200() {
+    if (!window.L || V200.map.leaflet) return;
+    const el = $200('mvl200Map');
+    if (!el) return;
+
+    V200.map.leaflet = L.map(el, { preferCanvas:true }).setView([-12.0464, -77.0428], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap'
+    }).addTo(V200.map.leaflet);
+
+    V200.map.layer = L.layerGroup().addTo(V200.map.leaflet);
+    V200.map.ctoLayer = L.layerGroup();
+  }
+
+  function mapFilters200() {
+    return {
+      token: typeof token === 'function' ? token() : '',
+      period: $200('mvl200Period')?.value || '',
+      date: $200('mvl200Date')?.value || '',
+      supervisorId: $200('mvl200Supervisor')?.value || '',
+      platform: $200('mvl200Platform')?.value || '',
+      visualType: $200('mvl200Visual')?.value || '',
+      workType: $200('mvl200Work')?.value || '',
+      state: $200('mvl200State')?.value || '',
+      crewId: $200('mvl200Crew')?.value || '',
+      code: $200('mvl200Code')?.value.trim() || ''
+    };
+  }
+
+  async function loadMapData200() {
+    const loading = $200('mvl200Loading');
+    loading?.classList.remove('hidden');
+    try {
+      const data = await api('mapData', mapFilters200());
+      if (!data?.ok) {
+        if (data?.expired && typeof clearSession === 'function') return clearSession();
+        throw new Error(data?.error || 'No se pudo cargar Mapa Operativo.');
+      }
+
+      V200.map.data = data;
+      if ($200('mvl200LastUpdate')) {
+        $200('mvl200LastUpdate').textContent = data.lastUpdate
+          ? `Última actualización: ${data.lastUpdate}`
+          : 'Sin carga registrada';
+      }
+
+      $200('mvl200LoadGrid')?.classList.toggle('hidden', !data.canImport);
+      fillMapCatalogs200(data.catalogs || {});
+      renderMapKpis200(data);
+      renderMapOrders200(data.orders || []);
+      setMapMessage200(
+        data.records
+          ? `${data.records} órdenes dentro del alcance y filtros seleccionados.`
+          : 'No hay órdenes para los filtros seleccionados.',
+        data.records ? 'ok' : ''
+      );
+    } catch (err) {
+      setMapMessage200(err.message || 'No se pudo cargar Mapa Operativo.', 'error');
+    } finally {
+      loading?.classList.add('hidden');
+    }
+  }
+
+  function setMapMessage200(text, type = '') {
+    const el = $200('mvl200Message');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = `mvl200-msg ${type}`.trim();
+  }
+
+  function keepSelect200(id, baseLabel, items, valueKey = null, labelKey = null) {
+    const el = $200(id);
+    if (!el) return;
+    const current = el.value;
+    const opts = [`<option value="">${esc200(baseLabel)}</option>`];
+
+    (items || []).forEach(item => {
+      const value = valueKey ? item?.[valueKey] : item;
+      const label = labelKey ? item?.[labelKey] : item;
+      if (value == null || value === '') return;
+      opts.push(`<option value="${esc200(value)}">${esc200(label)}</option>`);
+    });
+
+    el.innerHTML = opts.join('');
+    if ([...el.options].some(o => o.value === current)) el.value = current;
+  }
+
+  function fillMapCatalogs200(c) {
+    keepSelect200('mvl200Supervisor', 'Todos', c.supervisors, 'id', 'name');
+    keepSelect200('mvl200Platform', 'Todas', c.platforms);
+    keepSelect200('mvl200Visual', 'Todos', c.visualTypes);
+    keepSelect200('mvl200Work', 'Todos', c.workTypes);
+    keepSelect200('mvl200State', 'Todos', c.states);
+    keepSelect200('mvl200Crew', 'Todas', c.crews, 'id', 'name');
+  }
+
+  function renderMapKpis200(data) {
+    const orders = data.orders || [];
+    const geo = orders.filter(o => Number.isFinite(Number(o.latitud)) && Number.isFinite(Number(o.longitud))).length;
+    const finalized = orders.filter(o => norm200(o.estado) === 'FINALIZADA').length;
+    const sla = data.sla || {};
+
+    if ($200('mvl200KpiTotal')) $200('mvl200KpiTotal').textContent = String(orders.length);
+    if ($200('mvl200KpiGeo')) $200('mvl200KpiGeo').textContent = String(geo);
+    if ($200('mvl200KpiFinal')) $200('mvl200KpiFinal').textContent = String(finalized);
+    if ($200('mvl200KpiSla')) $200('mvl200KpiSla').textContent = pct200(sla.percent);
+    if ($200('mvl200KpiSlaHelp')) {
+      $200('mvl200KpiSlaHelp').textContent = sla.evaluables
+        ? `${sla.cumplen} de ${sla.evaluables} dentro de SLA`
+        : 'Sin órdenes evaluables';
+    }
+  }
+
+  function markerColor200(state) {
+    const s = norm200(state);
+    if (s === 'FINALIZADA') return '#16a34a';
+    if (s.includes('CANCEL') || s.includes('ANUL')) return '#dc2626';
+    if (s.includes('REPROGRAM')) return '#f59e0b';
+    if (s.includes('EN CAMINO') || s === 'EN_CAMINO') return '#0891b2';
+    if (s.includes('INICIAD')) return '#7c3aed';
+    if (s.includes('AGENDAD')) return '#2563eb';
+    return '#64748b';
+  }
+
+  function slaBadgeHtml200(sla) {
+    if (!sla) return '<span class="mvl200-sla-badge neutral">SLA: sin cruce</span>';
+    if (!sla.evaluable) {
+      return `<span class="mvl200-sla-badge neutral">SLA: ${esc200(sla.motivoNoEvaluable || 'No evaluable')}</span>`;
+    }
+    const cls = sla.cumple ? 'ok' : 'bad';
+    return `<span class="mvl200-sla-badge ${cls}">${sla.cumple ? 'Dentro de SLA' : 'Fuera de SLA'} · ${Number(sla.minutosGestion || 0).toFixed(0)} / ${Number(sla.slaMinutos || 0).toFixed(0)} min</span>`;
+  }
+
+  function mapPopup200(o) {
+    const fields = [
+      ['Cuadrilla', o.cuadrilla || o.codigoCuadrilla],
+      ['Estado', o.estado],
+      ['Tipo', o.tipoTrabajo],
+      ['Grupo', o.grupoTrabajo],
+      ['Cliente', o.cliente],
+      ['Código cliente', o.codigoCliente],
+      ['Dirección', [o.direccion,o.direccionAdicional].filter(Boolean).join(' · ')],
+      ['Inicio visita', o.fechaInicioVisita],
+      ['Fin visita', o.fechaFinVisita],
+      ['Partida', o.sla?.tipoPartida],
+      ['CTO', o.cto],
+      ['Puerto', o.puerto]
+    ].filter(x => String(x[1] ?? '').trim());
+
+    const lat = Number(o.latitud), lng = Number(o.longitud);
+    const route = Number.isFinite(lat) && Number.isFinite(lng)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`
+      : '';
+
+    return `
+      <div class="mvl200-popup">
+        <h4>Orden ${esc200(o.ordenId)}</h4>
+        <div class="mvl200-popup-grid">
+          ${fields.map(f => `<b>${esc200(f[0])}</b><span>${esc200(f[1])}</span>`).join('')}
+        </div>
+        ${slaBadgeHtml200(o.sla)}
+        ${route ? `<a class="mvl200-route" href="${route}" target="_blank" rel="noopener noreferrer">📍 Cómo llegar</a>` : ''}
+      </div>`;
+  }
+
+  function renderMapOrders200(orders) {
+    initLeaflet200();
+    const map = V200.map.leaflet;
+    const layer = V200.map.layer;
+    if (layer) layer.clearLayers();
+    V200.map.markers.clear();
+
+    const bounds = [];
+    (orders || []).forEach(o => {
+      const lat = Number(o.latitud), lng = Number(o.longitud);
+      if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const marker = L.circleMarker([lat,lng], {
+        radius:7,
+        color:'#fff',
+        weight:1.5,
+        fillColor:markerColor200(o.estado),
+        fillOpacity:.92
+      }).bindPopup(mapPopup200(o), { maxWidth:360 });
+      marker.addTo(layer);
+      V200.map.markers.set(String(o.ordenId), marker);
+      bounds.push([lat,lng]);
+    });
+
+    if (map) {
+      setTimeout(() => map.invalidateSize(), 50);
+      if (bounds.length === 1) map.setView(bounds[0], 15);
+      else if (bounds.length > 1) map.fitBounds(bounds, { padding:[25,25], maxZoom:15 });
+      else map.setView([-12.0464,-77.0428], 11);
+    }
+
+    renderCtoLayer200();
+
+    const list = $200('mvl200List');
+    if (!list) return;
+    const sample = (orders || []).slice(0, 150);
+    list.innerHTML = sample.length
+      ? sample.map(o => `
+        <div class="mvl200-order" data-map-order="${esc200(o.ordenId)}">
+          <div class="mvl200-order-head">
+            <strong>${esc200(o.ordenId)} · ${esc200(o.tipoTrabajo || 'Sin tipo')}</strong>
+            <small>${esc200(o.estado || '')}</small>
+          </div>
+          <small>${esc200(o.cuadrilla || o.codigoCuadrilla || 'Sin cuadrilla')}</small>
+          <div class="mvl200-pills">
+            ${o.plataforma ? `<span class="mvl200-pill">${esc200(o.plataforma)}</span>` : ''}
+            ${o.tipoVisual ? `<span class="mvl200-pill">${esc200(o.tipoVisual)}</span>` : ''}
+            ${o.grupoTrabajo ? `<span class="mvl200-pill">${esc200(o.grupoTrabajo)}</span>` : ''}
+            ${o.sla?.evaluable ? `<span class="mvl200-pill ${o.sla.cumple ? 'ok' : 'bad'}">${o.sla.cumple ? 'Dentro SLA' : 'Fuera SLA'}</span>` : ''}
+          </div>
+        </div>`).join('')
+      : '<p class="empty">No hay órdenes para mostrar.</p>';
+
+    list.querySelectorAll('[data-map-order]').forEach(el => {
+      el.addEventListener('click', () => {
+        const marker = V200.map.markers.get(String(el.dataset.mapOrder));
+        if (marker && map) {
+          map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+          marker.openPopup();
+          $200('mvl200Map')?.scrollIntoView({ behavior:'smooth', block:'center' });
+        }
+      });
+    });
+
+    if ((orders || []).length > sample.length) {
+      list.insertAdjacentHTML('beforeend', `<p class="muted">Se muestran las primeras ${sample.length} órdenes en la lista; el mapa contiene todas las georreferenciadas.</p>`);
+    }
+  }
+
+  function renderCtoLayer200() {
+    const map = V200.map.leaflet;
+    const layer = V200.map.ctoLayer;
+    if (!map || !layer) return;
+    layer.clearLayers();
+
+    const show = Boolean($200('mvl200ShowCto')?.checked);
+    if (!show) {
+      if (map.hasLayer(layer)) map.removeLayer(layer);
+      return;
+    }
+
+    const seen = new Set();
+    (V200.map.data?.orders || []).forEach(o => {
+      [[o.cto1,o.coordenadaCto1],[o.cto2,o.coordenadaCto2],[o.cto3,o.coordenadaCto3]]
+        .forEach(([code, coord]) => {
+          const nums = String(coord || '').match(/-?\d+(?:[.,]\d+)?/g) || [];
+          if (nums.length < 2) return;
+          const lat = Number(nums[0].replace(',','.'));
+          const lng = Number(nums[1].replace(',','.'));
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const k = `${key200(code)}|${lat}|${lng}`;
+          if (seen.has(k)) return;
+          seen.add(k);
+
+          L.circleMarker([lat,lng], {
+            radius:5, color:'#6d28d9', weight:2, fillColor:'#c4b5fd', fillOpacity:.9
+          })
+            .bindTooltip(`CTO ${code || ''}`, { permanent:false })
+            .addTo(layer);
+        });
+    });
+
+    layer.addTo(map);
+  }
+
+  /* -------------------------
+     LECTOR EXCEL
+     ------------------------- */
+
+  function headerKey200(value) {
+    return norm200(value).replace(/[^A-Z0-9]/g, '');
+  }
+
+  function excelDateParts200(value) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return {
+        y:value.getFullYear(), m:value.getMonth()+1, d:value.getDate(),
+        hh:value.getHours(), mm:value.getMinutes(), ss:value.getSeconds()
+      };
+    }
+    if (typeof value === 'number' && window.XLSX?.SSF?.parse_date_code) {
+      const p = XLSX.SSF.parse_date_code(value);
+      if (p) return { y:p.y,m:p.m,d:p.d,hh:p.H||0,mm:p.M||0,ss:Math.floor(p.S||0) };
+    }
+    return null;
+  }
+
+  function pad200(n) { return String(n).padStart(2,'0'); }
+
+  function excelDateTime200(value) {
+    const p = excelDateParts200(value);
+    if (p) return `${p.y}-${pad200(p.m)}-${pad200(p.d)} ${pad200(p.hh)}:${pad200(p.mm)}:${pad200(p.ss)}`;
+    const text = String(value ?? '').trim();
+    return text;
+  }
+
+  function excelDateOnly200(value) {
+    const p = excelDateParts200(value);
+    if (p) return `${p.y}-${pad200(p.m)}-${pad200(p.d)}`;
+    return String(value ?? '').trim();
+  }
+
+  function excelTimeOnly200(value) {
+    const p = excelDateParts200(value);
+    if (p) return `${pad200(p.hh)}:${pad200(p.mm)}:${pad200(p.ss)}`;
+    return '';
+  }
+
+  function coord200(value) {
+    const nums = String(value ?? '').match(/-?\d+(?:[.,]\d+)?/g) || [];
+    if (nums.length < 2) return [null,null];
+    const lat = Number(nums[0].replace(',','.'));
+    const lng = Number(nums[1].replace(',','.'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat)>90 || Math.abs(lng)>180) return [null,null];
+    return [lat,lng];
+  }
+
+  function parseTechnicalCto200(text) {
+    const fields = {};
+    String(text ?? '').split(';').forEach(segment => {
+      const parts = String(segment).split('/');
+      if (parts.length < 3) return;
+      const k = headerKey200(parts.shift());
+      parts.shift();
+      const value = parts.join('/').trim();
+      if (k && value && !fields[k]) fields[k] = value;
+    });
+    return {
+      cto1:fields.CTO1 || '',
+      coordenadaCto1:fields.COORDENADACTO1 || '',
+      cto2:fields.CTO2 || '',
+      coordenadaCto2:fields.COORDENADACTO2 || '',
+      cto3:fields.CTO3 || '',
+      coordenadaCto3:fields.COORDENADACTO3 || '',
+      cto:fields.CTO || '',
+      puerto:fields.PUERTO || ''
+    };
+  }
+
+  function cell200(row, map, ...names) {
+    for (const name of names) {
+      const idx = map[headerKey200(name)];
+      if (idx !== undefined) return row[idx];
+    }
+    return '';
+  }
+
+  async function parseMapWorkbook200(file) {
+    await ensureXlsx200();
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type:'array', cellDates:true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 2) throw new Error('El archivo no contiene registros.');
+
+    let headerIndex = -1;
+    for (let i=0; i<Math.min(30, rows.length); i++) {
+      if ((rows[i] || []).map(headerKey200).includes('ORDENID')) {
+        headerIndex = i; break;
+      }
+    }
+    if (headerIndex < 0) throw new Error('No se encontró la fila de encabezados con OrdenId.');
+
+    const map = {};
+    (rows[headerIndex] || []).forEach((h,i) => {
+      const k = headerKey200(h);
+      if (k) map[k] = i;
+    });
+
+    const geoIndex = map.GEOREFERENCIA;
+    const result = [];
+
+    rows.slice(headerIndex + 1).forEach(row => {
+      const orden = cell200(row,map,'OrdenId','ORDEN_ID');
+      if (!String(orden ?? '').trim()) return;
+
+      const solicitud = cell200(row,map,'F.Soli','FSOLI','FECHA SOLICITUD');
+      const georef = cell200(row,map,'Georeferencia','GEOREFERENCIA');
+      const [lat,lng] = coord200(georef);
+
+      let dir = String(cell200(row,map,'Direccion') ?? '').trim();
+      let dir2 = String(cell200(row,map,'Direccion1') ?? '').trim();
+      if (key200(dir) && key200(dir) === key200(dir2)) dir2 = '';
+      if (!dir && dir2) { dir = dir2; dir2 = ''; }
+
+      let technical = cell200(row,map,'Datos Técnicos','Datos Tecnicos','Información CTO','Informacion CTO','Detalle CTO');
+      if (!technical && geoIndex !== undefined && row[geoIndex + 1] !== undefined) {
+        technical = row[geoIndex + 1];
+      }
+      const cto = parseTechnicalCto200(technical);
+
+      result.push({
+        ordenId:String(orden).replace(/\.0+$/,'').trim(),
+        tipoTrabajo:String(cell200(row,map,'TipoTraba','TIPO_TRABAJO') ?? '').trim(),
+        fechaSolicitud:excelDateOnly200(solicitud),
+        horaSolicitud:excelTimeOnly200(solicitud),
+        cliente:String(cell200(row,map,'Cliente') ?? '').trim(),
+        tipo:String(cell200(row,map,'Tipo') ?? '').trim(),
+        productoOrigen:String(cell200(row,map,'Producto') ?? '').trim(),
+        cuadrilla:String(cell200(row,map,'Cuadrilla') ?? '').trim(),
+        estado:String(cell200(row,map,'Estado') ?? '').trim(),
+        direccion:dir,
+        direccionAdicional:dir2,
+        fechaUltimoEstado:excelDateTime200(cell200(row,map,'FechaUltimoEstado','FechaUltiEsta','Fecha Ultimo Estado')),
+        productoServicio:String(cell200(row,map,'IdenServi') ?? '').trim(),
+        region:String(cell200(row,map,'Region') ?? '').trim(),
+        codigoCliente:String(cell200(row,map,'CodiSeguiClien') ?? '').trim(),
+        codigoSeguimiento:String(cell200(row,map,'CodiSegui') ?? '').trim(),
+        numeroDocumento:String(cell200(row,map,'Número Documento','Numero Documento') ?? '').trim(),
+        telefonoMovil:String(cell200(row,map,'TeleMovilNume') ?? '').trim(),
+        telefonoFijo:String(cell200(row,map,'TeleFijoNume') ?? '').trim(),
+        prioridad:String(cell200(row,map,'Prioridad') ?? '').trim(),
+        fechaInicioVisita:excelDateTime200(cell200(row,map,'FechaIniVisi')),
+        fechaFinVisita:excelDateTime200(cell200(row,map,'FechaFinVisi')),
+        motivoCancelacion:String(cell200(row,map,'Motivo Cancelación','Motivo Cancelacion') ?? '').trim(),
+        motivoFinalizacion:String(cell200(row,map,'Motivo Finalización','Motivo Finalizacion') ?? '').trim(),
+        motivoAnulacion:String(cell200(row,map,'Motivo Anulación','Motivo Anulacion') ?? '').trim(),
+        latitud:lat,
+        longitud:lng,
+        detalle:String(cell200(row,map,'Detalle','Motivo Regestión','Motivo Regestion') ?? '').trim(),
+        ...cto
+      });
+    });
+
+    if (!result.length) throw new Error('No se encontraron filas con OrdenId.');
+    return result;
+  }
+
+  function validateClientLoad200(type, rows) {
+    const typed = rows.filter(r => String(r.tipoTrabajo || '').trim());
+    const inst = typed.filter(r => ['INSTALACION','INSTALACION POSIBLE FRAUDE'].includes(norm200(r.tipoTrabajo)));
+    if (!typed.length) throw new Error('No se encontró TipoTraba en el archivo.');
+
+    const ratio = inst.length / typed.length;
+    if (type === 'INSTALACIONES' && ratio < .8) {
+      throw new Error(`El archivo no corresponde a Instalaciones (${inst.length} de ${typed.length}).`);
+    }
+    if (type === 'VISITA_TECNICA' && ratio >= .8) {
+      throw new Error('El archivo parece de Instalaciones. Use CARGA INSTALACIONES.');
+    }
+  }
+
+  async function importMapFile200(file, type) {
+    if (!file) return;
+    const inputId = type === 'INSTALACIONES' ? 'mvl200FileInst' : 'mvl200FileVt';
+
+    try {
+      if (typeof showLoader === 'function') showLoader('Leyendo Excel…');
+      setMapMessage200('Leyendo archivo…');
+      const rows = await parseMapWorkbook200(file);
+      validateClientLoad200(type, rows);
+
+      const geo = rows.filter(r => Number.isFinite(r.latitud) && Number.isFinite(r.longitud)).length;
+      setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia. Registrando…`);
+
+      if (typeof showLoader === 'function') {
+        showLoader(type === 'INSTALACIONES' ? 'Cargando Instalaciones…' : 'Cargando Visita Técnica…');
+      }
+
+      const res = await api('mapImport', {
+        token: typeof token === 'function' ? token() : '',
+        loadType:type,
+        fileName:file.name,
+        items:JSON.stringify(rows)
+      });
+
+      if (!res?.ok) throw new Error(res?.error || 'No se pudo registrar la carga.');
+
+      setMapMessage200(
+        `${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce de cuadrilla · SLA recalculado.`,
+        'ok'
+      );
+
+      // La carga del Mapa modifica SLA: no reutilizar Dashboard anterior.
+      V200.dashboard = null;
+      V200.tech = null;
+
+      await loadMapData200();
+    } catch (err) {
+      setMapMessage200(err.message || 'No se pudo procesar el Excel.', 'error');
+    } finally {
+      if ($200(inputId)) $200(inputId).value = '';
+      try { if (typeof hideLoader === 'function') hideLoader(); } catch (_) {}
+    }
+  }
+
+  /* -------------------------
+     SLA EN DASHBOARD / TÉCNICO
+     ------------------------- */
+
+  function dashboardConfig200() {
+    const data = V200.dashboard || {};
+    const visual = norm200($200('dashboardVisualTypeV19')?.value || 'TODOS') || 'TODOS';
+    return data.indicatorConfigs?.[visual] || data.indicatorConfigs?.TODOS || data.indicatorConfig || {};
+  }
+
+  function dashboardRowsFiltered200() {
+    const rows = V200.dashboard?.rows || [];
+    const visual = norm200($200('dashboardVisualTypeV19')?.value || '');
+    const platform = norm200($200('dashboardPlatformV19')?.value || '');
+    const composition = norm200($200('dashboardCompositionV19')?.value || '');
+    const state = norm200($200('dashboardStateV19')?.value || '');
+    const supervisor = String($200('dashboardSupervisor')?.value || '');
+    const crew = String($200('dashboardCrew')?.value || '');
+
+    return rows.filter(row => {
+      if (visual && norm200(row.visualType) !== visual) return false;
+      if (platform && norm200(row.platform) !== platform) return false;
+      if (composition && norm200(row.composition) !== composition) return false;
+      if (state && norm200(row.state) !== state) return false;
+      if (supervisor) {
+        if (supervisor === '__GG__') {
+          if (String(row.supervisorId || '') !== '__GG__' && norm200(row.supervisor) !== 'GG') return false;
+        } else if (String(row.supervisorId || '') !== supervisor) return false;
+      }
+      if (crew && String(row.crewId || '') !== crew) return false;
+      return true;
+    });
+  }
+
+  function slaSummary200(rows) {
+    let evaluables=0, cumplen=0, fuera=0;
+    (rows || []).forEach(r => {
+      evaluables += Number(r.slaEvaluables || 0);
+      cumplen += Number(r.slaCumplen || 0);
+      fuera += Number(r.slaFuera || 0);
+    });
+    return {
+      evaluables, cumplen, fuera,
+      percent:evaluables ? cumplen / evaluables : null
+    };
+  }
+
+  function findSummarySlaCard200() {
+    const root = $200('dashboardTotalSummaryV19');
+    if (!root) return null;
+    return [...root.querySelectorAll('.dashboard-v19-total-card')].find(card => {
+      const label = card.querySelector(':scope > span')?.textContent || '';
+      return norm200(label).includes('SLA') || norm200(label).includes('TIEMPO DE GESTION');
+    }) || null;
+  }
+
+  function renderDashboardSlaSummary200() {
+    if (!V200.dashboard?.ok) return;
+    const card = findSummarySlaCard200();
+    if (!card) return;
+
+    const summary = slaSummary200(dashboardRowsFiltered200());
+    const cfg = dashboardConfig200();
+    const status = positiveStatus200(summary.percent, cfg?.sla);
+    const info = statusInfo200(status);
+
+    card.classList.remove('under-construction','mvl-v118-card-neutral','mvl-v118-card-optimal','mvl-v118-card-moderate','mvl-v118-card-critical');
+    card.classList.add(
+      info.cls === 'cumple' ? 'mvl-v118-card-optimal' :
+      info.cls === 'atencion' ? 'mvl-v118-card-moderate' :
+      info.cls === 'critico' ? 'mvl-v118-card-critical' : 'mvl-v118-card-neutral'
+    );
+
+    const label = card.querySelector(':scope > span');
+    const strong = card.querySelector(':scope > strong');
+    let small = card.querySelector(':scope > small');
+    if (!small) {
+      small = document.createElement('small');
+      card.appendChild(small);
+    }
+
+    if (label) label.textContent = 'Tiempo de gestión / SLA';
+    if (strong) strong.textContent = pct200(summary.percent);
+    small.textContent = summary.evaluables
+      ? `${summary.cumplen} de ${summary.evaluables} órdenes dentro de SLA`
+      : 'Sin órdenes evaluables';
+
+    let badge = card.querySelector(':scope > .mvl-v113-status');
+    if (!summary.evaluables) {
+      badge?.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      card.appendChild(badge);
+    }
+    badge.className = `mvl-v113-status ${info.cls}`;
+    badge.textContent = info.label;
+  }
+
+  function renderAllCardsSla200() {
+    if (($200('dashboardIndicator')?.value || '') !== 'ALL') return;
+    const byCrew = new Map((V200.dashboard?.rows || []).map(r => [String(r.crewId || ''), r]));
+    document.querySelectorAll('#dashboardRankingList [data-dashboard-crew]').forEach(card => {
+      const row = byCrew.get(String(card.dataset.dashboardCrew || ''));
+      if (!row) return;
+      const cells = [...card.querySelectorAll('.dashboard-kpi-mini-grid > div')];
+      const slaCell = cells.find(c => norm200(c.querySelector('span')?.textContent || '') === 'SLA');
+      if (!slaCell) return;
+      slaCell.classList.remove('kpi-building');
+      const b = slaCell.querySelector('b');
+      if (b) b.textContent = row.slaEvaluables ? pct200(row.slaPercent) : '—';
+      slaCell.title = row.slaEvaluables
+        ? `${row.slaCumplen} de ${row.slaEvaluables} dentro de SLA`
+        : 'Sin órdenes evaluables';
+    });
+  }
+
+  function renderSlaRanking200() {
+    if (($200('dashboardIndicator')?.value || '') !== 'SLA' || !V200.dashboard?.ok) return;
+
+    const construction = $200('dashboardConstruction');
+    construction?.classList.add('hidden');
+
+    const rows = dashboardRowsFiltered200();
+    const compare = $200('dashboardCompareByV116')?.value || 'CUADRILLA';
+    const cfg = dashboardConfig200();
+    const list = $200('dashboardRankingList');
+    const title = $200('dashboardRankingTitle');
+    const help = $200('dashboardRankingHelp');
+    if (!list) return;
+
+    if (compare === 'SUPERVISOR') {
+      const groups = new Map();
+      rows.forEach(r => {
+        const isGG = String(r.supervisorId || '') === '__GG__' || norm200(r.supervisor) === 'GG';
+        const key = isGG ? '__GG__' : String(r.supervisorId || r.supervisor || 'SIN_SUPERVISOR');
+        const name = isGG ? 'GG · Supervisión directa de Gerencia' : String(r.supervisor || 'Sin supervisor');
+        if (!groups.has(key)) groups.set(key,{name,evaluables:0,cumplen:0,fuera:0,crews:0});
+        const g=groups.get(key);
+        g.evaluables += Number(r.slaEvaluables || 0);
+        g.cumplen += Number(r.slaCumplen || 0);
+        g.fuera += Number(r.slaFuera || 0);
+        g.crews++;
+      });
+
+      const data=[...groups.values()].map(g=>({...g,percent:g.evaluables?g.cumplen/g.evaluables:null}))
+        .sort((a,b)=>(b.percent??-1)-(a.percent??-1)||a.name.localeCompare(b.name,'es'));
+
+      if(title) title.textContent='Ranking de Supervisores · Tiempo de gestión / SLA';
+      if(help) help.textContent='Mayor porcentaje de órdenes dentro del SLA primero.';
+      list.innerHTML=data.length?data.map((g,i)=>{
+        const info=statusInfo200(positiveStatus200(g.percent,cfg?.sla));
+        return `<div class="mvl-v116-compare-row">
+          <div class="dashboard-rank-position">${g.percent==null?'—':'#'+(i+1)}</div>
+          <div class="mvl-v116-compare-copy">
+            <strong>${esc200(g.name)}</strong>
+            <small>${g.cumplen} dentro · ${g.fuera} fuera · ${g.evaluables} evaluables · ${g.crews} cuadrillas</small>
+          </div>
+          <div class="mvl-v116-compare-value">
+            ${esc200(pct200(g.percent))}
+            ${g.percent==null?'':`<span class="mvl-v113-status ${info.cls}">${info.label}</span>`}
+          </div>
+        </div>`;
+      }).join(''):'<p class="empty">No hay órdenes SLA evaluables para estos filtros.</p>';
+      return;
+    }
+
+    const sorted=[...rows].sort((a,b)=>(b.slaPercent??-1)-(a.slaPercent??-1)||String(a.crewDisplay||'').localeCompare(String(b.crewDisplay||''),'es'));
+    if(title) title.textContent='Ranking de Tiempo de gestión / SLA';
+    if(help) help.textContent='Mayor porcentaje de órdenes dentro del SLA primero.';
+    list.innerHTML=sorted.length?sorted.map((r,i)=>{
+      const info=statusInfo200(positiveStatus200(r.slaPercent,cfg?.sla));
+      const has=Number(r.slaEvaluables||0)>0;
+      return `<button type="button" class="dashboard-rank-row dashboard-rank-button" data-dashboard-crew="${esc200(r.crewId)}">
+        <div class="dashboard-rank-position">${has?'#'+(i+1):'—'}</div>
+        <div class="dashboard-rank-copy">
+          <strong>${esc200(r.crewDisplay||r.crewName||r.crewCode||'')}</strong>
+          <small>${Number(r.slaCumplen||0)} dentro · ${Number(r.slaFuera||0)} fuera · ${Number(r.slaEvaluables||0)} evaluables</small>
+        </div>
+        <div class="dashboard-rank-value">
+          ${esc200(has?pct200(r.slaPercent):'Sin datos')}
+          ${has?`<span class="mvl-v113-status ${info.cls}">${info.label}</span>`:''}
+        </div>
+      </button>`;
+    }).join(''):'<p class="empty">No hay cuadrillas dentro del filtro.</p>';
+  }
+
+  function renderSupervisorAllSla200() {
+    if (($200('dashboardIndicator')?.value || '') !== 'ALL') return;
+    if (($200('dashboardCompareByV116')?.value || '') !== 'SUPERVISOR') return;
+
+    const rows=dashboardRowsFiltered200();
+    const groups=new Map();
+    rows.forEach(r=>{
+      const name=(String(r.supervisorId||'')==='__GG__'||norm200(r.supervisor)==='GG')
+        ? 'GG · Supervisión directa de Gerencia'
+        : String(r.supervisor||'Sin supervisor');
+      if(!groups.has(name)) groups.set(name,{e:0,c:0});
+      const g=groups.get(name);
+      g.e+=Number(r.slaEvaluables||0);
+      g.c+=Number(r.slaCumplen||0);
+    });
+
+    document.querySelectorAll('#dashboardRankingList .mvl-v126-supervisor-all').forEach(card=>{
+      const name=card.querySelector('.mvl-v126-supervisor-head strong')?.textContent?.trim();
+      const g=groups.get(name);
+      const grid=card.querySelector('.mvl-v126-kpi-grid');
+      if(!g||!grid) return;
+      let cell=grid.querySelector('[data-v200-sla]');
+      if(!cell){
+        cell=document.createElement('div');
+        cell.dataset.v200Sla='1';
+        grid.appendChild(cell);
+      }
+      const p=g.e?g.c/g.e:null;
+      const info=statusInfo200(positiveStatus200(p,dashboardConfig200()?.sla));
+      cell.innerHTML=`<span>Tiempo gestión / SLA</span><b>${esc200(pct200(p))}</b>${p==null?'':`<span class="mvl-v113-status ${info.cls}">${info.label}</span>`}`;
+      grid.style.gridTemplateColumns='repeat(4,minmax(0,1fr))';
+    });
+  }
+
+  function renderTechSla200() {
+    const data=V200.tech;
+    if(!data?.ok) return;
+    const summary=data.summary||{};
+    const card=[...document.querySelectorAll('#performanceTechPanel .performance-card')].find(c=>{
+      const label=c.querySelector('.performance-label')?.textContent||'';
+      return norm200(label).includes('SLA')||norm200(label).includes('TIEMPO DE GESTION');
+    });
+    if(!card) return;
+
+    card.classList.remove('under-construction');
+    const label=card.querySelector('.performance-label');
+    const strong=card.querySelector('strong');
+    let small=card.querySelector('small');
+    if(label) label.textContent='Tiempo de gestión / SLA';
+    if(strong) strong.textContent=pct200(summary.slaPercent);
+    if(!small){small=document.createElement('small');card.appendChild(small);}
+    small.textContent=summary.slaEvaluables
+      ? `${summary.slaCumplen} de ${summary.slaEvaluables} dentro de SLA`
+      : 'Sin órdenes evaluables';
+
+    let badge=card.querySelector(':scope > .mvl-v113-status');
+    const status=summary.slaStatus||positiveStatus200(summary.slaPercent,data.indicatorConfig?.sla);
+    if(!summary.slaEvaluables){badge?.remove();return;}
+    const info=statusInfo200(status);
+    if(!badge){badge=document.createElement('span');card.appendChild(badge);}
+    badge.className=`mvl-v113-status ${info.cls}`;
+    badge.textContent=info.label;
+  }
+
+  function refreshSlaUi200() {
+    setTimeout(()=>{
+      renderDashboardSlaSummary200();
+      renderAllCardsSla200();
+      renderSlaRanking200();
+      renderSupervisorAllSla200();
+      renderTechSla200();
+    },30);
+  }
+
+  ['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19',
+   'dashboardSupervisor','dashboardCrew','dashboardIndicator','dashboardCompareByV116']
+    .forEach(id=>{
+      document.addEventListener('change',e=>{
+        if(e.target?.id===id) setTimeout(refreshSlaUi200,30);
+      });
+    });
+
+  $200('refreshDashboardButton')?.addEventListener('click',()=>setTimeout(refreshSlaUi200,80));
+
+  /* -------------------------
+     SLA EN PONER INDICADORES
+     ------------------------- */
+
+  function updateSlaRanges200() {
+    const moderate=Number($200('cfgSlaModerateV200')?.value);
+    const optimal=Number($200('cfgSlaOptimalV200')?.value);
+    const c=$200('cfgSlaRangeCriticalV200');
+    const m=$200('cfgSlaRangeModerateV200');
+    const o=$200('cfgSlaRangeOptimalV200');
+
+    if(c) c.textContent=Number.isFinite(moderate)?`0% a <${moderate}%`:'—';
+    if(m) m.textContent=Number.isFinite(moderate)&&Number.isFinite(optimal)?`${moderate}% a <${optimal}%`:'—';
+    if(o) o.textContent=Number.isFinite(optimal)?`${optimal}% a 100%`:'—';
+  }
+
+  function currentConfigForModal200() {
+    const type=norm200($200('cfgVisualTypeV114')?.value||'TODOS')||'TODOS';
+    return V200.configByType.get(type)
+      || V200.dashboard?.indicatorConfigs?.[type]
+      || V200.dashboard?.indicatorConfigs?.TODOS
+      || V200.dashboard?.indicatorConfig
+      || null;
+  }
+
+  function fillSlaInputs200(config) {
+    const s=config?.sla||{};
+    if($200('cfgSlaModerateV200')) $200('cfgSlaModerateV200').value=Number(s.moderateFrom??.8)*100;
+    if($200('cfgSlaOptimalV200')) $200('cfgSlaOptimalV200').value=Number(s.optimalFrom??.9)*100;
+    updateSlaRanges200();
+  }
+
+  function ensureSlaConfig200() {
+    const modal=$200('indicatorConfigModalV113');
+    if(!modal||modal.dataset.v200Sla==='1') return;
+
+    const goals=$200('cfgGoalsPanelV123');
+    const indicators=$200('cfgIndicatorsPanelV123');
+    if(!goals||!indicators) return;
+
+    // Quitar "SLA En construcción" de las metas pendientes.
+    [...goals.querySelectorAll('.mvl-v124-pending-goal')].forEach(row=>{
+      if(norm200(row.textContent).includes('SLA')) row.remove();
+    });
+    [...indicators.querySelectorAll('.mvl-v113-construction-item')].forEach(row=>{
+      if(norm200(row.textContent).includes('SLA')) row.remove();
+    });
+
+    const goal=document.createElement('section');
+    goal.className='mvl-v124-goal-card';
+    goal.innerHTML=`
+      <h4>Tiempo de gestión / SLA</h4>
+      <div class="mvl-v113-config-grid">
+        <label class="mvl-v113-field">Meta objetivo · %
+          <input id="cfgSlaOptimalV200" type="number" min="0" max="100" step="0.1">
+          <span class="mvl-v114-field-note">Porcentaje mínimo considerado ÓPTIMO.</span>
+        </label>
+      </div>
+      <div class="mvl-v124-goal-note">La meta se calcula con órdenes FINALIZADAS que tengan Inicio, Fin y una partida con parámetro SLA.</div>`;
+    goals.appendChild(goal);
+
+    const sem=document.createElement('section');
+    sem.className='mvl-v113-config-section';
+    sem.innerHTML=`
+      <h4>Semáforo de Tiempo de gestión / SLA</h4>
+      <div class="mvl-v113-config-grid">
+        <label class="mvl-v113-field">Inicio MODERADO · %
+          <input id="cfgSlaModerateV200" type="number" min="0" max="100" step="0.1">
+        </label>
+      </div>
+      <div class="mvl-v114-levels">
+        <div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span>Por debajo del inicio Moderado.</span><b class="mvl-v117-range" id="cfgSlaRangeCriticalV200">—</b></div>
+        <div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span>Desde Moderado hasta antes de la Meta.</span><b class="mvl-v117-range" id="cfgSlaRangeModerateV200">—</b></div>
+        <div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span>Desde la Meta objetivo.</span><b class="mvl-v117-range" id="cfgSlaRangeOptimalV200">—</b></div>
+      </div>`;
+
+    const pending=[...indicators.querySelectorAll('.mvl-v113-config-section')].find(s=>norm200(s.querySelector('h4')?.textContent).includes('PENDIENT'));
+    if(pending) indicators.insertBefore(sem,pending);
+    else indicators.appendChild(sem);
+
+    ['cfgSlaModerateV200','cfgSlaOptimalV200'].forEach(id=>{
+      $200(id)?.addEventListener('input',updateSlaRanges200);
+    });
+
+    modal.dataset.v200Sla='1';
+    fillSlaInputs200(currentConfigForModal200());
+  }
+
+  document.addEventListener('click',e=>{
+    if(e.target?.closest?.('#putIndicatorsButtonV113')){
+      setTimeout(()=>{
+        ensureSlaConfig200();
+        fillSlaInputs200(currentConfigForModal200());
+      },0);
+    }
+  },true);
+
+  document.addEventListener('change',e=>{
+    if(e.target?.id==='cfgVisualTypeV114'){
+      setTimeout(()=>fillSlaInputs200(currentConfigForModal200()),80);
+    }
+  });
+
+  /* -------------------------
+     API WRAPPER V2
+     ------------------------- */
+
+  function wrapApi200() {
+    if(V200.apiWrapped||typeof api!=='function') return;
+    V200.apiWrapped=true;
+    const previous=api;
+    api=async function(action,params={}){
+      const result=await previous(action,params);
+
+      if(action==='performanceDashboard'&&result?.ok){
+        V200.dashboard=result;
+        Object.entries(result.indicatorConfigs||{}).forEach(([k,v])=>{
+          if(v) V200.configByType.set(norm200(k),v);
+        });
+        if(result.indicatorConfig){
+          V200.configByType.set(norm200(result.indicatorConfig.visualType||'TODOS'),result.indicatorConfig);
+        }
+        refreshSlaUi200();
+      }
+
+      if(action==='performanceSummary'&&result?.ok){
+        V200.tech=result;
+        refreshSlaUi200();
+      }
+
+      if((action==='performanceIndicatorConfigGet'||action==='performanceIndicatorConfigSave')&&result?.ok&&result.config){
+        V200.configByType.set(norm200(result.config.visualType||params.visualType||'TODOS'),result.config);
+        setTimeout(()=>{
+          ensureSlaConfig200();
+          fillSlaInputs200(result.config);
+        },0);
+      }
+
+      if(action==='mapImport'&&result?.ok){
+        V200.dashboard=null;
+        V200.tech=null;
+      }
+
+      return result;
+    };
+  }
+
+  /* -------------------------
+     INIT
+     ------------------------- */
+  function init200() {
+    installStyles200();
+    wrapApi200();
+    watchMapCard200();
+    activateMapCard200();
+    ensureSlaConfig200();
+    refreshSlaUi200();
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>setTimeout(init200,0),{once:true});
+  }else{
+    setTimeout(init200,0);
+  }
+})();
+
+console.info('[MI VISUAL LIMA] V2.00: Mapa Operativo + Tiempo de gestión / SLA habilitados.');

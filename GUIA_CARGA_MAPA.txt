@@ -1,0 +1,16 @@
+GUÍA RÁPIDA - MAPA OPERATIVO
+
+INSTALACIONES:
+misOrdenesdeTrabajo... correspondiente a TipoTraba INSTALACION
+-> usar CARGA INSTALACIONES
+
+VISITA TÉCNICA:
+archivo que contiene LOS ROJO / TRASLADO / RECABLEADO / POSTVENTA / MOTOWIN, etc.
+-> usar CARGA VISITA TÉCNICA
+
+El sistema no borra órdenes anteriores.
+OrdenId existente = ACTUALIZAR.
+OrdenId nuevo = AGREGAR.
+
+SLA:
+FINALIZADA + Inicio + Fin + partida + parámetro SLA = EVALUABLE.

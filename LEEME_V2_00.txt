@@ -1,0 +1,151 @@
+MI VISUAL LIMA - V2.00
+MAPA OPERATIVO + TIEMPO DE GESTIÓN / SLA
+
+IMPORTANTE
+Esta versión conserva el Dashboard V1.27 y agrega Mapa Operativo.
+Es una actualización de APPS SCRIPT + GITHUB.
+
+========================
+1. MAPA OPERATIVO
+========================
+Se habilita el módulo Mapa Operativo según los permisos ya existentes.
+
+CARGAS:
+- CARGA INSTALACIONES
+- CARGA VISITA TÉCNICA
+
+El sistema valida el tipo de archivo para evitar cargar Instalaciones en VT o viceversa.
+
+Los Excel se leen directamente desde la APP.
+Datos principales:
+OrdenId, TipoTraba, fecha solicitud, cliente, producto, cuadrilla, estado,
+direcciones, código cliente/seguimiento, documento, teléfonos, FechaIniVisi,
+FechaFinVisi, motivos, georreferencia, CTO 1/2/3, coordenadas CTO, CTO y puerto.
+
+ACTUALIZACIÓN:
+- La clave del Mapa es ORDEN_ID.
+- Si la orden ya existe, se actualiza.
+- Si la nueva descarga trae un campo vacío, se conserva el dato anterior existente.
+- No se duplica el mismo OrdenId.
+
+========================
+2. CRUCE DE CUADRILLAS
+========================
+No se usa solamente K1/K2/etc. porque los códigos pueden repetirse entre plataformas.
+Se valida por:
+1. nombre completo normalizado;
+2. código + plataforma;
+3. código + plataforma + técnico;
+4. código + técnico.
+Si no existe coincidencia segura queda SIN_COINCIDENCIA para revisión.
+
+Plataformas consideradas:
+SGI / SGA / TRASLADO / POSTMOTOWIN.
+
+========================
+3. MAPA
+========================
+Mapa Leaflet + OpenStreetMap.
+Incluye:
+- marcadores por estado;
+- filtros;
+- cuadrilla/supervisor/plataforma/tipo visual;
+- tipo de trabajo;
+- estado;
+- periodo/fecha;
+- búsqueda por orden;
+- detalle de cliente/dirección;
+- Inicio/Fin visita;
+- CTO/Puerto;
+- opción Mostrar CTO;
+- botón Cómo llegar.
+
+========================
+4. SLA / TIEMPO DE GESTIÓN
+========================
+Regla:
+Tiempo de gestión = FechaFinVisi - FechaIniVisi.
+
+Se evalúan órdenes FINALIZADAS que tengan:
+- Inicio y Fin de visita;
+- cruce con ORDENES_DETALLE;
+- ID_TARIFA/partida;
+- parámetro SLA activo.
+
+Cruce:
+MAPA_ORDENES.ORDEN_ID
+=
+ORDENES_DETALLE.CODIGO_ORDEN_ORIGEN
+
+Resultados:
+DENTRO_SLA / FUERA_SLA / NO_EVALUABLE.
+
+Los tiempos por partida ya fueron cargados directamente en PARAMETROS_SLA.
+No es necesario volver a copiarlos.
+
+Semáforo inicial:
+- ÓPTIMO: >= 90%
+- MODERADO: >= 80% y < 90%
+- CRÍTICO: < 80%
+
+Gerencia y Administrador pueden editar estos límites desde PONER INDICADORES.
+
+========================
+5. DASHBOARD
+========================
+Tiempo de gestión / SLA deja de estar En construcción después de existir carga de Mapa.
+
+Participa en:
+- Resumen general;
+- filtro Indicador;
+- Ranking por cuadrilla;
+- Comparar por Supervisores;
+- Todos los indicadores;
+- Mi Desempeño del Técnico.
+
+Los mismos filtros del Dashboard se respetan.
+
+========================
+6. HOJAS DE GOOGLE SHEETS
+========================
+YA CREADAS DIRECTAMENTE EN BD MI VISUAL LIMA:
+- MAPA_ORDENES
+- CATALOGO_CTO (oculta)
+- PARAMETROS_SLA
+- SLA_ORDENES_RESUMEN (oculta)
+
+NO CREARLAS NUEVAMENTE.
+
+PARAMETROS_SLA ya contiene T0001-T0034.
+
+========================
+7. ORDEN PARA ACTUALIZAR
+========================
+PASO 1 - APPS SCRIPT
+- Reemplazar Code.gs por Code_V2_00_MAPA_SLA.gs.
+- Guardar.
+- Implementar -> Administrar implementaciones.
+- Editar la implementación existente.
+- Crear NUEVA VERSIÓN.
+- Mantener la misma URL del Web App.
+
+PASO 2 - GITHUB
+- Reemplazar app.js por el app.js de este paquete.
+- manifest.webmanifest y data/cuadrillas-v19.json se incluyen como respaldo y no cambian.
+- NO borrar index.html, styles.css ni assets del repositorio.
+- Cerrar la pestaña anterior de la APP y volver a abrir.
+
+PASO 3 - CARGAS
+Dentro de Mapa Operativo:
+- Archivo de Instalaciones -> CARGA INSTALACIONES.
+- Archivo de VT/Traslado/PostMotoWIN -> CARGA VISITA TÉCNICA.
+
+Después de cada carga se recalcula el SLA automáticamente.
+
+========================
+8. VALIDACIÓN
+========================
+- Code.gs: sintaxis validada.
+- app.js: sintaxis validada.
+- Mantiene optimización de rendimiento de V1.25/V1.27.
+- La carga del Mapa invalida la caché del Dashboard para mostrar SLA actualizado.
