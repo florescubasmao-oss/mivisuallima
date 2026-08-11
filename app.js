@@ -3758,3 +3758,284 @@ console.info('[MI VISUAL LIMA] V1.20: resumen más compacto y sin palabras entre
 })();
 
 console.info('[MI VISUAL LIMA] V1.21: tarjeta Producción definitiva en bloques.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.22
+   Producción clara + Metas generales explícitas.
+   Solo frontend. No cambia API ni cálculos.
+   ========================================================== */
+(() => {
+  const esc122 = (value) => String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+
+  function installStyles122() {
+    if (document.getElementById('mvlV122Styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'mvlV122Styles';
+    style.textContent = `
+      /* Tarjeta Producción: estructura estable, sin elipsis */
+      #dashboardTotalSummaryV19 .mvl-v122-prod-grid{
+        display:grid !important;
+        grid-template-columns:1fr 1fr !important;
+        gap:7px !important;
+        margin-top:8px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-cell{
+        min-width:0 !important;
+        padding:7px 8px !important;
+        border:1px solid #e3edf7 !important;
+        border-radius:9px !important;
+        background:#fbfdff !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-cell span{
+        display:block !important;
+        margin:0 0 4px !important;
+        color:#5f7188 !important;
+        font-size:.61rem !important;
+        line-height:1.12 !important;
+        font-weight:650 !important;
+        white-space:normal !important;
+        overflow:visible !important;
+        text-overflow:clip !important;
+        word-break:normal !important;
+        overflow-wrap:normal !important;
+        hyphens:none !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-cell b{
+        display:block !important;
+        color:#082f5b !important;
+        font-size:.76rem !important;
+        line-height:1.08 !important;
+        font-weight:850 !important;
+        white-space:nowrap !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-cell small{
+        display:block !important;
+        margin-top:3px !important;
+        color:#8291a3 !important;
+        font-size:.52rem !important;
+        line-height:1.08 !important;
+        white-space:normal !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-full{
+        grid-column:1/-1 !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-bar{
+        height:6px !important;
+        border-radius:999px !important;
+        overflow:hidden !important;
+        background:#e7eef6 !important;
+        margin-top:1px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-bar i{
+        display:block !important;
+        height:100% !important;
+        border-radius:inherit !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-chip{
+        grid-column:1/-1 !important;
+        margin-top:1px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v122-prod-chip .mvl-v118-status-chip,
+      #dashboardTotalSummaryV19 .mvl-v122-prod-chip .mvl-v117-status-chip{
+        max-width:100% !important;
+        padding:3px 7px !important;
+        font-size:.58rem !important;
+        line-height:1.1 !important;
+        white-space:normal !important;
+      }
+
+      /* PONER INDICADORES: metas generales visibles */
+      #indicatorConfigModalV113 .mvl-v122-general-help{
+        margin:7px 0 0 !important;
+        padding:8px 10px !important;
+        border-radius:10px !important;
+        background:#eef6ff !important;
+        border:1px solid #cfe2fa !important;
+        color:#34536f !important;
+        font-size:.68rem !important;
+        line-height:1.35 !important;
+      }
+
+      #indicatorConfigModalV113 .mvl-v122-config-mode{
+        margin:0 0 8px !important;
+        color:#073b78 !important;
+        font-size:.72rem !important;
+        font-weight:850 !important;
+      }
+
+      @media(max-width:430px){
+        #dashboardTotalSummaryV19 .mvl-v122-prod-grid{
+          grid-template-columns:1fr !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function numberOnly122(text){
+    const m=String(text||'').match(/-?\d+(?:[.,]\d+)?/);
+    return m ? m[0].replace(',','.') : '';
+  }
+
+  function rebuildProduction122(){
+    const root=document.getElementById('dashboardTotalSummaryV19');
+    if(!root) return;
+
+    const oldGrid=root.querySelector('.mvl-v121-prod-grid');
+    if(!oldGrid || oldGrid.dataset.v122Done==='1') return;
+
+    const cells=[...oldGrid.querySelectorAll('.mvl-v121-prod-cell')];
+    if(cells.length < 6) return;
+
+    const getB = index => cells[index]?.querySelector('b')?.textContent?.trim() || '—';
+    const getSmall = index => cells[index]?.querySelector('small')?.textContent?.trim() || '';
+
+    const metaCut = getB(0);
+    const metaCutDays = getSmall(0);
+    const metaMonth = getB(1);
+    const metaMonthDays = getSmall(1);
+    const avgReal = getB(2);
+    const metaDaily = getB(3);
+    const compliance = getB(4);
+    const monthlyAdvance = getB(5);
+
+    const bar = oldGrid.querySelector('.mvl-v121-prod-bar');
+    const chip = oldGrid.querySelector('.mvl-v121-prod-chip');
+
+    let barHtml='';
+    if(bar){
+      const i=bar.querySelector('i');
+      const cls=[...bar.classList].filter(x=>x!=='mvl-v121-prod-bar').join(' ');
+      barHtml=`<div class="mvl-v122-prod-bar ${esc122(cls)}"><i style="${esc122(i?.getAttribute('style')||'')}"></i></div>`;
+    }
+
+    oldGrid.outerHTML = `
+      <div class="mvl-v122-prod-grid" data-v122-done="1">
+        <div class="mvl-v122-prod-cell">
+          <span>Meta diaria general</span>
+          <b>${esc122(metaDaily)}</b>
+          <small>Suma de la meta diaria de las cuadrillas evaluadas</small>
+        </div>
+
+        <div class="mvl-v122-prod-cell">
+          <span>Promedio real por día</span>
+          <b>${esc122(avgReal)}</b>
+        </div>
+
+        <div class="mvl-v122-prod-cell">
+          <span>Meta al corte</span>
+          <b>${esc122(metaCut)}</b>
+          ${metaCutDays ? `<small>${esc122(metaCutDays)}</small>` : ''}
+        </div>
+
+        <div class="mvl-v122-prod-cell">
+          <span>Cumplimiento al corte</span>
+          <b>${esc122(compliance)}</b>
+        </div>
+
+        <div class="mvl-v122-prod-cell">
+          <span>Meta mensual</span>
+          <b>${esc122(metaMonth)}</b>
+          ${metaMonthDays ? `<small>${esc122(metaMonthDays)}</small>` : ''}
+        </div>
+
+        <div class="mvl-v122-prod-cell">
+          <span>Avance mensual</span>
+          <b>${esc122(monthlyAdvance)}</b>
+        </div>
+
+        <div class="mvl-v122-prod-full">${barHtml}</div>
+        ${chip ? `<div class="mvl-v122-prod-chip">${chip.innerHTML}</div>` : ''}
+      </div>`;
+  }
+
+  function polishIndicatorModal122(){
+    const modal=document.getElementById('indicatorConfigModalV113');
+    if(!modal) return;
+
+    const headP=modal.querySelector('.mvl-v113-modal-head p');
+    if(headP){
+      headP.textContent='Define metas generales y, si necesitas, metas específicas por tipo de cuadrilla.';
+    }
+
+    const selector=document.getElementById('cfgVisualTypeV114');
+    if(!selector) return;
+
+    const generalOption=[...selector.options].find(o=>o.value==='TODOS');
+    if(generalOption) generalOption.textContent='METAS GENERALES · TODOS';
+
+    const scope=selector.closest('.mvl-v114-scope');
+    if(scope && !scope.querySelector('.mvl-v122-general-help')){
+      const help=document.createElement('div');
+      help.className='mvl-v122-general-help';
+      help.textContent='Las METAS GENERALES son la referencia base del Dashboard. PDG, PLANILLA, PRODUCCIÓN y DISPONIBILIDAD pueden tener metas propias; si no tienen una configuración específica, usan automáticamente las metas generales.';
+      scope.appendChild(help);
+    }
+
+    let mode=modal.querySelector('.mvl-v122-config-mode');
+    if(!mode){
+      mode=document.createElement('div');
+      mode.className='mvl-v122-config-mode';
+      const firstSection=modal.querySelector('.mvl-v113-config-section');
+      firstSection?.parentNode?.insertBefore(mode, firstSection);
+    }
+
+    const refreshMode=()=>{
+      const value=selector.value || 'TODOS';
+      if(mode){
+        mode.textContent=value==='TODOS'
+          ? 'Configurando: METAS GENERALES'
+          : `Configurando metas específicas: ${value}`;
+      }
+
+      const source=document.getElementById('cfgSourceV114');
+      if(source && value==='TODOS'){
+        source.textContent='Configuración general usada para comparar el resultado global y como base para los tipos de cuadrilla sin meta propia.';
+      }
+    };
+
+    if(!selector.dataset.v122Bound){
+      selector.addEventListener('change',()=>setTimeout(refreshMode,80));
+      selector.dataset.v122Bound='1';
+    }
+    setTimeout(refreshMode,0);
+  }
+
+  function refresh122(){
+    installStyles122();
+    rebuildProduction122();
+    polishIndicatorModal122();
+  }
+
+  installStyles122();
+
+  const observer=new MutationObserver(()=>requestAnimationFrame(refresh122));
+  const start=()=>{
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+    refresh122();
+  };
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',start,{once:true});
+  }else{
+    start();
+  }
+})();
+
+console.info('[MI VISUAL LIMA] V1.22: Producción clara + metas generales explícitas.');
