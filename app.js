@@ -1706,6 +1706,7 @@
 
       if (cached) {
         fillConfig113(cached);
+        window.__mvlOrganizeGoals124?.();
         modalMessage113('');
         return;
       }
@@ -1714,6 +1715,7 @@
       try {
         const config = await getConfig113(false, type);
         fillConfig113(config);
+        window.__mvlOrganizeGoals124?.();
         modalMessage113('');
       } catch (err) {
         modalMessage113(err.message || 'No se pudo cargar la configuración.', 'error');
@@ -1937,10 +1939,15 @@
     modal?.classList.remove('hidden');
     showConfigTab123('metas');
 
+    // V1.25: preparar la vista una sola vez al abrir, sin observar todo el body.
+    window.__mvlPolishIndicatorModal122?.();
+    window.__mvlOrganizeGoals124?.();
+
     // V1.23: si el Dashboard ya trajo las metas, abre de inmediato.
     const cached = peekConfig113('TODOS');
     if (cached) {
       fillConfig113(cached);
+      window.__mvlOrganizeGoals124?.();
       modalMessage113('');
       return;
     }
@@ -1950,6 +1957,7 @@
     try {
       const config = await getConfig113(false, 'TODOS');
       fillConfig113(config);
+      window.__mvlOrganizeGoals124?.();
       modalMessage113('');
     } catch (err) {
       modalMessage113(err.message || 'No se pudo cargar la configuración.', 'error');
@@ -2210,9 +2218,15 @@
 
     panel.dataset.v113Observed = '1';
 
+    let scheduled113 = false;
     const run = () => {
-      ensureIndicatorButton113();
-      refreshSemaphores113();
+      if (scheduled113) return;
+      scheduled113 = true;
+      window.requestAnimationFrame(() => {
+        scheduled113 = false;
+        ensureIndicatorButton113();
+        refreshSemaphores113();
+      });
     };
 
     run();
@@ -2232,18 +2246,11 @@
     wrapApi113();
     watchDashboard113();
 
-    const bodyObserver = new MutationObserver(() => {
-      watchModuleCards113();
-      watchDashboard113();
-      ensureIndicatorButton113();
-    });
+    // V1.25: se elimina el observer global de document.body.
+    // Los componentes principales son estáticos y ya tienen watchers específicos.
+    ensureIndicatorButton113();
 
-    bodyObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    console.info('[MI VISUAL LIMA] Frontend V1.15: metas por Tipo Visual + semáforos Crítico/Moderado/Óptimo.');
+    console.info('[MI VISUAL LIMA] Frontend V1.15/V1.25: metas + semáforos con observación optimizada.');
   }
 
   function waitForCore113(attempt = 0) {
@@ -3736,22 +3743,13 @@ console.info('[MI VISUAL LIMA] V1.19: fecha de corte por última FINALIZADA + re
     compactLabels120(document.querySelector('#dashboardTotalSummaryV19'));
   }
 
+  // V1.25: V1.20 queda solo como compatibilidad visual inicial.
+  // No mantiene un MutationObserver propio.
   installStyles120();
-
-  const observer = new MutationObserver(() => {
-    window.requestAnimationFrame(refresh120);
-  });
-
-  const startObserver = () => {
-    const target = document.getElementById('performanceDashboardPanel') || document.body;
-    observer.observe(target, { childList:true, subtree:true, characterData:true });
-    refresh120();
-  };
-
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startObserver, { once:true });
+    document.addEventListener('DOMContentLoaded', refresh120, { once:true });
   } else {
-    startObserver();
+    refresh120();
   }
 })();
 
@@ -3960,11 +3958,11 @@ console.info('[MI VISUAL LIMA] V1.20: resumen más compacto y sin palabras entre
     rebuildProduction121();
   }
 
-  const obs=new MutationObserver(()=>requestAnimationFrame(refresh121));
+  // V1.25: V1.21 ya no observa el DOM por su cuenta.
+  // V1.22 llama esta función solo cuando el Dashboard realmente cambia.
+  window.__mvlRefresh121 = refresh121;
   function start(){
     installStyles121();
-    const target=document.getElementById('performanceDashboardPanel')||document.body;
-    obs.observe(target,{childList:true,subtree:true});
     refresh121();
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
@@ -4233,15 +4231,32 @@ console.info('[MI VISUAL LIMA] V1.21: tarjeta Producción definitiva en bloques.
 
   function refresh122(){
     installStyles122();
+    window.__mvlRefresh121?.();
     rebuildProduction122();
     polishIndicatorModal122();
   }
 
+  window.__mvlRefresh122 = refresh122;
+  window.__mvlPolishIndicatorModal122 = polishIndicatorModal122;
+
   installStyles122();
 
-  const observer=new MutationObserver(()=>requestAnimationFrame(refresh122));
+  let scheduled122=false;
+  const schedule122=()=>{
+    if(scheduled122) return;
+    scheduled122=true;
+    window.requestAnimationFrame(()=>{
+      scheduled122=false;
+      refresh122();
+    });
+  };
+
   const start=()=>{
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+    const target=document.getElementById('performanceDashboardPanel');
+    if(target && target.dataset.v125VisualObserved!=='1'){
+      target.dataset.v125VisualObserved='1';
+      new MutationObserver(schedule122).observe(target,{childList:true,subtree:true});
+    }
     refresh122();
   };
 
@@ -4253,3 +4268,284 @@ console.info('[MI VISUAL LIMA] V1.21: tarjeta Producción definitiva en bloques.
 })();
 
 console.info('[MI VISUAL LIMA] V1.22: Producción clara + metas generales explícitas.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.24
+   METAS para todos los indicadores.
+   Solo reorganización visual: conserva IDs, valores y backend.
+   ========================================================== */
+(() => {
+  function installStyles124() {
+    if (document.getElementById('mvlV124GoalsStyles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'mvlV124GoalsStyles';
+    style.textContent = `
+      #indicatorConfigModalV113 .mvl-v124-goal-card{
+        margin-top:10px;
+        padding:12px;
+        border:1px solid #dbe7f4;
+        border-radius:13px;
+        background:#fff;
+      }
+      #indicatorConfigModalV113 .mvl-v124-goal-card h4{
+        margin:0 0 9px;
+        color:#073b78;
+        font-size:.82rem;
+      }
+      #indicatorConfigModalV113 .mvl-v124-goal-card .mvl-v113-config-grid{
+        margin:0 !important;
+      }
+      #indicatorConfigModalV113 .mvl-v124-goal-note{
+        margin-top:7px;
+        color:#687b91;
+        font-size:.65rem;
+        line-height:1.3;
+      }
+      #indicatorConfigModalV113 .mvl-v124-pending-goal{
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:center;
+        padding:9px 10px;
+        border-radius:10px;
+        background:#f6f8fb;
+        color:#4f6176;
+        font-size:.69rem;
+      }
+      #indicatorConfigModalV113 .mvl-v124-pending-goal + .mvl-v124-pending-goal{
+        margin-top:6px;
+      }
+      #indicatorConfigModalV113 .mvl-v124-pending-goal strong{
+        color:#718096;
+        font-size:.62rem;
+      }
+      #indicatorConfigModalV113 .mvl-v124-semaforo-note{
+        margin:7px 0 0;
+        color:#6b7e93;
+        font-size:.64rem;
+        line-height:1.3;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function findSection124(title) {
+    const modal = document.getElementById('indicatorConfigModalV113');
+    if (!modal) return null;
+    const wanted = String(title || '').trim().toUpperCase();
+    return [...modal.querySelectorAll('#cfgIndicatorsPanelV123 > .mvl-v113-config-section')]
+      .find(section =>
+        String(section.querySelector('h4')?.textContent || '').trim().toUpperCase() === wanted
+      ) || null;
+  }
+
+  function relabelField124(label, text, note = '') {
+    if (!label) return;
+    const input = label.querySelector('input');
+    if (!input) return;
+
+    // Conservar el mismo input/ID; solo cambia el texto visible.
+    [...label.childNodes].forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) node.remove();
+    });
+
+    label.insertBefore(document.createTextNode(text), input);
+
+    const oldNotes = [...label.querySelectorAll('.mvl-v114-field-note')];
+    oldNotes.forEach(n => n.remove());
+
+    if (note) {
+      const span = document.createElement('span');
+      span.className = 'mvl-v114-field-note';
+      span.textContent = note;
+      label.appendChild(span);
+    }
+  }
+
+  function createGoalSection124(goals, title, label, note = '') {
+    if (!goals || !label) return;
+
+    const section = document.createElement('section');
+    section.className = 'mvl-v124-goal-card';
+    section.innerHTML = `
+      <h4>${title}</h4>
+      <div class="mvl-v113-config-grid"></div>
+      ${note ? `<div class="mvl-v124-goal-note">${note}</div>` : ''}
+    `;
+    section.querySelector('.mvl-v113-config-grid').appendChild(label);
+    goals.appendChild(section);
+  }
+
+  function organizeGoals124() {
+    const modal = document.getElementById('indicatorConfigModalV113');
+    const goals = modal?.querySelector('#cfgGoalsPanelV123');
+    const indicators = modal?.querySelector('#cfgIndicatorsPanelV123');
+    if (!modal || !goals || !indicators || modal.dataset.v124Goals === '1') return;
+
+    installStyles124();
+
+    // Producción ya fue separada por V1.23.
+    const prodGoal = goals.querySelector('.mvl-v113-config-section');
+    if (prodGoal) {
+      prodGoal.classList.add('mvl-v124-goal-card');
+      const title = prodGoal.querySelector('h4');
+      if (title) title.textContent = 'Producción';
+    }
+
+    // EFECTIVIDAD: el inicio ÓPTIMO es la meta objetivo.
+    const effSection = findSection124('EFECTIVIDAD');
+    const effOptimalInput = document.getElementById('cfgEffGreenV113');
+    const effOptimalLabel = effOptimalInput?.closest('label');
+    if (effOptimalLabel) {
+      relabelField124(
+        effOptimalLabel,
+        'Meta objetivo · %',
+        'Resultado mínimo considerado ÓPTIMO.'
+      );
+      createGoalSection124(
+        goals,
+        'Efectividad',
+        effOptimalLabel,
+        'La meta se compara contra la efectividad total del periodo o del filtro seleccionado.'
+      );
+    }
+    if (effSection) {
+      const h = effSection.querySelector('h4');
+      if (h) h.textContent = 'Semáforo de Efectividad';
+      const note = document.createElement('div');
+      note.className = 'mvl-v124-semaforo-note';
+      note.textContent = 'El nivel ÓPTIMO comienza en la meta definida en la pestaña METAS.';
+      effSection.appendChild(note);
+    }
+
+    // RECABLEADO: máximo ÓPTIMO es la meta.
+    const recSection = findSection124('% RECABLEADO');
+    const recOptimalInput = document.getElementById('cfgRecOptimalV114');
+    const recOptimalLabel = recOptimalInput?.closest('label');
+    if (recOptimalLabel) {
+      relabelField124(
+        recOptimalLabel,
+        'Meta máxima · %',
+        'Menor porcentaje es mejor.'
+      );
+      createGoalSection124(
+        goals,
+        '% Recableado',
+        recOptimalLabel,
+        'El resultado será ÓPTIMO cuando esté en la meta máxima definida o por debajo de ella.'
+      );
+    }
+    if (recSection) {
+      const h = recSection.querySelector('h4');
+      if (h) h.textContent = 'Semáforo de % Recableado';
+      const note = document.createElement('div');
+      note.className = 'mvl-v124-semaforo-note';
+      note.textContent = 'El límite ÓPTIMO proviene de la meta definida en la pestaña METAS.';
+      recSection.appendChild(note);
+    }
+
+    // VTR/GAR: máximo ÓPTIMO es la meta.
+    const vtrSection = findSection124('VTR / GAR');
+    const vtrOptimalInput = document.getElementById('cfgVtrOptimalV114');
+    const vtrOptimalLabel = vtrOptimalInput?.closest('label');
+    if (vtrOptimalLabel) {
+      relabelField124(
+        vtrOptimalLabel,
+        'Meta máxima · %',
+        'Menor porcentaje es mejor.'
+      );
+      createGoalSection124(
+        goals,
+        'VTR / GAR',
+        vtrOptimalLabel,
+        'La meta puede dejarse definida desde ahora; el cálculo seguirá en construcción hasta integrar su fuente.'
+      );
+    }
+    if (vtrSection) {
+      const h = vtrSection.querySelector('h4');
+      if (h) h.textContent = 'Semáforo de VTR / GAR';
+      const note = document.createElement('div');
+      note.className = 'mvl-v124-semaforo-note';
+      note.textContent = 'El límite ÓPTIMO proviene de la meta definida en la pestaña METAS.';
+      vtrSection.appendChild(note);
+    }
+
+    // Indicadores todavía en construcción también aparecen en METAS.
+    const pending = document.createElement('section');
+    pending.className = 'mvl-v124-goal-card';
+    pending.innerHTML = `
+      <h4>Próximas metas</h4>
+      <div class="mvl-v124-pending-goal">
+        <span>Tiempo de gestión / SLA</span><strong>EN CONSTRUCCIÓN</strong>
+      </div>
+      <div class="mvl-v124-pending-goal">
+        <span>Observaciones</span><strong>EN CONSTRUCCIÓN</strong>
+      </div>
+    `;
+    goals.appendChild(pending);
+
+    // Cambiar algunos textos del semáforo ahora que la meta está aparte.
+    const effModerateLabel = document.getElementById('cfgEffCriticalV113')?.closest('label');
+    relabelField124(effModerateLabel, 'Inicio MODERADO · %');
+
+    const recModerateLabel = document.getElementById('cfgRecModerateV114')?.closest('label');
+    relabelField124(
+      recModerateLabel,
+      'Máximo MODERADO · %',
+      'Por encima será CRÍTICO.'
+    );
+
+    const vtrModerateLabel = document.getElementById('cfgVtrModerateV114')?.closest('label');
+    relabelField124(
+      vtrModerateLabel,
+      'Máximo MODERADO · %',
+      'Por encima será CRÍTICO.'
+    );
+
+    modal.dataset.v124Goals = '1';
+  }
+
+  // V1.25: sin observer global. La organización se ejecuta al abrir el modal.
+  window.__mvlOrganizeGoals124 = organizeGoals124;
+
+  function start124() {
+    organizeGoals124();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start124, { once:true });
+  } else {
+    start124();
+  }
+})();
+
+console.info('[MI VISUAL LIMA] V1.24: METAS de Producción, Efectividad, Recableado y VTR/GAR.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.25
+   Guardia de rendimiento.
+   ========================================================== */
+(() => {
+  // Evita que un click repetido en PONER INDICADORES dispare varias acciones
+  // mientras la primera todavía está resolviendo.
+  document.addEventListener('click', (event) => {
+    const button = event.target?.closest?.('#putIndicatorsButtonV113');
+    if (!button) return;
+
+    if (button.dataset.v125Busy === '1') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    button.dataset.v125Busy = '1';
+    window.setTimeout(() => {
+      button.dataset.v125Busy = '0';
+    }, 700);
+  }, true);
+})();
+
+console.info('[MI VISUAL LIMA] V1.25: observers globales eliminados y modal de indicadores optimizado.');
