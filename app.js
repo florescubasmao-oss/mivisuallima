@@ -3144,3 +3144,195 @@ console.info('[MI VISUAL LIMA] V1.17: efectividad óptima inclusiva, rangos visi
 })();
 
 console.info('[MI VISUAL LIMA] V1.18: producción por calendario 6x1, meta al corte/meta mensual y vista profesional para Dashboard, Supervisor y Técnico.');
+
+
+/**
+ * MI VISUAL LIMA - Frontend V1.19
+ * - Fecha de corte = última orden FINALIZADA registrada en el periodo.
+ * - Resumen de indicadores compacto (aprox. 50% menos altura visual).
+ */
+(() => {
+  const esc119 = (v) => String(v ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+
+  function installStyles119() {
+    if (document.getElementById('mvlV119Styles')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlV119Styles';
+    style.textContent = `
+      /* Fecha de corte: una sola línea, sin icono ni texto de ciclo */
+      .mvl-v118-cutoff {
+        min-height:0 !important; margin:0 0 8px !important; padding:7px 10px !important;
+        border-radius:11px !important; background:#f7fbff !important;
+      }
+      .mvl-v118-cutoff-main { display:block !important; }
+      .mvl-v118-cutoff-icon, .mvl-v118-cutoff-cycle { display:none !important; }
+      .mvl-v118-cutoff strong { font-size:.74rem !important; line-height:1.2 !important; }
+      .mvl-v118-cutoff small { display:none !important; }
+
+      /* Resumen compacto */
+      #dashboardTotalSummaryV19 { margin-bottom:14px !important; }
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-head { margin-bottom:7px !important; }
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-grid {
+        gap:7px !important; align-items:start !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card {
+        align-self:start !important; min-height:0 !important; padding:9px 10px !important;
+        border-radius:12px !important; box-shadow:0 4px 12px rgba(31,68,111,.04) !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > span {
+        font-size:.68rem !important; margin-bottom:3px !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > strong {
+        font-size:1.02rem !important; line-height:1.12 !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > small {
+        font-size:.66rem !important; line-height:1.18 !important; margin-top:3px !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction > strong {
+        font-size:.88rem !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction > small {
+        display:none !important;
+      }
+
+      /* Producción: datos en 2 columnas para evitar una tarjeta larga */
+      #dashboardTotalSummaryV19 .mvl-v118-production-meta,
+      #performanceTechPanel .mvl-v118-production-meta {
+        display:grid !important; grid-template-columns:1fr 1fr !important;
+        gap:4px 7px !important; margin-top:6px !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v118-production-line,
+      #performanceTechPanel .mvl-v118-production-line {
+        display:grid !important; gap:1px !important; align-content:start !important;
+        padding:3px 0 !important; border-top:1px solid #edf2f7;
+        font-size:.62rem !important; line-height:1.15 !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v118-production-line b,
+      #performanceTechPanel .mvl-v118-production-line b {
+        font-size:.68rem !important; text-align:left !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v118-progress,
+      #performanceTechPanel .mvl-v118-progress,
+      #dashboardTotalSummaryV19 .mvl-v118-status-chip,
+      #performanceTechPanel .mvl-v118-status-chip {
+        grid-column:1/-1 !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v118-progress,
+      #performanceTechPanel .mvl-v118-progress { height:5px !important; margin-top:1px !important; }
+      #dashboardTotalSummaryV19 .mvl-v118-progress-label,
+      #performanceTechPanel .mvl-v118-progress-label {
+        margin-top:0 !important; font-size:.60rem !important; line-height:1.12 !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v118-progress-label strong,
+      #performanceTechPanel .mvl-v118-progress-label strong { font-size:.63rem !important; }
+      #dashboardTotalSummaryV19 .mvl-v118-status-chip,
+      #performanceTechPanel .mvl-v118-status-chip {
+        margin-top:2px !important; padding:3px 6px !important; font-size:.62rem !important;
+      }
+
+      /* Quita badges heredados para dejar un solo semáforo por indicador */
+      #dashboardTotalSummaryV19 .mvl-v113-status,
+      #performanceTechPanel .mvl-v113-status { display:none !important; }
+
+      /* Técnico: misma presentación compacta */
+      #performanceTechPanel .performance-grid { gap:7px !important; align-items:start !important; }
+      #performanceTechPanel .performance-card {
+        min-height:0 !important; padding:10px !important; border-radius:12px !important;
+      }
+      #performanceTechPanel .performance-card .performance-label { font-size:.68rem !important; }
+      #performanceTechPanel .performance-card > strong { font-size:1.02rem !important; }
+      #performanceTechPanel .performance-card > small { font-size:.65rem !important; line-height:1.15 !important; }
+
+      @media (max-width:640px) {
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid { grid-template-columns:1fr 1fr !important; }
+      }
+      @media (max-width:430px) {
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid { grid-template-columns:1fr 1fr !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function dateLabel119(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 'Sin órdenes finalizadas';
+    const months=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return `${Number(m[3])} ${months[Number(m[2])-1]} ${m[1]}`;
+  }
+
+  function rewriteCutoff119(calendar, technician=false) {
+    const id = technician ? 'mvlV118TechCutoff' : 'mvlV118DashboardCutoff';
+    const box = document.getElementById(id);
+    if (!box) return;
+    box.innerHTML = `<div class="mvl-v118-cutoff-main"><strong>Fecha de corte: ${esc119(dateLabel119(calendar?.asOfDate))}</strong></div>`;
+  }
+
+  function compactProduction119(root, calendar, technician=false) {
+    if (!root) return;
+    const meta = root.querySelector('.mvl-v118-production-meta');
+    if (!meta) return;
+    const lines = [...meta.querySelectorAll('.mvl-v118-production-line')];
+    const elapsed = Number(calendar?.elapsedWorkDays || 0);
+    const month = Number(calendar?.monthWorkDays || 0);
+
+    if (technician) {
+      // Técnico mantiene Meta diaria y compacta las metas acumuladas.
+      if (lines[1]) {
+        const span=lines[1].querySelector('span');
+        if (span) span.textContent = elapsed ? `Meta al corte · ${elapsed} días` : 'Meta al corte';
+      }
+      if (lines[2]) {
+        const span=lines[2].querySelector('span');
+        if (span) span.textContent = month ? `Meta mensual · ${month} días` : 'Meta mensual';
+      }
+      return;
+    }
+
+    if (lines[0]) {
+      const span=lines[0].querySelector('span');
+      if (span) span.textContent = elapsed ? `Meta al corte · ${elapsed} días` : 'Meta al corte';
+    }
+    if (lines[1]) {
+      const span=lines[1].querySelector('span');
+      if (span) span.textContent = month ? `Meta mensual · ${month} días` : 'Meta mensual';
+    }
+  }
+
+  function refresh119(result, action) {
+    window.setTimeout(() => {
+      installStyles119();
+      if (action === 'performanceDashboard') {
+        rewriteCutoff119(result?.productionCalendar, false);
+        compactProduction119(document.querySelector('#dashboardTotalSummaryV19'), result?.productionCalendar, false);
+      }
+      if (action === 'performanceSummary') {
+        rewriteCutoff119(result?.productionCalendar, true);
+        compactProduction119(document.querySelector('#performanceTechPanel'), result?.productionCalendar, true);
+      }
+    }, 70);
+  }
+
+  function wrap119() {
+    if (document.documentElement.dataset.v119Api === '1' || typeof api !== 'function') return false;
+    // Espera la capa V1.18 para no alterar su orden de render.
+    if (document.documentElement.dataset.v118Events !== '1') return false;
+    document.documentElement.dataset.v119Api='1';
+    const previous=api;
+    api=async function(action, params={}) {
+      const result=await previous(action, params);
+      if ((action === 'performanceDashboard' || action === 'performanceSummary') && result?.ok) {
+        refresh119(result, action);
+      }
+      return result;
+    };
+    return true;
+  }
+
+  installStyles119();
+  const timer=window.setInterval(() => { if (wrap119()) window.clearInterval(timer); }, 120);
+  window.setTimeout(wrap119, 0);
+})();
+
+console.info('[MI VISUAL LIMA] V1.19: fecha de corte por última FINALIZADA + resumen compacto.');

@@ -1,0 +1,61 @@
+MI VISUAL LIMA - V1.19
+FECHA DE CORTE REAL + RESUMEN COMPACTO
+
+CAMBIO 1 - FECHA DE CORTE
+La fecha de corte ya NO usa la fecha del día.
+Se toma de la última orden FINALIZADA registrada en el periodo.
+
+Fuente principal:
+- DESEMPENO_DIARIO: última fecha con FINALIZADAS > 0.
+
+Respaldo:
+- ORDENES_DETALLE: última FECHA_ATENCION con ESTADO FINALIZADA.
+
+En la base actual validada, el corte es:
+- 09/08/2026
+
+La franja superior muestra solamente:
+- Fecha de corte: 9 ago 2026
+
+Se elimina de esa franja:
+- Icono ↗
+- "Corte de desempeño"
+- "Ciclo 6x1"
+- Texto largo de días efectivos/restantes
+
+IMPORTANTE
+El ciclo 6x1 NO se elimina del cálculo.
+Los días efectivos siguen usándose para:
+- Meta al corte
+- Meta mensual
+- Promedio diario
+- Cumplimiento de meta
+
+CAMBIO 2 - INDICADORES MÁS COMPACTOS
+Se reduce aproximadamente a la mitad la altura visual del Resumen:
+- Menor padding
+- Tipografía secundaria más compacta
+- Producción en distribución de 2 columnas
+- Meta al corte y Meta mensual muestran los días efectivos dentro del dato
+- Barra de avance más delgada
+- Semáforos compactos
+- Indicadores "En construcción" ya no muestran textos largos
+- Se elimina duplicidad de badges/semáforos heredados
+
+TÉCNICO
+Se aplica el mismo criterio visual compacto y la misma Fecha de corte real.
+Conserva:
+- Meta diaria
+- Meta al corte
+- Meta mensual
+- Promedio diario
+- Semáforos
+
+ORDEN DE ACTUALIZACIÓN
+1. Reemplazar Code.gs por Code_V1_19.gs.
+2. Guardar Apps Script.
+3. Implementar una NUEVA VERSIÓN de la implementación existente.
+4. En GitHub reemplazar app.js.
+5. Ctrl+F5 para probar.
+
+NO SE MODIFICAN HOJAS DE GOOGLE SHEETS EN ESTA ACTUALIZACIÓN.
