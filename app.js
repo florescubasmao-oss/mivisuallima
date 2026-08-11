@@ -382,13 +382,14 @@
         const indicator = $v19('dashboardIndicator');
         if (indicator) {
           indicator.innerHTML = `
+            <option value="ALL">Todos los indicadores</option>
             <option value="PRODUCCION">Producción</option>
             <option value="EFECTIVIDAD">Efectividad</option>
             <option value="RECABLEADO">% Recableado</option>
             <option value="VTR_GAR">VTR / GAR · En construcción</option>
             <option value="SLA">Tiempo de gestión / SLA · En construcción</option>
             <option value="OBSERVACIONES">Observaciones · En construcción</option>`;
-          if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO','VTR_GAR','SLA','OBSERVACIONES'].includes(indicator.value)) {
+          if (!['ALL','PRODUCCION','EFECTIVIDAD','RECABLEADO','VTR_GAR','SLA','OBSERVACIONES'].includes(indicator.value)) {
             indicator.value = 'PRODUCCION';
           }
         }
@@ -677,6 +678,7 @@
       function renderRanking(data) {
         const indicator = $v19('dashboardIndicator')?.value || 'PRODUCCION';
         const labels = {
+          ALL: { label: 'Todos los indicadores', help: 'Resumen de indicadores por cuadrilla.', construction: false },
           PRODUCCION: { label: 'Producción', help: 'Mayor puntaje primero.', construction: false },
           EFECTIVIDAD: { label: 'Efectividad', help: 'Mejor efectividad primero.', construction: false },
           RECABLEADO: { label: '% Recableado', help: 'Menor porcentaje primero.', construction: false },
@@ -702,6 +704,56 @@
 
         const f = filtrosSeleccionados();
         let rows = (data?.rows || []).filter(r => coincide(r, f));
+
+        if (indicator === 'ALL') {
+          $v19('dashboardRankingTitle').textContent = 'Resumen por cuadrilla';
+          $v19('dashboardRankingHelp').textContent =
+            `${rows.length} cuadrilla${rows.length === 1 ? '' : 's'} en el filtro seleccionado.`;
+          construction?.classList.add('hidden');
+
+          if (!rows.length) {
+            list.innerHTML = '<p class="empty">No hay cuadrillas con esta combinación de filtros.</p>';
+            return;
+          }
+
+          list.innerHTML = rows.map(r => {
+            const m = metadataForRow(r);
+            const eff = r.effectiveness == null || r.effectiveness === ''
+              ? '—'
+              : `${(Number(r.effectiveness) * 100).toFixed(1)}%`;
+            const rec = r.recablePercent == null || r.recablePercent === ''
+              ? '—'
+              : `${(Number(r.recablePercent) * 100).toFixed(1)}%`;
+            const sup = m.directManagement || norm(m.supervisor) === 'GG'
+              ? 'GG'
+              : (m.supervisor || r.supervisor || '');
+            const pills = [m.visualType, m.platform, sup, m.composition, m.state].filter(Boolean);
+
+            return `
+              <button type="button" class="dashboard-all-card" data-dashboard-crew="${html(r.crewId)}">
+                <div class="dashboard-all-head">
+                  <div>
+                    <strong>${html(r.crewDisplay || m.name || m.code || '')}</strong>
+                    <small>${html(sup)}</small>
+                  </div>
+                  <span class="module-arrow">›</span>
+                </div>
+                <div class="dashboard-kpi-mini-grid">
+                  <div><span>Producción</span><b>${Number(r.points || 0).toFixed(2)} pts</b></div>
+                  <div><span>Efectividad</span><b>${html(eff)}</b></div>
+                  <div><span>% Recableado</span><b>${html(rec)}</b></div>
+                  <div class="kpi-building"><span>VTR / GAR</span><b>En construcción</b></div>
+                  <div class="kpi-building"><span>SLA</span><b>En construcción</b></div>
+                  <div class="kpi-building"><span>Observaciones</span><b>En construcción</b></div>
+                </div>
+                <div class="dashboard-v19-rank-meta">
+                  ${pills.map(p => `<span class="dashboard-v19-meta-pill ${norm(p)==='GG'?'gg':''}">${html(p)}</span>`).join('')}
+                </div>
+              </button>`;
+          }).join('');
+          return;
+        }
+
         rows = ordenarRows(rows, indicator);
 
         $v19('dashboardRankingTitle').textContent = `Ranking de ${meta.label}`;
@@ -2691,7 +2743,7 @@
     if (compare !== 'SUPERVISOR' || !STATE116.data?.ok) return;
 
     const indicator = document.getElementById('dashboardIndicator')?.value || 'PRODUCCION';
-    if (!['PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator)) return;
+    if (!['ALL','PRODUCCION','EFECTIVIDAD','RECABLEADO'].includes(indicator)) return;
 
     const list = document.getElementById('dashboardRankingList');
     const title = document.getElementById('dashboardRankingTitle');
@@ -2700,6 +2752,51 @@
 
     const groups = aggregateSupervisors116();
     const cfg = config116();
+
+    if (indicator === 'ALL') {
+      groups.sort((a,b) => a.name.localeCompare(b.name, 'es'));
+
+      if (title) title.textContent = 'Resumen por Supervisores';
+      if (help) {
+        help.textContent =
+          `Producción, Efectividad y % Recableado consolidados. ${groups.length} supervisor${groups.length === 1 ? '' : 'es'} dentro del filtro seleccionado.`;
+      }
+
+      STATE116.renderingSupervisor = true;
+      try {
+        list.innerHTML = groups.length ? groups.map(g => {
+          const prod = g.productionRatio == null ? '—' : `${(g.productionRatio * 100).toFixed(0)}% meta`;
+          const eff = pct116(g.effectiveness);
+          const rec = pct116(g.recablePercent);
+
+          const prodStatus = info116(productionStatus116(g.productionRatio, cfg));
+          const effStatus = info116(effectivenessStatus116(g.effectiveness, cfg));
+          const recStatus = info116(negativeStatus116(g.recablePercent, cfg?.recableado));
+
+          const badge = meta => meta
+            ? `<span class="mvl-v113-status ${meta.cls}">${meta.label}</span>`
+            : '';
+
+          return `
+            <div class="mvl-v126-supervisor-all">
+              <div class="mvl-v126-supervisor-head">
+                <strong>${esc116(g.name)}</strong>
+                <small>${g.crews} cuadrilla${g.crews === 1 ? '' : 's'} · ${g.finalized} finalizadas</small>
+              </div>
+              <div class="mvl-v126-kpi-grid">
+                <div><span>Producción</span><b>${esc116(prod)}</b>${badge(prodStatus)}</div>
+                <div><span>Efectividad</span><b>${esc116(eff)}</b>${badge(effStatus)}</div>
+                <div><span>% Recableado</span><b>${esc116(rec)}</b>${badge(recStatus)}</div>
+              </div>
+            </div>`;
+        }).join('') : '<p class="empty">No hay Supervisores con datos para esta combinación de filtros.</p>';
+
+        list.dataset.v116Supervisor = '1';
+      } finally {
+        STATE116.renderingSupervisor = false;
+      }
+      return;
+    }
 
     groups.sort((a,b) => {
       if (indicator === 'PRODUCCION') {
@@ -4549,3 +4646,68 @@ console.info('[MI VISUAL LIMA] V1.24: METAS de Producción, Efectividad, Recable
 })();
 
 console.info('[MI VISUAL LIMA] V1.25: observers globales eliminados y modal de indicadores optimizado.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.26
+   "Todos los indicadores" restaurado.
+   ========================================================== */
+(() => {
+  if (document.getElementById('mvlV126Styles')) return;
+  const style = document.createElement('style');
+  style.id = 'mvlV126Styles';
+  style.textContent = `
+    .mvl-v126-supervisor-all{
+      border:1px solid #dce6f1;
+      border-radius:14px;
+      background:#fff;
+      padding:12px;
+      margin-bottom:9px;
+    }
+    .mvl-v126-supervisor-head{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:9px;
+    }
+    .mvl-v126-supervisor-head strong{color:#073b78;font-size:.80rem}
+    .mvl-v126-supervisor-head small{color:#718096;font-size:.65rem;text-align:right}
+    .mvl-v126-kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+    }
+    .mvl-v126-kpi-grid>div{
+      padding:8px;
+      border-radius:10px;
+      background:#f8fbff;
+      border:1px solid #e3edf7;
+      min-width:0;
+    }
+    .mvl-v126-kpi-grid span{
+      display:block;
+      color:#66788d;
+      font-size:.61rem;
+      margin-bottom:3px;
+    }
+    .mvl-v126-kpi-grid b{
+      display:block;
+      color:#102f55;
+      font-size:.76rem;
+      margin-bottom:4px;
+    }
+    .mvl-v126-kpi-grid .mvl-v113-status{
+      margin:0;
+      font-size:.56rem;
+      padding:2px 6px;
+    }
+    @media(max-width:540px){
+      .mvl-v126-kpi-grid{grid-template-columns:1fr}
+      .mvl-v126-supervisor-head{display:block}
+      .mvl-v126-supervisor-head small{display:block;text-align:left;margin-top:3px}
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+console.info('[MI VISUAL LIMA] V1.26: Todos los indicadores restaurado.');
