@@ -2203,19 +2203,41 @@
   }
 
   function summary116(rows) {
-    const dataRows = rows.filter(r => r.hasData);
-    const points = dataRows.reduce((a,r)=>a + Number(r.points || 0), 0);
+    const allRows = Array.isArray(rows) ? rows : [];
+    const dataRows = allRows.filter(r => r.hasData);
+    const points = allRows.reduce((a,r)=>a + Number(r.points || 0), 0);
     const finalized = dataRows.reduce((a,r)=>a + Number(r.finalized || 0), 0);
     const totalGeneral = dataRows.reduce((a,r)=>a + Number(r.totalGeneral || 0), 0);
     const losRojo = dataRows.reduce((a,r)=>a + Number(r.losRojo || 0), 0);
     const recables = dataRows.reduce((a,r)=>a + Number(r.recables || 0), 0);
-    const target = dataRows.reduce(
-      (a,r)=>a + Number(r.productionDailyTarget || 0) * Number(r.productionDays || 0),
+    const target = allRows.reduce(
+      (a,r)=>a + Number(
+        r.productionTargetToDate != null
+          ? r.productionTargetToDate
+          : Number(r.productionDailyTarget || 0) * Number(r.productionDays || 0)
+      ),
+      0
+    );
+    const monthlyTarget = allRows.reduce(
+      (a,r)=>a + Number(r.productionMonthlyTarget || 0),
+      0
+    );
+    const dailyTarget = allRows.reduce(
+      (a,r)=>a + Number(r.productionDailyTarget || 0),
+      0
+    );
+    const elapsedWorkDays = allRows.reduce(
+      (max,r)=>Math.max(max, Number(r.productionElapsedWorkDays || r.productionDays || 0)),
+      0
+    );
+    const monthWorkDays = allRows.reduce(
+      (max,r)=>Math.max(max, Number(r.productionMonthWorkDays || 0)),
       0
     );
 
     return {
-      crews: dataRows.length,
+      crews: allRows.length,
+      crewsWithData: dataRows.length,
       points,
       finalized,
       effectiveness: ratio116(finalized, totalGeneral),
@@ -2223,7 +2245,12 @@
       recables,
       recablePercent: ratio116(recables, losRojo),
       productionTarget: target,
-      productionRatio: ratio116(points, target)
+      productionMonthlyTarget: monthlyTarget,
+      productionDailyTarget: dailyTarget,
+      productionElapsedWorkDays: elapsedWorkDays,
+      productionMonthWorkDays: monthWorkDays,
+      productionRatio: ratio116(points, target),
+      productionMonthlyProgress: ratio116(points, monthlyTarget)
     };
   }
 
@@ -2400,7 +2427,7 @@
   }
 
   function aggregateSupervisors116() {
-    const rows = filteredRows116(false).filter(r => r.hasData);
+    const rows = filteredRows116(false);
     const map = new Map();
 
     rows.forEach(row => {
@@ -2422,7 +2449,11 @@
       g.totalGeneral += Number(row.totalGeneral || 0);
       g.losRojo += Number(row.losRojo || 0);
       g.recables += Number(row.recables || 0);
-      g.productionTarget += Number(row.productionDailyTarget || 0) * Number(row.productionDays || 0);
+      g.productionTarget += Number(
+        row.productionTargetToDate != null
+          ? row.productionTargetToDate
+          : Number(row.productionDailyTarget || 0) * Number(row.productionDays || 0)
+      );
     });
 
     return [...map.values()].map(g => ({
@@ -2618,3 +2649,498 @@
 })();
 
 console.info('[MI VISUAL LIMA] V1.17: efectividad óptima inclusiva, rangos visibles, guardado con carga y filtros responsivos.');
+
+
+/* =========================================================
+   V1.18 - PRODUCCIÓN POR CALENDARIO 6x1 + VISUAL PROFESIONAL
+   ========================================================= */
+(() => {
+  const V118 = {
+    wrappedApi: false,
+    dashboard: null,
+    technician: null,
+    installed: false
+  };
+
+  const norm118 = (v) => String(v ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+
+  const esc118 = (v) => String(v ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+
+  const number118 = (v, fallback = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const pct118 = (v, digits = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '—';
+  };
+
+  function statusInfo118(status) {
+    const s = norm118(status);
+    if (s === 'CUMPLE' || s === 'OPTIMO') return { cls:'optimal', label:'Óptimo', dot:'●' };
+    if (s === 'ATENCION' || s === 'MODERADO') return { cls:'moderate', label:'Moderado', dot:'●' };
+    if (s === 'CRITICO') return { cls:'critical', label:'Crítico', dot:'●' };
+    return { cls:'neutral', label:'Sin dato', dot:'●' };
+  }
+
+  function dateLabel118(iso) {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return `${Number(m[3])} ${months[Number(m[2])-1]} ${m[1]}`;
+  }
+
+  function installStyles118() {
+    if (document.getElementById('mvlV118Styles')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlV118Styles';
+    style.textContent = `
+      /* Corte operativo */
+      .mvl-v118-cutoff {
+        display:flex; align-items:center; justify-content:space-between; gap:14px;
+        margin:0 0 14px; padding:11px 13px; border:1px solid #cfe1f7;
+        border-radius:14px; background:linear-gradient(180deg,#f8fbff,#f2f7fd);
+        color:#294766;
+      }
+      .mvl-v118-cutoff-main { display:flex; align-items:center; gap:9px; min-width:0; }
+      .mvl-v118-cutoff-icon {
+        width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+        flex:0 0 auto; background:#e6f1ff; color:#0758b7; font-weight:900;
+      }
+      .mvl-v118-cutoff strong { display:block; color:#12375f; font-size:.82rem; }
+      .mvl-v118-cutoff small { display:block; margin-top:2px; color:#61758d; font-size:.72rem; }
+      .mvl-v118-cutoff-cycle {
+        flex:0 0 auto; padding:5px 8px; border-radius:999px; background:#fff;
+        border:1px solid #d9e6f4; color:#46627f; font-size:.69rem; font-weight:800;
+      }
+
+      /* Resumen profesional */
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-grid { gap:12px !important; }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card {
+        position:relative; overflow:hidden; padding:15px !important;
+        border-color:#d7e3f1 !important; box-shadow:0 7px 20px rgba(31,68,111,.055);
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card::before,
+      #performanceTechPanel .performance-card::before {
+        content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+        background:#d9e4ef;
+      }
+      .mvl-v118-card-optimal::before { background:#16a34a !important; }
+      .mvl-v118-card-moderate::before { background:#e5a000 !important; }
+      .mvl-v118-card-critical::before { background:#dc2626 !important; }
+      .mvl-v118-card-neutral::before { background:#94a3b8 !important; }
+
+      .mvl-v118-production-meta { display:grid; gap:7px; margin-top:9px; }
+      .mvl-v118-production-line {
+        display:flex; align-items:center; justify-content:space-between; gap:8px;
+        font-size:.70rem; color:#60738a;
+      }
+      .mvl-v118-production-line b { color:#183d66; font-size:.72rem; text-align:right; }
+      .mvl-v118-progress {
+        height:7px; overflow:hidden; border-radius:999px; background:#e9eff6; margin-top:2px;
+      }
+      .mvl-v118-progress > i {
+        display:block; height:100%; border-radius:inherit; background:#0758b7;
+        transition:width .25s ease;
+      }
+      .mvl-v118-progress.optimal > i { background:#16a34a; }
+      .mvl-v118-progress.moderate > i { background:#e5a000; }
+      .mvl-v118-progress.critical > i { background:#dc2626; }
+      .mvl-v118-progress-label {
+        display:flex; justify-content:space-between; gap:8px; margin-top:4px;
+        font-size:.66rem; color:#6b7d92;
+      }
+      .mvl-v118-progress-label strong { color:#334f6f; font-size:.68rem !important; }
+      .mvl-v118-status-chip {
+        display:inline-flex; align-items:center; gap:5px; width:max-content; max-width:100%;
+        margin-top:8px; padding:5px 8px; border-radius:999px; font-size:.68rem; font-weight:900;
+      }
+      .mvl-v118-status-chip.optimal { background:#eaf8ef; color:#087d34; border:1px solid #b9e4c8; }
+      .mvl-v118-status-chip.moderate { background:#fff6df; color:#9b5b00; border:1px solid #f1d393; }
+      .mvl-v118-status-chip.critical { background:#fff0f0; color:#b42318; border:1px solid #f1bbbb; }
+      .mvl-v118-status-chip.neutral { background:#f1f5f9; color:#64748b; border:1px solid #dbe3eb; }
+
+      /* Técnico */
+      #performanceTechPanel .performance-grid { gap:12px !important; }
+      #performanceTechPanel .performance-card {
+        position:relative; overflow:hidden; border-color:#d7e3f1 !important;
+        box-shadow:0 7px 20px rgba(31,68,111,.055);
+      }
+      .mvl-v118-tech-production { grid-column:span 2; }
+      .mvl-v118-tech-kpi-note { margin-top:6px; font-size:.70rem; color:#63758b; }
+      .mvl-v118-daily-badges { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+      .mvl-v118-mini-status {
+        display:inline-flex; align-items:center; gap:4px; padding:3px 6px; border-radius:999px;
+        font-size:.62rem; font-weight:850; border:1px solid transparent;
+      }
+      .mvl-v118-mini-status.optimal { background:#eef9f1; color:#087d34; border-color:#c7e9d1; }
+      .mvl-v118-mini-status.moderate { background:#fff7e5; color:#946000; border-color:#f1d9a0; }
+      .mvl-v118-mini-status.critical { background:#fff1f1; color:#b42318; border-color:#f1c1c1; }
+      .mvl-v118-mini-status.neutral { background:#f1f5f9; color:#64748b; border-color:#e1e7ee; }
+
+      /* Encabezado y cards más ejecutivos */
+      #performanceView > .topbar { padding-bottom:3px; }
+      #performanceCrewTitle { letter-spacing:-.02em; }
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-head h3 { font-size:1.03rem; }
+      .mvl-v118-summary-kicker { color:#0758b7 !important; font-weight:800; }
+
+      @media (max-width:640px) {
+        .mvl-v118-cutoff { align-items:flex-start; }
+        .mvl-v118-cutoff-cycle { display:none; }
+        .mvl-v118-tech-production { grid-column:1/-1; }
+      }
+      @media (max-width:430px) {
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid { grid-template-columns:1fr !important; }
+        #performanceTechPanel .performance-grid { grid-template-columns:1fr !important; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function rowMatches118(row) {
+    const visual = norm118(document.getElementById('dashboardVisualTypeV19')?.value || '');
+    const platform = norm118(document.getElementById('dashboardPlatformV19')?.value || '');
+    const composition = norm118(document.getElementById('dashboardCompositionV19')?.value || '');
+    const state = norm118(document.getElementById('dashboardStateV19')?.value || '');
+    const supervisor = String(document.getElementById('dashboardSupervisor')?.value || '');
+    const crew = String(document.getElementById('dashboardCrew')?.value || '');
+
+    if (visual && norm118(row.visualType) !== visual) return false;
+    if (platform && norm118(row.platform) !== platform) return false;
+    if (composition) {
+      const rc = norm118(row.composition) === 'INDIVIDUAL' ? 'SOLO' : norm118(row.composition);
+      if (rc !== composition) return false;
+    }
+    if (state) {
+      const rs = norm118(row.state);
+      if (rs !== state && !(state === 'ACTIVO' && rs === 'ACTIVA')) return false;
+    }
+    if (supervisor) {
+      if (supervisor === '__GG__') {
+        if (!(String(row.supervisorId || '') === '__GG__' || norm118(row.supervisor) === 'GG')) return false;
+      } else if (String(row.supervisorId || '') !== supervisor) return false;
+    }
+    if (crew && String(row.crewId || '') !== crew) return false;
+    return true;
+  }
+
+  function dashboardSummary118() {
+    const rows = (V118.dashboard?.rows || []).filter(rowMatches118);
+    const withData = rows.filter(r => r.hasData);
+    const points = rows.reduce((a,r)=>a + number118(r.points), 0);
+    const finalized = withData.reduce((a,r)=>a + number118(r.finalized), 0);
+    const totalGeneral = withData.reduce((a,r)=>a + number118(r.totalGeneral), 0);
+    const los = withData.reduce((a,r)=>a + number118(r.losRojo), 0);
+    const recables = withData.reduce((a,r)=>a + number118(r.recables), 0);
+    const targetToDate = rows.reduce((a,r)=>a + number118(r.productionTargetToDate), 0);
+    const monthlyTarget = rows.reduce((a,r)=>a + number118(r.productionMonthlyTarget), 0);
+    const dailyTarget = rows.reduce((a,r)=>a + number118(r.productionDailyTarget), 0);
+    const elapsedWorkDays = rows.reduce((m,r)=>Math.max(m, number118(r.productionElapsedWorkDays ?? r.productionDays)), 0);
+    const monthWorkDays = rows.reduce((m,r)=>Math.max(m, number118(r.productionMonthWorkDays)), 0);
+    const ratio = targetToDate > 0 ? points / targetToDate : null;
+    const monthlyProgress = monthlyTarget > 0 ? points / monthlyTarget : null;
+    const eff = totalGeneral > 0 ? finalized / totalGeneral : null;
+    const rec = los > 0 ? recables / los : null;
+    return {
+      rows, withData, points, finalized, totalGeneral, los, recables,
+      targetToDate, monthlyTarget, dailyTarget, elapsedWorkDays, monthWorkDays,
+      productionRatio: ratio, monthlyProgress,
+      dailyAverage: elapsedWorkDays > 0 ? points / elapsedWorkDays : null,
+      effectiveness: eff, recablePercent: rec
+    };
+  }
+
+  function currentConfig118() {
+    const data = V118.dashboard || {};
+    const selected = norm118(document.getElementById('dashboardVisualTypeV19')?.value || 'TODOS') || 'TODOS';
+    return data.indicatorConfigs?.[selected] || data.indicatorConfigs?.TODOS || data.indicatorConfig || {};
+  }
+
+  function statusProduction118(ratio, cfg) {
+    if (ratio == null || !Number.isFinite(Number(ratio))) return '';
+    const moderate = number118(cfg?.production?.moderateFromRatio ?? cfg?.production?.attentionRatio, .7);
+    const optimal = number118(cfg?.production?.optimalFromRatio ?? cfg?.production?.greenRatio, 1);
+    return Number(ratio) >= optimal ? 'CUMPLE' : Number(ratio) >= moderate ? 'ATENCION' : 'CRITICO';
+  }
+
+  function statusEffectiveness118(value, cfg) {
+    if (value == null || !Number.isFinite(Number(value))) return '';
+    const moderate = number118(cfg?.effectiveness?.moderateFrom ?? cfg?.effectiveness?.criticalBelow, .5);
+    const optimal = number118(cfg?.effectiveness?.optimalFrom ?? cfg?.effectiveness?.greenAbove, .7);
+    return Number(value) >= optimal ? 'CUMPLE' : Number(value) >= moderate ? 'ATENCION' : 'CRITICO';
+  }
+
+  function statusNegative118(value, rule) {
+    if (value == null || !Number.isFinite(Number(value)) || !rule?.configured) return '';
+    return Number(value) <= Number(rule.optimalMax)
+      ? 'CUMPLE'
+      : Number(value) <= Number(rule.moderateMax)
+        ? 'ATENCION'
+        : 'CRITICO';
+  }
+
+  function setCardStatus118(card, status) {
+    if (!card) return;
+    card.classList.remove('mvl-v118-card-optimal','mvl-v118-card-moderate','mvl-v118-card-critical','mvl-v118-card-neutral');
+    const info = statusInfo118(status);
+    card.classList.add(`mvl-v118-card-${info.cls}`);
+  }
+
+  function chip118(status, detail = '') {
+    const info = statusInfo118(status);
+    return `<span class="mvl-v118-status-chip ${info.cls}">${info.dot} ${esc118(info.label)}${detail ? ` · ${esc118(detail)}` : ''}</span>`;
+  }
+
+  function ensureCutoff118(container, calendar, technician = false) {
+    if (!container || !calendar) return;
+    const id = technician ? 'mvlV118TechCutoff' : 'mvlV118DashboardCutoff';
+    let box = document.getElementById(id);
+    if (!box) {
+      box = document.createElement('div');
+      box.id = id;
+      box.className = 'mvl-v118-cutoff';
+      if (technician) {
+        const controls = container.querySelector('.performance-controls');
+        controls?.insertAdjacentElement('afterend', box);
+      } else {
+        const grid = container.querySelector('.dashboard-v19-summary-grid');
+        grid?.insertAdjacentElement('beforebegin', box);
+      }
+    }
+    if (!box) return;
+    const dateLabel = dateLabel118(calendar.asOfDate) || 'periodo seleccionado';
+    box.innerHTML = `
+      <div class="mvl-v118-cutoff-main">
+        <span class="mvl-v118-cutoff-icon">↗</span>
+        <div>
+          <strong>Corte de desempeño: ${esc118(dateLabel)}</strong>
+          <small>${number118(calendar.elapsedWorkDays)} de ${number118(calendar.monthWorkDays)} días efectivos del mes · ${number118(calendar.remainingWorkDays)} días efectivos restantes</small>
+        </div>
+      </div>
+      <span class="mvl-v118-cutoff-cycle">Ciclo ${esc118(calendar.cycleLabel || '6x1')}</span>`;
+  }
+
+  function renderDashboardProfessional118() {
+    const data = V118.dashboard;
+    if (!data?.ok) return;
+    installStyles118();
+
+    const s = dashboardSummary118();
+    const cfg = currentConfig118();
+    const calendar = data.productionCalendar || {};
+
+    const summaryBox = document.getElementById('dashboardTotalSummaryV19');
+    ensureCutoff118(summaryBox, calendar, false);
+
+    const title = summaryBox?.querySelector('.dashboard-v19-summary-head h3');
+    const subtitle = summaryBox?.querySelector('.dashboard-v19-summary-head .section-subtitle');
+    const anyFilter = [
+      'dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19',
+      'dashboardSupervisor','dashboardCrew'
+    ].some(id => Boolean(document.getElementById(id)?.value));
+    if (title) title.textContent = anyFilter ? 'Resumen filtrado' : 'Resumen general';
+    if (subtitle && !anyFilter) subtitle.textContent = `Avance de indicadores al corte del ${dateLabel118(calendar.asOfDate) || 'periodo'}.`;
+
+    const crewValue = document.getElementById('dashboardTotalCrewsV19');
+    if (crewValue) crewValue.textContent = String(s.rows.length);
+    const crewCard = crewValue?.closest('article');
+    if (crewCard) {
+      const label = crewCard.querySelector('span');
+      const small = crewCard.querySelector('small');
+      if (label) label.textContent = 'Cuadrillas evaluadas';
+      if (small) small.textContent = `${s.withData.length} con movimiento en el periodo`;
+      setCardStatus118(crewCard, '');
+    }
+
+    const prodValue = document.getElementById('dashboardTotalPointsV19');
+    const prodCard = prodValue?.closest('article');
+    if (prodValue) prodValue.textContent = `${s.points.toFixed(2)} pts`;
+    if (prodCard) {
+      const label = prodCard.querySelector(':scope > span');
+      if (label) label.textContent = 'Producción acumulada';
+      const oldSmall = document.getElementById('dashboardTotalFinalizedV19');
+      if (oldSmall) oldSmall.textContent = `${s.finalized} órdenes finalizadas`;
+      let meta = prodCard.querySelector('.mvl-v118-production-meta');
+      if (!meta) {
+        meta = document.createElement('div');
+        meta.className = 'mvl-v118-production-meta';
+        prodCard.appendChild(meta);
+      }
+      const ratio = s.productionRatio;
+      const monthly = s.monthlyProgress;
+      const status = statusProduction118(ratio, cfg);
+      const info = statusInfo118(status);
+      const width = ratio == null ? 0 : Math.max(0, Math.min(100, ratio * 100));
+      meta.innerHTML = `
+        <div class="mvl-v118-production-line"><span>Meta al corte</span><b>${s.targetToDate.toFixed(2)} pts</b></div>
+        <div class="mvl-v118-production-line"><span>Meta mensual</span><b>${s.monthlyTarget.toFixed(2)} pts</b></div>
+        <div class="mvl-v118-production-line"><span>Promedio / meta diaria</span><b>${s.dailyAverage == null ? '—' : s.dailyAverage.toFixed(2)} / ${s.dailyTarget.toFixed(2)} pts</b></div>
+        <div class="mvl-v118-progress ${info.cls}"><i style="width:${width.toFixed(1)}%"></i></div>
+        <div class="mvl-v118-progress-label"><span>Cumplimiento al corte</span><strong>${pct118(ratio,0)}</strong></div>
+        <div class="mvl-v118-progress-label"><span>Avance sobre meta mensual</span><strong>${pct118(monthly,0)}</strong></div>
+        ${chip118(status, ratio == null ? '' : `${pct118(ratio,0)} de meta al corte`)}`;
+      setCardStatus118(prodCard, status);
+      // Evita duplicar el badge antiguo de V1.13/V1.16.
+      prodCard.querySelector(':scope > .mvl-v113-status')?.remove();
+    }
+
+    const effValue = document.getElementById('dashboardTotalEffectivenessV19');
+    const effCard = effValue?.closest('article');
+    const effStatus = statusEffectiveness118(s.effectiveness, cfg);
+    setCardStatus118(effCard, effStatus);
+    if (effCard) {
+      effCard.querySelector(':scope > .mvl-v113-status')?.remove();
+      let chip = effCard.querySelector('.mvl-v118-status-chip');
+      if (chip) chip.remove();
+      effCard.insertAdjacentHTML('beforeend', chip118(effStatus));
+    }
+
+    const recValue = document.getElementById('dashboardTotalRecableV19');
+    const recCard = recValue?.closest('article');
+    const recStatus = statusNegative118(s.recablePercent, cfg?.recableado);
+    setCardStatus118(recCard, recStatus);
+    if (recCard) {
+      recCard.querySelector(':scope > .mvl-v113-status')?.remove();
+      recCard.querySelector('.mvl-v118-status-chip')?.remove();
+      if (recStatus) recCard.insertAdjacentHTML('beforeend', chip118(recStatus));
+    }
+  }
+
+  function renderTechnicianProfessional118(data) {
+    if (!data?.ok) return;
+    installStyles118();
+    const summary = data.summary || {};
+    const cfg = data.indicatorConfig || {};
+    const calendar = data.productionCalendar || {};
+    const panel = document.getElementById('performanceTechPanel');
+    ensureCutoff118(panel, calendar, true);
+
+    const prodValue = document.getElementById('perfPoints');
+    const prodCard = prodValue?.closest('.performance-card');
+    if (prodCard) {
+      prodCard.classList.add('mvl-v118-tech-production');
+      let meta = prodCard.querySelector('.mvl-v118-production-meta');
+      if (!meta) {
+        meta = document.createElement('div');
+        meta.className = 'mvl-v118-production-meta';
+        prodCard.appendChild(meta);
+      }
+      const ratio = Number.isFinite(Number(summary.productionRatio)) ? Number(summary.productionRatio) : null;
+      const monthProgress = Number.isFinite(Number(summary.productionMonthlyProgress)) ? Number(summary.productionMonthlyProgress) : null;
+      const status = summary.productionStatus || statusProduction118(ratio, cfg);
+      const info = statusInfo118(status);
+      const width = ratio == null ? 0 : Math.max(0, Math.min(100, ratio * 100));
+      meta.innerHTML = `
+        <div class="mvl-v118-production-line"><span>Meta diaria</span><b>${number118(summary.productionDailyTarget).toFixed(2)} pts</b></div>
+        <div class="mvl-v118-production-line"><span>Meta acumulada al corte</span><b>${number118(summary.productionTargetToDate).toFixed(2)} pts</b></div>
+        <div class="mvl-v118-production-line"><span>Meta mensual (${number118(summary.productionMonthWorkDays)} días efectivos)</span><b>${number118(summary.productionMonthlyTarget).toFixed(2)} pts</b></div>
+        <div class="mvl-v118-production-line"><span>Promedio diario actual</span><b>${summary.productionDailyAverage == null ? '—' : number118(summary.productionDailyAverage).toFixed(2)} pts/día</b></div>
+        <div class="mvl-v118-progress ${info.cls}"><i style="width:${width.toFixed(1)}%"></i></div>
+        <div class="mvl-v118-progress-label"><span>Cumplimiento al corte</span><strong>${pct118(ratio,0)}</strong></div>
+        <div class="mvl-v118-progress-label"><span>Avance mensual</span><strong>${pct118(monthProgress,0)}</strong></div>
+        ${chip118(status)}`;
+      setCardStatus118(prodCard, status);
+    }
+
+    const effCard = document.getElementById('effectivenessCard');
+    const effStatus = summary.effectivenessStatus || statusEffectiveness118(summary.effectiveness, cfg);
+    setCardStatus118(effCard, effStatus);
+    if (effCard) {
+      effCard.querySelector('.mvl-v118-status-chip')?.remove();
+      effCard.insertAdjacentHTML('beforeend', chip118(effStatus));
+      const small = effCard.querySelector('small');
+      const opt = number118(cfg?.effectiveness?.optimalFrom ?? cfg?.effectiveness?.greenAbove, .7);
+      if (small) small.textContent = `Óptimo desde ${(opt*100).toFixed(0)}%`;
+    }
+
+    const recValue = document.getElementById('perfRecable');
+    const recCard = recValue?.closest('.performance-card');
+    const recStatus = summary.recableadoStatus || statusNegative118(summary.recablePercent, cfg?.recableado);
+    setCardStatus118(recCard, recStatus);
+    if (recCard) {
+      recCard.querySelector('.mvl-v118-status-chip')?.remove();
+      if (recStatus) recCard.insertAdjacentHTML('beforeend', chip118(recStatus));
+    }
+
+    // Detalle diario con semáforos de producción y efectividad.
+    const byDate = new Map((data.daily || []).map(d => [String(d.date || ''), d]));
+    document.querySelectorAll('#performanceDailyList [data-performance-date]').forEach(row => {
+      const d = byDate.get(String(row.dataset.performanceDate || ''));
+      if (!d) return;
+      let badges = row.querySelector('.mvl-v118-daily-badges');
+      if (!badges) {
+        badges = document.createElement('div');
+        badges.className = 'mvl-v118-daily-badges';
+        const copy = row.querySelector('div');
+        copy?.appendChild(badges);
+      }
+      const ps = statusInfo118(d.productionStatus);
+      const es = statusInfo118(d.effectivenessStatus);
+      badges.innerHTML = `
+        <span class="mvl-v118-mini-status ${ps.cls}">Producción ${esc118(ps.label)}</span>
+        <span class="mvl-v118-mini-status ${es.cls}">Efectividad ${esc118(es.label)}</span>`;
+    });
+  }
+
+  function wrapApi118() {
+    if (V118.wrappedApi || typeof api !== 'function') return false;
+    // Espera a que las capas V1.15/V1.16 ya hayan terminado de envolver la API.
+    if (document.documentElement.dataset.v116Events !== '1') return false;
+    V118.wrappedApi = true;
+    const previous = api;
+    api = async function(action, params = {}) {
+      const result = await previous(action, params);
+      if (action === 'performanceDashboard' && result?.ok) {
+        V118.dashboard = result;
+        window.setTimeout(renderDashboardProfessional118, 0);
+      }
+      if (action === 'performanceSummary' && result?.ok) {
+        V118.technician = result;
+        // Si estamos en Técnico, el render del núcleo ocurre después de resolver api().
+        // Se da un pequeño turno al DOM y luego se aplica la capa visual.
+        window.setTimeout(() => renderTechnicianProfessional118(result), 40);
+      }
+      return result;
+    };
+    return true;
+  }
+
+  function attachEvents118() {
+    if (document.documentElement.dataset.v118Events === '1') return;
+    document.documentElement.dataset.v118Events = '1';
+    const ids = new Set([
+      'dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19',
+      'dashboardSupervisor','dashboardCrew','dashboardCompareByV116','dashboardIndicator'
+    ]);
+    document.addEventListener('change', (e) => {
+      if (ids.has(e.target?.id || '')) window.setTimeout(renderDashboardProfessional118, 20);
+    }, true);
+    document.addEventListener('click', (e) => {
+      if (e.target?.id === 'refreshDashboardButton') window.setTimeout(renderDashboardProfessional118, 80);
+    }, true);
+  }
+
+  function observePerformance118() {
+    // V1.18 evita observar mutaciones internas para no generar ciclos de render.
+    // Las actualizaciones se disparan desde API + eventos de filtros.
+    return;
+  }
+
+  function init118() {
+    installStyles118();
+    attachEvents118();
+    observePerformance118();
+    return wrapApi118();
+  }
+
+  const timer118 = window.setInterval(() => {
+    if (init118()) window.clearInterval(timer118);
+  }, 150);
+  window.setTimeout(init118, 0);
+})();
+
+console.info('[MI VISUAL LIMA] V1.18: producción por calendario 6x1, meta al corte/meta mensual y vista profesional para Dashboard, Supervisor y Técnico.');
