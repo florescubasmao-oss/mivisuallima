@@ -1,0 +1,43 @@
+MI VISUAL LIMA - V2.02
+TIEMPO DE GESTIÓN / SLA + ETIQUETAS EN MAPA
+
+VALIDACIÓN REAL
+- MAPA_ORDENES sí contiene Inicio y Fin.
+- Los archivos insta.xlsx y vt.xlsx contienen 33 órdenes FINALIZADAS con ambos tiempos.
+- SLA_ORDENES_RESUMEN estaba quedando SIN_PARTIDA porque los OrdenId del 11/08
+  todavía no existen en ORDENES_DETALLE.
+
+NUEVA REGLA
+1. Si existe el OrdenId en ORDENES_DETALLE: usa su partida exacta.
+2. Si todavía no existe: homologa TIPO_TRABAJO del Mapa con PARAMETROS_SLA.
+3. Cuando luego cargues Producción, el cruce exacto vuelve a tener prioridad.
+
+TIEMPOS
+- Instalación 140 min
+- Traslado 140 min
+- Recableado 140 min
+- Reubicación 140 min
+- MESH/cableado 140 min
+- Cambio/descarte/mejora ONT 80 min
+- LOS ROJO/intermitencia/degradación/patchcord/averías 80 min
+
+Con los dos Excel actuales el resultado de referencia es:
+24 dentro de SLA / 33 evaluables = 72.7%.
+
+El Dashboard y Mapa recalculan automáticamente el resumen viejo SIN_PARTIDA
+después de instalar esta versión. NO necesitas volver a subir los Excel.
+
+MAPA
+Los puntos muestran al costado:
+K1 SGI
+K2 SGA
+K1 TRAS
+K7 PVTWIN
+según código y plataforma de la cuadrilla.
+
+ACTUALIZACIÓN
+1. Apps Script: reemplazar Code.gs por Code_V2_02_MAPA_SLA.gs.
+2. Guardar y crear NUEVA VERSIÓN de la implementación existente.
+3. GitHub: subir/reemplazar el contenido del ZIP completo.
+4. Cerrar la pestaña anterior y abrir nuevamente MI VISUAL LIMA.
+5. Entrar al Dashboard: SLA debe recalcularse automáticamente.

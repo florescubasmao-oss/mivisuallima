@@ -5394,6 +5394,22 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
       .mvl200-sla-badge.ok{background:#eaf8ef;color:#14723a}
       .mvl200-sla-badge.bad{background:#fff0f0;color:#b42318}
       .mvl200-sla-badge.neutral{background:#f1f5f9;color:#64748b}
+      .leaflet-tooltip.mvl200-crew-label{
+        background:rgba(255,255,255,.95);
+        border:1px solid #b9cce2;
+        border-radius:6px;
+        box-shadow:0 1px 4px rgba(28,55,86,.12);
+        color:#073b78;
+        font-size:9px;
+        font-weight:850;
+        line-height:1;
+        padding:3px 5px;
+        pointer-events:none;
+        white-space:nowrap;
+      }
+      .leaflet-tooltip-right.mvl200-crew-label:before{
+        border-right-color:#b9cce2;
+      }
       .mvl200-modal-file{position:fixed;inset:0;z-index:9999;background:rgba(18,39,64,.44);display:grid;place-items:center;padding:20px}
       .mvl200-modal-file.hidden{display:none}
       .mvl200-modal-card{width:min(480px,100%);background:#fff;border-radius:16px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
@@ -5751,6 +5767,28 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
       </div>`;
   }
 
+
+  function platformShort200(value) {
+    const p = norm200(value);
+    if (p === 'SGI') return 'SGI';
+    if (p === 'SGA') return 'SGA';
+    if (p === 'TRASLADO' || p === 'TRAS') return 'TRAS';
+    if (
+      p === 'POSTMOTOWIN' ||
+      p === 'POST MOTOWIN' ||
+      p === 'MOTOWIN' ||
+      p === 'MOTOWIN POSTVENTA' ||
+      p === 'POSTVENTA'
+    ) return 'PVTWIN';
+    return String(value || '').trim().toUpperCase();
+  }
+
+  function crewMarkerLabel200(o) {
+    const code = String(o?.codigoCuadrilla || '').trim().toUpperCase();
+    const platform = platformShort200(o?.plataforma);
+    return [code, platform].filter(Boolean).join(' ');
+  }
+
   function renderMapOrders200(orders) {
     initLeaflet200();
     const map = V200.map.leaflet;
@@ -5769,6 +5807,18 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
         fillColor:markerColor200(o.estado),
         fillOpacity:.92
       }).bindPopup(mapPopup200(o), { maxWidth:360 });
+
+      const crewLabel = crewMarkerLabel200(o);
+      if (crewLabel) {
+        marker.bindTooltip(crewLabel, {
+          permanent:true,
+          direction:'right',
+          offset:[8,0],
+          className:'mvl200-crew-label',
+          opacity:.96
+        });
+      }
+
       marker.addTo(layer);
       V200.map.markers.set(String(o.ordenId), marker);
       bounds.push([lat,lng]);
@@ -5795,7 +5845,7 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
           </div>
           <small>${esc200(o.cuadrilla || o.codigoCuadrilla || 'Sin cuadrilla')}</small>
           <div class="mvl200-pills">
-            ${o.plataforma ? `<span class="mvl200-pill">${esc200(o.plataforma)}</span>` : ''}
+            ${o.plataforma ? `<span class="mvl200-pill">${esc200(platformShort200(o.plataforma))}</span>` : ''}
             ${o.tipoVisual ? `<span class="mvl200-pill">${esc200(o.tipoVisual)}</span>` : ''}
             ${o.grupoTrabajo ? `<span class="mvl200-pill">${esc200(o.grupoTrabajo)}</span>` : ''}
             ${o.sla?.evaluable ? `<span class="mvl200-pill ${o.sla.cumple ? 'ok' : 'bad'}">${o.sla.cumple ? 'Dentro SLA' : 'Fuera SLA'}</span>` : ''}
@@ -6537,3 +6587,5 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 console.info('[MI VISUAL LIMA] V2.00: Mapa Operativo + Tiempo de gestión / SLA habilitados.');
 
 console.info('[MI VISUAL LIMA] V2.01 DEFINITIVA: arranque no bloqueante + núcleo cacheado + mapa diferido.');
+
+console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en mapa.');
