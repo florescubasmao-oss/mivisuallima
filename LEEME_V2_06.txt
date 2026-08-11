@@ -1,0 +1,62 @@
+MI VISUAL LIMA - V2.06
+MÓDULOS OPERATIVOS COMPLETOS
+
+Esta versión parte de V2.05.1 y conserva Dashboard, Mapa Operativo, SLA, Observaciones y Validación Técnica.
+
+NUEVOS MÓDULOS HABILITADOS
+1. Gestión de Actas
+   - Carga PDF por Técnico/perfiles con REGISTRAR.
+   - Autocompletado desde Mapa Operativo/Producción.
+   - Estados PENDIENTE, PENDIENTE VALIDACION, OBSERVADA, FINALIZADA, FALTANTE.
+   - Reemplazo de PDF cuando está OBSERVADA.
+   - Revisión operativa y validación final según permisos.
+   - Entrega física.
+   - Selección de actas finalizadas y generación de Cargo PDF.
+
+2. Actividad en Campo
+   - Auditoría en Frío / Auditoría en Caliente.
+   - Seguimiento / Validación de Observación / Capacitación / Checklist.
+   - Búsqueda de cliente por orden/código desde Mapa.
+   - Auditoría 100 puntos: Calidad 40, Seguridad 20, Atención 20, Orden/Limpieza 20.
+   - Clasificación EXCELENTE >=90, CONFORME >=80, OBSERVADO >=70, CRITICO <70.
+   - Incumplimiento crítico de EPP o trabajo seguro fuerza CRITICO.
+   - Hasta 4 evidencias y seguimiento de acciones correctivas.
+
+3. Checklist
+   - MATERIALES.
+   - HERRAMIENTAS: Bueno / Regular / Malo; Malo exige motivo + foto.
+   - UNIDAD VEHICULAR.
+   - DOCUMENTACION con vencimientos.
+   - EPP.
+   - Control de duplicado por tipo + cuadrilla + fecha.
+   - Validación según permisos.
+
+4. Descansos Programados
+   - Calendario mensual.
+   - Programación por cuadrilla.
+   - Descanso / Vacaciones.
+   - Cobertura calculada por plataforma Lima.
+   - Cobertura mínima base 80% (si no existe configuración distinta).
+   - Técnico puede solicitar cambio de su descanso.
+   - Supervisor revisa.
+   - Jefatura valida y la APP conserva el histórico del cambio.
+
+HOJAS
+NO CREA HOJAS NUEVAS. Usa las existentes:
+ACTIVIDAD_CAMPO, CHECKLIST_ALMACEN, HERRAMIENTAS_DETALLE, CATALOGO_HERRAMIENTAS, ACTAS_ESCANEADAS, CARGOS_ACTAS, PROGRAMACION_DESCANSOS.
+
+ARCHIVOS DRIVE
+Se crean automáticamente subcarpetas dentro de CARPETA_ARCHIVOS_ID cuando se registra el primer archivo:
+ACTIVIDAD_CAMPO, CHECKLIST, ACTAS y ACTAS_CARGOS.
+
+ORDEN DE ACTUALIZACIÓN
+1. Apps Script: reemplazar Code.gs por Code_V2_06_MODULOS_OPERATIVOS.gs.
+2. Guardar.
+3. Implementar > Administrar implementaciones > Editar > Nueva versión. Mantener la misma URL.
+4. GitHub: subir TODO el ZIP V2.06 GitHub completo y reemplazar archivos actuales.
+5. Esperar Pages = Éxito.
+6. Cerrar sesión y volver a ingresar. Si el navegador conserva versión anterior: Ctrl+F5.
+
+VALIDACIÓN DE CÓDIGO
+- Apps Script: sintaxis JavaScript OK.
+- app.js: sintaxis JavaScript OK.
