@@ -3336,3 +3336,209 @@ console.info('[MI VISUAL LIMA] V1.18: producción por calendario 6x1, meta al co
 })();
 
 console.info('[MI VISUAL LIMA] V1.19: fecha de corte por última FINALIZADA + resumen compacto.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.20
+   Compactación tipográfica del Resumen general.
+   Solo visual: no cambia cálculos ni API.
+   ========================================================== */
+(() => {
+  function installStyles120() {
+    if (document.getElementById('mvlV120Styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'mvlV120Styles';
+    style.textContent = `
+      /* Resumen: tipografía más pequeña y mejor aprovechamiento horizontal */
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-grid {
+        grid-template-columns: .92fr 1.35fr .98fr 1.02fr !important;
+        gap:6px !important;
+      }
+
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card {
+        padding:7px 8px !important;
+        border-radius:11px !important;
+        overflow:hidden !important;
+      }
+
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > span {
+        font-size:.58rem !important;
+        line-height:1.08 !important;
+        margin-bottom:2px !important;
+      }
+
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > strong {
+        font-size:.88rem !important;
+        line-height:1.05 !important;
+      }
+
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > small {
+        font-size:.56rem !important;
+        line-height:1.12 !important;
+        margin-top:2px !important;
+      }
+
+      /* Producción */
+      #dashboardTotalSummaryV19 .mvl-v118-production-meta {
+        gap:2px 6px !important;
+        margin-top:4px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-production-line {
+        display:flex !important;
+        align-items:center !important;
+        justify-content:space-between !important;
+        gap:4px !important;
+        padding:2px 0 !important;
+        min-width:0 !important;
+        font-size:.53rem !important;
+        line-height:1.05 !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-production-line span {
+        min-width:0 !important;
+        overflow-wrap:normal !important;
+        word-break:normal !important;
+        hyphens:none !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-production-line b {
+        flex:0 0 auto !important;
+        font-size:.57rem !important;
+        line-height:1 !important;
+        white-space:nowrap !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-progress-label {
+        font-size:.51rem !important;
+        line-height:1.05 !important;
+        gap:4px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-progress-label span {
+        white-space:normal !important;
+        overflow-wrap:normal !important;
+        word-break:normal !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-progress-label strong {
+        font-size:.54rem !important;
+        white-space:nowrap !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v118-status-chip,
+      #dashboardTotalSummaryV19 .mvl-v117-status-chip {
+        max-width:100% !important;
+        width:max-content !important;
+        padding:2px 5px !important;
+        font-size:.52rem !important;
+        line-height:1.05 !important;
+        white-space:normal !important;
+        overflow-wrap:normal !important;
+        word-break:normal !important;
+      }
+
+      /* Efectividad / Recableado */
+      #dashboardTotalSummaryV19 .mvl-v118-compact-chip,
+      #dashboardTotalSummaryV19 .mvl-v117-compact-chip,
+      #dashboardTotalSummaryV19 .mvl-v113-status {
+        font-size:.54rem !important;
+        padding:2px 6px !important;
+        line-height:1.05 !important;
+      }
+
+      /* En construcción */
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction {
+        padding:7px 8px !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction > strong {
+        font-size:.70rem !important;
+        line-height:1.05 !important;
+      }
+
+      /* Fecha de corte */
+      .mvl-v118-cutoff {
+        padding:5px 8px !important;
+        margin-bottom:6px !important;
+      }
+      .mvl-v118-cutoff strong {
+        font-size:.64rem !important;
+      }
+
+      @media (max-width:760px) {
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid {
+          grid-template-columns:1fr 1.18fr !important;
+        }
+      }
+
+      @media (max-width:430px) {
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid {
+          grid-template-columns:1fr 1fr !important;
+          gap:5px !important;
+        }
+        #dashboardTotalSummaryV19 .dashboard-v19-total-card {
+          padding:6px 7px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function compactLabels120(root) {
+    if (!root) return;
+    const lines = [...root.querySelectorAll('.mvl-v118-production-line')];
+
+    // Dashboard: Meta corte / Meta mes / Promedio-meta.
+    if (lines[0]) {
+      const s = lines[0].querySelector('span');
+      if (s) s.textContent = s.textContent
+        .replace('Meta al corte', 'Meta corte')
+        .replace(' días', ' d');
+    }
+    if (lines[1]) {
+      const s = lines[1].querySelector('span');
+      if (s) s.textContent = s.textContent
+        .replace('Meta mensual', 'Meta mes')
+        .replace(' días', ' d');
+    }
+    if (lines[2]) {
+      const s = lines[2].querySelector('span');
+      if (s) s.textContent = 'Promedio / meta diaria';
+    }
+
+    const labels = [...root.querySelectorAll('.mvl-v118-progress-label')];
+    labels.forEach(el => {
+      const span = el.querySelector('span');
+      if (!span) return;
+      const t = String(span.textContent || '').trim();
+      if (/Cumplimiento/i.test(t)) span.textContent = 'Cumpl. al corte';
+      if (/Avance/i.test(t)) span.textContent = 'Avance mensual';
+    });
+  }
+
+  function refresh120() {
+    installStyles120();
+    compactLabels120(document.querySelector('#dashboardTotalSummaryV19'));
+  }
+
+  installStyles120();
+
+  const observer = new MutationObserver(() => {
+    window.requestAnimationFrame(refresh120);
+  });
+
+  const startObserver = () => {
+    const target = document.getElementById('performanceDashboardPanel') || document.body;
+    observer.observe(target, { childList:true, subtree:true, characterData:true });
+    refresh120();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startObserver, { once:true });
+  } else {
+    startObserver();
+  }
+})();
+
+console.info('[MI VISUAL LIMA] V1.20: resumen más compacto y sin palabras entrecortadas.');

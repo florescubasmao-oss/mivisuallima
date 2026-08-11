@@ -1,0 +1,22 @@
+MI VISUAL LIMA - V1.20
+RESUMEN GENERAL MÁS COMPACTO
+
+SOLO GITHUB. APPS SCRIPT NO CAMBIA.
+
+CAMBIOS
+- Reduce la tipografía del Resumen general.
+- Da más ancho útil a Producción.
+- Evita palabras partidas/entrecortadas.
+- Abrevia solo etiquetas visuales:
+  Meta al corte -> Meta corte
+  Meta mensual -> Meta mes
+  Cumplimiento al corte -> Cumpl. al corte
+  Avance sobre meta mensual -> Avance mensual
+- Mantiene exactamente los mismos cálculos y valores.
+- Efectividad, Recableado y tarjetas En construcción también quedan más compactas.
+- En móvil mantiene 2 columnas y reduce espacios.
+
+ACTUALIZACIÓN
+1. En GitHub reemplaza app.js.
+2. No cambies Apps Script.
+3. Ctrl+F5 para forzar la actualización.
