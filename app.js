@@ -4711,3 +4711,331 @@ console.info('[MI VISUAL LIMA] V1.25: observers globales eliminados y modal de i
 })();
 
 console.info('[MI VISUAL LIMA] V1.26: Todos los indicadores restaurado.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.27
+   FILTROS debajo de Fecha de corte + panel desplegable.
+   Solo frontend. No cambia cálculos ni API.
+   ========================================================== */
+(() => {
+  const ID_PANEL = 'mvlV127FilterPanel';
+  const ID_TOGGLE = 'mvlV127FilterToggle';
+  const ID_STYLE = 'mvlV127Styles';
+
+  function installStyles127() {
+    if (document.getElementById(ID_STYLE)) return;
+
+    const style = document.createElement('style');
+    style.id = ID_STYLE;
+    style.textContent = `
+      #${ID_PANEL}{
+        margin:7px 0 12px;
+        border:1px solid #d6e3f2;
+        border-radius:13px;
+        background:#fff;
+        overflow:hidden;
+      }
+
+      .mvl-v127-filter-head{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:9px 11px;
+        background:linear-gradient(180deg,#f9fcff,#f4f8fd);
+        cursor:pointer;
+        user-select:none;
+      }
+
+      .mvl-v127-filter-title{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        min-width:0;
+      }
+
+      .mvl-v127-filter-title strong{
+        color:#092f5d;
+        font-size:.75rem;
+        letter-spacing:.01em;
+      }
+
+      .mvl-v127-filter-summary{
+        color:#6a7d93;
+        font-size:.62rem;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        max-width:420px;
+      }
+
+      #${ID_TOGGLE}{
+        flex:0 0 auto;
+        min-height:30px;
+        padding:5px 10px;
+        border-radius:9px;
+        border:1px solid #cbdcf0;
+        background:#fff;
+        color:#0758b7;
+        font-size:.65rem;
+        font-weight:850;
+      }
+
+      .mvl-v127-filter-body{
+        padding:10px 11px 11px;
+        border-top:1px solid #e3edf7;
+      }
+
+      .mvl-v127-filter-body.hidden{
+        display:none !important;
+      }
+
+      /* Reusar los filtros existentes, pero sin el título viejo duplicado */
+      #${ID_PANEL} .dashboard-filter-grid{
+        margin:0 !important;
+      }
+
+      #${ID_PANEL} .dashboard-v19-active-filters{
+        margin:8px 0 0 !important;
+      }
+
+      #${ID_PANEL} #dashboardApply{
+        width:100%;
+      }
+
+      /* Compactar la grilla de filtros */
+      #${ID_PANEL} .dashboard-filter-grid{
+        display:grid !important;
+        grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+        gap:8px !important;
+      }
+
+      #${ID_PANEL} .dashboard-filter-grid label,
+      #${ID_PANEL} .dashboard-filter-grid .field{
+        min-width:0 !important;
+      }
+
+      #${ID_PANEL} .dashboard-filter-grid select,
+      #${ID_PANEL} .dashboard-filter-grid input{
+        width:100% !important;
+      }
+
+      /* El Resumen queda inmediatamente después del filtro */
+      #dashboardTotalSummaryV19{
+        margin-top:0 !important;
+      }
+
+      @media(max-width:760px){
+        #${ID_PANEL} .dashboard-filter-grid{
+          grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+        }
+        .mvl-v127-filter-summary{
+          max-width:260px;
+        }
+      }
+
+      @media(max-width:480px){
+        #${ID_PANEL} .dashboard-filter-grid{
+          grid-template-columns:1fr !important;
+        }
+        .mvl-v127-filter-summary{
+          display:none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function getFilterText127() {
+    const labels = [];
+
+    const supervisor = document.getElementById('dashboardSupervisor');
+    const visual = document.getElementById('dashboardVisualTypeV19');
+    const platform = document.getElementById('dashboardPlatformV19');
+    const composition = document.getElementById('dashboardCompositionV19');
+    const state = document.getElementById('dashboardStateV19');
+    const crew = document.getElementById('dashboardCrew');
+    const indicator = document.getElementById('dashboardIndicator');
+    const compare = document.getElementById('dashboardCompareByV116');
+
+    const selectedText = el => {
+      if (!el || !el.value) return '';
+      return el.options?.[el.selectedIndex]?.text || '';
+    };
+
+    const push = (prefix, el, allValues = []) => {
+      if (!el) return;
+      const value = String(el.value || '');
+      if (!value || allValues.includes(value)) return;
+      const text = selectedText(el);
+      if (text) labels.push(`${prefix}: ${text}`);
+    };
+
+    push('Supervisor', supervisor, ['']);
+    push('Visual', visual, ['']);
+    push('Plataforma', platform, ['']);
+    push('Composición', composition, ['']);
+    push('Estado', state, ['']);
+    push('Cuadrilla', crew, ['']);
+
+    if (indicator) {
+      const text = selectedText(indicator);
+      if (text && indicator.value !== 'ALL') labels.push(`Indicador: ${text}`);
+    }
+
+    if (compare) {
+      const text = selectedText(compare);
+      if (text && !/CUADRILLAS/i.test(text)) labels.push(`Comparar: ${text}`);
+    }
+
+    return labels.length ? labels.join(' · ') : 'Sin filtros · total del alcance';
+  }
+
+  function updateFilterHeader127() {
+    const summary = document.querySelector(`#${ID_PANEL} .mvl-v127-filter-summary`);
+    if (summary) summary.textContent = getFilterText127();
+  }
+
+  function setOpen127(open) {
+    const body = document.querySelector(`#${ID_PANEL} .mvl-v127-filter-body`);
+    const toggle = document.getElementById(ID_TOGGLE);
+    if (!body || !toggle) return;
+
+    body.classList.toggle('hidden', !open);
+    toggle.textContent = open ? 'Ocultar' : 'Desplegar';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+    try {
+      sessionStorage.setItem('mvl_v127_filters_open', open ? '1' : '0');
+    } catch (_) {}
+  }
+
+  function buildFilterPanel127() {
+    installStyles127();
+
+    const dashboard = document.getElementById('performanceDashboardPanel');
+    const summary = document.getElementById('dashboardTotalSummaryV19');
+    const cutoff = document.getElementById('mvlV118DashboardCutoff');
+    const grid = dashboard?.querySelector('.dashboard-filter-grid');
+
+    if (!dashboard || !summary || !grid || !cutoff) return false;
+    if (document.getElementById(ID_PANEL)) {
+      updateFilterHeader127();
+      return true;
+    }
+
+    // Buscar el bloque completo donde hoy viven filtros + chips.
+    const activeChips = document.getElementById('dashboardActiveFiltersV19');
+
+    const panel = document.createElement('section');
+    panel.id = ID_PANEL;
+
+    const head = document.createElement('div');
+    head.className = 'mvl-v127-filter-head';
+    head.innerHTML = `
+      <div class="mvl-v127-filter-title">
+        <strong>FILTRAR</strong>
+        <span class="mvl-v127-filter-summary">Sin filtros · total del alcance</span>
+      </div>
+      <button type="button" id="${ID_TOGGLE}" aria-expanded="false">Desplegar</button>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'mvl-v127-filter-body hidden';
+
+    panel.appendChild(head);
+    panel.appendChild(body);
+
+    // Mover los controles reales, no duplicarlos.
+    body.appendChild(grid);
+    if (activeChips) body.appendChild(activeChips);
+
+    // Insertar debajo de Fecha de corte y antes del Resumen.
+    cutoff.insertAdjacentElement('afterend', panel);
+
+    // Eliminar el título FILTRAR anterior si quedó suelto.
+    const oldTitles = [...dashboard.querySelectorAll('h3,h4,strong')].filter(el =>
+      el !== head.querySelector('strong') &&
+      String(el.textContent || '').trim().toUpperCase() === 'FILTRAR' &&
+      !panel.contains(el)
+    );
+    oldTitles.forEach(el => {
+      const parent = el.parentElement;
+      if (parent && parent.children.length === 1) parent.remove();
+      else el.remove();
+    });
+
+    const toggle = document.getElementById(ID_TOGGLE);
+    const toggleAction = (event) => {
+      event?.preventDefault?.();
+      const isOpen = !body.classList.contains('hidden');
+      setOpen127(!isOpen);
+    };
+
+    toggle?.addEventListener('click', toggleAction);
+    head.addEventListener('click', event => {
+      if (event.target?.closest?.(`#${ID_TOGGLE}`)) return;
+      toggleAction(event);
+    });
+
+    // Si el usuario ya lo desplegó en esta sesión, mantenerlo.
+    let remembered = false;
+    try {
+      remembered = sessionStorage.getItem('mvl_v127_filters_open') === '1';
+    } catch (_) {}
+    setOpen127(remembered);
+
+    // Actualizar el resumen del encabezado cuando cambien filtros.
+    body.addEventListener('change', () => {
+      updateFilterHeader127();
+    });
+
+    const apply = document.getElementById('dashboardApply');
+    apply?.addEventListener('click', () => {
+      updateFilterHeader127();
+      // Al aplicar NO se oculta: queda abierto hasta que el usuario pulse Ocultar.
+      setOpen127(true);
+    });
+
+    updateFilterHeader127();
+    return true;
+  }
+
+  let scheduled127 = false;
+  function schedule127() {
+    if (scheduled127) return;
+    scheduled127 = true;
+    requestAnimationFrame(() => {
+      scheduled127 = false;
+      buildFilterPanel127();
+      updateFilterHeader127();
+    });
+  }
+
+  function start127() {
+    if (buildFilterPanel127()) return;
+
+    // Solo observar el panel del Dashboard hasta que existan Fecha de corte + filtros.
+    const dashboard = document.getElementById('performanceDashboardPanel');
+    if (!dashboard) return;
+
+    const observer = new MutationObserver(() => {
+      if (buildFilterPanel127()) observer.disconnect();
+    });
+    observer.observe(dashboard, { childList:true, subtree:true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start127, { once:true });
+  } else {
+    start127();
+  }
+
+  // Cuando se actualiza el Dashboard, refrescar el texto del encabezado.
+  document.addEventListener('change', event => {
+    if (event.target?.closest?.(`#${ID_PANEL}`)) schedule127();
+  });
+})();
+
+console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Desplegar/Ocultar.');
