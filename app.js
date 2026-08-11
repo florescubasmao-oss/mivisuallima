@@ -3542,3 +3542,219 @@ console.info('[MI VISUAL LIMA] V1.19: fecha de corte por última FINALIZADA + re
 })();
 
 console.info('[MI VISUAL LIMA] V1.20: resumen más compacto y sin palabras entrecortadas.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V1.21
+   Tarjeta de Producción definitiva: bloques cortos y estables.
+   Solo visual. No cambia API, metas ni cálculos.
+   ========================================================== */
+(() => {
+  const esc121 = (v) => String(v ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+
+  function installStyles121(){
+    document.getElementById('mvlV120Styles')?.remove();
+    if(document.getElementById('mvlV121Styles')) return;
+    const style=document.createElement('style');
+    style.id='mvlV121Styles';
+    style.textContent=`
+      #dashboardTotalSummaryV19 .dashboard-v19-summary-grid{
+        grid-template-columns:.92fr 1.48fr 1fr 1fr !important;
+        gap:8px !important;
+        align-items:start !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card{
+        padding:9px 10px !important;
+        min-height:0 !important;
+        border-radius:12px !important;
+        overflow:hidden !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > span{
+        font-size:.66rem !important;
+        line-height:1.1 !important;
+        margin-bottom:3px !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > strong{
+        font-size:1.02rem !important;
+        line-height:1.08 !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card > small{
+        font-size:.64rem !important;
+        line-height:1.18 !important;
+        margin-top:3px !important;
+      }
+
+      #dashboardTotalSummaryV19 .mvl-v121-prod-grid{
+        display:grid !important;
+        grid-template-columns:1fr 1fr !important;
+        gap:5px 7px !important;
+        margin-top:7px !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-cell{
+        min-width:0 !important;
+        padding:5px 6px !important;
+        border:1px solid #e5edf6 !important;
+        border-radius:8px !important;
+        background:#fbfdff !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-cell span{
+        display:block !important;
+        margin:0 0 2px !important;
+        font-size:.55rem !important;
+        line-height:1.05 !important;
+        color:#64748b !important;
+        white-space:nowrap !important;
+        overflow:hidden !important;
+        text-overflow:ellipsis !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-cell b{
+        display:block !important;
+        font-size:.67rem !important;
+        line-height:1.08 !important;
+        color:#0f365f !important;
+        white-space:nowrap !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-cell small{
+        display:block !important;
+        margin:1px 0 0 !important;
+        font-size:.48rem !important;
+        line-height:1 !important;
+        color:#8a99aa !important;
+        white-space:nowrap !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-full{
+        grid-column:1/-1 !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-bar{
+        height:5px !important;
+        border-radius:999px !important;
+        overflow:hidden !important;
+        background:#e8eef5 !important;
+        margin-top:1px !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-bar i{
+        display:block !important;
+        height:100% !important;
+        border-radius:inherit !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-chip{
+        grid-column:1/-1 !important;
+        margin-top:1px !important;
+      }
+      #dashboardTotalSummaryV19 .mvl-v121-prod-chip .mvl-v118-status-chip,
+      #dashboardTotalSummaryV19 .mvl-v121-prod-chip .mvl-v117-status-chip{
+        max-width:100% !important;
+        width:max-content !important;
+        padding:3px 6px !important;
+        font-size:.57rem !important;
+        line-height:1.05 !important;
+        white-space:nowrap !important;
+      }
+
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction{
+        padding:8px 9px !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction > strong{
+        font-size:.78rem !important;
+        line-height:1.08 !important;
+      }
+      #dashboardTotalSummaryV19 .dashboard-v19-total-card.under-construction > small{
+        display:none !important;
+      }
+
+      .mvl-v118-cutoff{padding:6px 9px !important;margin-bottom:8px !important}
+      .mvl-v118-cutoff strong{font-size:.68rem !important}
+
+      @media(max-width:760px){
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid{
+          grid-template-columns:1fr 1fr !important;
+        }
+      }
+      @media(max-width:430px){
+        #dashboardTotalSummaryV19 .dashboard-v19-summary-grid{
+          grid-template-columns:1fr !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function parseDays121(text){
+    const m=String(text||'').match(/(?:·|\s)(\d+)\s*d(?:\b|$)/i) || String(text||'').match(/(\d+)\s*d[ií]as/i);
+    return m ? m[1] : '';
+  }
+  function parseTwoValues121(text){
+    const clean=String(text||'').replace(/pts?\/?d[ií]a/gi,'').replace(/pts?/gi,'').trim();
+    const parts=clean.split('/').map(s=>s.trim()).filter(Boolean);
+    return {left:parts[0]||'—', right:parts[1]||'—'};
+  }
+
+  function rebuildProduction121(){
+    const root=document.getElementById('dashboardTotalSummaryV19');
+    if(!root) return;
+    const points=document.getElementById('dashboardTotalPointsV19');
+    const card=points?.closest('article');
+    if(!card) return;
+    const old=card.querySelector('.mvl-v118-production-meta');
+    if(!old || old.dataset.v121Done==='1') return;
+
+    const lines=[...old.querySelectorAll('.mvl-v118-production-line')];
+    if(lines.length<3) return;
+
+    const metaCutLabel=lines[0].querySelector('span')?.textContent||'Meta corte';
+    const metaMonthLabel=lines[1].querySelector('span')?.textContent||'Meta mes';
+    const avgText=lines[2].querySelector('b')?.textContent||'— / —';
+    const two=parseTwoValues121(avgText);
+    const cutDays=parseDays121(metaCutLabel);
+    const monthDays=parseDays121(metaMonthLabel);
+
+    const metaCut=lines[0].querySelector('b')?.textContent||'—';
+    const metaMonth=lines[1].querySelector('b')?.textContent||'—';
+
+    const labels=[...old.querySelectorAll('.mvl-v118-progress-label')];
+    const compliance=labels[0]?.querySelector('strong')?.textContent||'—';
+    const monthly=labels[1]?.querySelector('strong')?.textContent||'—';
+    const progress=old.querySelector('.mvl-v118-progress');
+    const chip=old.querySelector('.mvl-v118-status-chip, .mvl-v117-status-chip');
+
+    let barHtml='';
+    if(progress){
+      const i=progress.querySelector('i');
+      const style=i?.getAttribute('style')||'';
+      const cls=[...progress.classList].find(x=>x!=='mvl-v118-progress')||'';
+      barHtml=`<div class="mvl-v121-prod-bar ${esc121(cls)}"><i style="${esc121(style)}"></i></div>`;
+    }
+
+    old.innerHTML=`
+      <div class="mvl-v121-prod-grid">
+        <div class="mvl-v121-prod-cell"><span>Meta corte</span><b>${esc121(metaCut)}</b>${cutDays?`<small>${esc121(cutDays)} días efectivos</small>`:''}</div>
+        <div class="mvl-v121-prod-cell"><span>Meta mes</span><b>${esc121(metaMonth)}</b>${monthDays?`<small>${esc121(monthDays)} días efectivos</small>`:''}</div>
+        <div class="mvl-v121-prod-cell"><span>Prom. diario</span><b>${esc121(two.left)} pts</b></div>
+        <div class="mvl-v121-prod-cell"><span>Meta diaria</span><b>${esc121(two.right)} pts</b></div>
+        <div class="mvl-v121-prod-cell"><span>Cumplimiento</span><b>${esc121(compliance)}</b><small>al corte</small></div>
+        <div class="mvl-v121-prod-cell"><span>Avance mes</span><b>${esc121(monthly)}</b></div>
+        <div class="mvl-v121-prod-full">${barHtml}</div>
+        ${chip?`<div class="mvl-v121-prod-chip">${chip.outerHTML}</div>`:''}
+      </div>`;
+    old.dataset.v121Done='1';
+  }
+
+  function refresh121(){
+    installStyles121();
+    rebuildProduction121();
+  }
+
+  const obs=new MutationObserver(()=>requestAnimationFrame(refresh121));
+  function start(){
+    installStyles121();
+    const target=document.getElementById('performanceDashboardPanel')||document.body;
+    obs.observe(target,{childList:true,subtree:true});
+    refresh121();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+})();
+
+console.info('[MI VISUAL LIMA] V1.21: tarjeta Producción definitiva en bloques.');

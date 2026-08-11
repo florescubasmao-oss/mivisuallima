@@ -1,0 +1,29 @@
+MI VISUAL LIMA - V1.21
+TARJETA DE PRODUCCIÓN DEFINITIVA
+
+SOLO GITHUB. APPS SCRIPT NO CAMBIA.
+
+CAMBIO PRINCIPAL
+Se deja de intentar comprimir el diseño anterior.
+La tarjeta de Producción se reorganiza en 6 bloques cortos:
+
+Meta corte | Meta mes
+Prom. diario | Meta diaria
+Cumplimiento | Avance mes
+
+Debajo quedan:
+- Barra de avance
+- Semáforo
+
+BENEFICIOS
+- No se parten palabras.
+- Los valores no se montan sobre las etiquetas.
+- Mantiene exactamente los mismos cálculos.
+- Mantiene fecha de corte, meta 6x1, filtros y semáforos.
+- En pantallas medianas usa 2 columnas.
+- En móvil pasa a 1 columna para evitar cortes.
+
+ACTUALIZACIÓN
+1. En GitHub reemplaza app.js por el de este paquete.
+2. NO cambies Apps Script.
+3. Haz Ctrl + F5.
