@@ -517,7 +517,7 @@
               <article class="dashboard-v19-total-card"><span>% Recableado total</span><strong id="dashboardTotalRecableV19">—</strong><small id="dashboardTotalRecableHelpV19">Cargando datos…</small></article>
               <article class="dashboard-v19-total-card under-construction"><span>VTR / GAR</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
               <article class="dashboard-v19-total-card under-construction"><span>Tiempo de gestión / SLA</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
-              <article class="dashboard-v19-total-card under-construction"><span>Observaciones</span><strong>En construcción</strong><small>Pendiente de integrar fuente y regla de cálculo</small></article>
+              <article class="dashboard-v19-total-card" id="dashboardObsCardV205"><span>Observaciones</span><strong id="dashboardTotalObsV205">—</strong><small id="dashboardTotalObsHelpV205">Cargando datos…</small></article>
             </div>`;
           grid.parentNode.insertBefore(section, grid);
         }
@@ -573,7 +573,7 @@
             <option value="RECABLEADO">% Recableado</option>
             <option value="VTR_GAR">VTR / GAR · En construcción</option>
             <option value="SLA">Tiempo de gestión / SLA</option>
-            <option value="OBSERVACIONES">Observaciones · En construcción</option>`;
+            <option value="OBSERVACIONES">Observaciones</option>`;
           if (!['ALL','PRODUCCION','EFECTIVIDAD','RECABLEADO','VTR_GAR','SLA','OBSERVACIONES'].includes(indicator.value)) {
             indicator.value = 'PRODUCCION';
           }
@@ -799,6 +799,7 @@
         if (indicator === 'EFECTIVIDAD') return row.effectiveness ?? row.value;
         if (indicator === 'RECABLEADO') return row.recablePercent ?? row.value;
         if (indicator === 'SLA') return row.slaPercent ?? row.value;
+        if (indicator === 'OBSERVACIONES') return row.observationsCount ?? row.value ?? 0;
         return row.value;
       }
 
@@ -822,6 +823,9 @@
           const value = Number(row.slaPercent ?? row.value);
           return Number.isFinite(value) && evaluables > 0;
         }
+        if (indicator === 'OBSERVACIONES') {
+          return Number.isFinite(Number(row.observationsCount ?? row.value ?? 0));
+        }
         return Number.isFinite(Number(valueFor(row, indicator)));
       }
 
@@ -839,8 +843,8 @@
           if (aHas && bHas && av !== bv) {
             // Producción y Efectividad: mayor resultado primero.
             if (indicator === 'PRODUCCION' || indicator === 'EFECTIVIDAD' || indicator === 'SLA') return bv - av;
-            // % Recableado es indicador negativo: menor porcentaje primero.
-            if (indicator === 'RECABLEADO') return av - bv;
+            // Recableado y Observaciones son indicadores negativos: menor resultado primero.
+            if (indicator === 'RECABLEADO' || indicator === 'OBSERVACIONES') return av - bv;
           }
 
           // Desempate por producción finalizada y luego por nombre de cuadrilla.
@@ -875,7 +879,7 @@
           RECABLEADO: { label: '% Recableado', help: 'Menor porcentaje primero.', construction: false },
           VTR_GAR: { label: 'VTR / GAR', help: 'Indicador considerado para una siguiente etapa.', construction: true },
           SLA: { label: 'Tiempo de gestión / SLA', help: 'Mayor cumplimiento SLA primero.', construction: false },
-          OBSERVACIONES: { label: 'Observaciones', help: 'Indicador considerado para una siguiente etapa.', construction: true }
+          OBSERVACIONES: { label: 'Observaciones', help: 'Menor cantidad de observaciones primero.', construction: false }
         };
         const meta = labels[indicator] || labels.PRODUCCION;
         const list = $v19('dashboardRankingList');
@@ -935,7 +939,7 @@
                   <div><span>% Recableado</span><b>${html(rec)}</b></div>
                   <div class="kpi-building"><span>VTR / GAR</span><b>En construcción</b></div>
                   <div class="kpi-building"><span>SLA</span><b>En construcción</b></div>
-                  <div class="kpi-building"><span>Observaciones</span><b>En construcción</b></div>
+                  <div><span>Observaciones</span><b>${Number(r.observationsCount || 0)} obs.</b></div>
                 </div>
                 <div class="dashboard-v19-rank-meta">
                   ${pills.map(p => `<span class="dashboard-v19-meta-pill ${norm(p)==='GG'?'gg':''}">${html(p)}</span>`).join('')}
@@ -960,7 +964,9 @@
           const value = valueFor(r, indicator);
           const valueText = indicator === 'PRODUCCION'
             ? `${Number(value || 0).toFixed(2)} pts`
-            : valorPorcentaje(value == null || value === '' ? null : Number(value));
+            : (indicator === 'OBSERVACIONES'
+                ? `${Number(value || 0)} obs.`
+                : valorPorcentaje(value == null || value === '' ? null : Number(value)));
           let detail = '';
           if (indicator === 'PRODUCCION') detail = `${Number(r.finalized || 0)} finalizadas`;
           if (indicator === 'EFECTIVIDAD') {
@@ -968,6 +974,7 @@
             detail = total ? `${Number(r.finalized || 0)} finalizadas de ${total}` : '';
           }
           if (indicator === 'RECABLEADO') detail = `${Number(r.losRojo || 0)} LOS ROJO · ${Number(r.recables || 0)} recableados`;
+          if (indicator === 'OBSERVACIONES') detail = `${Number(r.observationsActive || 0)} activas · S/ ${Number(r.observationsImpact || 0).toFixed(2)} impacto`;
           const sup = m.directManagement || norm(m.supervisor) === 'GG' ? 'GG' : (m.supervisor || r.supervisor || '');
           const pills = [m.visualType, m.platform, sup, m.composition, m.state].filter(Boolean);
 
@@ -2254,6 +2261,10 @@
       sla: {
         moderateFrom: num('cfgSlaModerateV200') / 100,
         optimalFrom: num('cfgSlaOptimalV200') / 100
+      },
+      observations: {
+        optimalMax: num('cfgObsOptimalV205'),
+        moderateMax: num('cfgObsModerateV205')
       }
     };
 
@@ -2457,7 +2468,12 @@
           action === 'adminCreateCrew' ||
           action === 'adminUpdateCrew' ||
           action === 'adminReplaceCrewTechnician' ||
-          action === 'adminCatalogCreateBatch'
+          action === 'adminCatalogCreateBatch' ||
+          action === 'observationsCreate' ||
+          action === 'observationsDescargo' ||
+          action === 'observationsUpdate' ||
+          action === 'technicalValidationCreate' ||
+          action === 'technicalValidationResolve'
         ) {
           invalidateFastCache115();
         }
@@ -7610,6 +7626,8 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
                   ${item.typePartida ? esc204(item.typePartida) : esc204(item.typeAtencion || '')}
                 </small>
                 ${item.address ? `<small>${esc204(item.address)}</small>` : ''}
+                ${item.description ? `<small><b>Observación:</b> ${esc204(item.description)}</small>` : ''}
+                ${item.descargo ? `<small><b>Descargo:</b> ${esc204(item.descargo)}</small>` : ''}
               </div>
               <div class="mvl-v204-client-meta">
                 <b>${esc204(item.metric || '')}</b>
@@ -7733,3 +7751,559 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
   console.info('[MI VISUAL LIMA] V2.04: detalle por indicador y clientes por día.');
 })();
 
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.05
+   VALIDACIÓN TÉCNICA + OBSERVACIONES + DASHBOARD
+   ========================================================== */
+(() => {
+  const $205 = id => document.getElementById(id);
+  const esc205 = value => String(value ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const norm205 = value => String(value ?? '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+
+  const V205 = {
+    dashboard:null,
+    tech:null,
+    configByType:new Map(),
+    apiWrapped:false
+  };
+
+  function token205(){
+    try { return typeof token === 'function' ? token() : ''; }
+    catch(_) { return ''; }
+  }
+
+  function currentUser205(){
+    return window.sessionData?.user || {};
+  }
+
+  function modulePermission205(name){
+    const target=norm205(name);
+    return (window.sessionData?.modules || []).find(m=>norm205(m.module)===target)?.permissions || null;
+  }
+
+  function period205(){
+    return $205('dashboardPeriod')?.value || $205('performancePeriod')?.value || '2026-08';
+  }
+
+  function installStyles205(){
+    if($205('mvlV205Styles')) return;
+    const style=document.createElement('style');
+    style.id='mvlV205Styles';
+    style.textContent=`
+      .mvl205-view{padding-bottom:22px}
+      .mvl205-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}
+      .mvl205-back{border:0;background:transparent;color:#365a7c;font-weight:850;padding:4px 0;font-size:.74rem}
+      .mvl205-title h2{margin:3px 0 3px;color:#072f5b;font-size:1.16rem}
+      .mvl205-title p{margin:0;color:#6e7f92;font-size:.70rem}
+      .mvl205-actions{display:flex;gap:7px;flex-wrap:wrap}
+      .mvl205-primary,.mvl205-secondary{min-height:36px;border-radius:10px;padding:7px 12px;font-size:.67rem;font-weight:900}
+      .mvl205-primary{border:0;background:#1264c5;color:#fff}
+      .mvl205-secondary{border:1px solid #cbdced;background:#fff;color:#0b5bb5}
+      .mvl205-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+      .mvl205-filters label,.mvl205-form label{display:block;color:#536a82;font-size:.64rem;font-weight:800}
+      .mvl205-filters input,.mvl205-filters select,.mvl205-form input,.mvl205-form select,.mvl205-form textarea{
+        width:100%;margin-top:4px;border:1px solid #c8d8e8;border-radius:10px;padding:8px 9px;background:#fff;color:#13395f;font:inherit
+      }
+      .mvl205-form textarea{min-height:88px;resize:vertical}
+      .mvl205-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 13px}
+      .mvl205-summary div{border:1px solid #dce7f2;border-radius:11px;padding:9px 10px;background:#fbfdff}
+      .mvl205-summary span{display:block;color:#718196;font-size:.59rem}
+      .mvl205-summary b{display:block;color:#082f5b;font-size:.92rem;margin-top:2px}
+      .mvl205-list{display:grid;gap:8px}
+      .mvl205-card{border:1px solid #dce6f1;border-radius:13px;padding:11px 12px;background:#fff}
+      .mvl205-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+      .mvl205-card-head strong{display:block;color:#0a3b70;font-size:.76rem;line-height:1.22}
+      .mvl205-card-head small{display:block;color:#73849a;font-size:.59rem;margin-top:3px}
+      .mvl205-chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:.56rem;font-weight:900;background:#eef3f8;color:#526b85;white-space:nowrap}
+      .mvl205-chip.green{background:#edf9f0;color:#087d34}.mvl205-chip.red{background:#fff0f0;color:#b42318}
+      .mvl205-chip.yellow{background:#fff7e5;color:#946000}.mvl205-chip.blue{background:#edf5ff;color:#0758b7}
+      .mvl205-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+      .mvl205-desc{margin:8px 0 0;color:#415a74;font-size:.67rem;line-height:1.38;white-space:pre-wrap}
+      .mvl205-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+      .mvl205-card-actions button{border:1px solid #cbdced;background:#fff;color:#0758b7;border-radius:8px;padding:5px 8px;font-size:.60rem;font-weight:850}
+      .mvl205-empty{padding:24px 10px;text-align:center;color:#6d8197;font-size:.72rem}
+      .mvl205-overlay{position:fixed;inset:0;z-index:100050;background:rgba(15,35,58,.44);display:flex;align-items:center;justify-content:center;padding:16px}
+      .mvl205-overlay.hidden{display:none!important}
+      .mvl205-modal{width:min(720px,96vw);max-height:92vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(15,35,58,.25)}
+      .mvl205-modal-head{display:flex;justify-content:space-between;gap:12px;padding:14px 16px 11px;border-bottom:1px solid #e3ebf4}
+      .mvl205-modal-head h3{margin:0;color:#082f5b;font-size:.95rem}.mvl205-modal-head p{margin:3px 0 0;color:#74859a;font-size:.64rem}
+      .mvl205-close{width:32px;height:32px;border:0;border-radius:9px;background:#eef3f8;color:#24496f;font-weight:900}
+      .mvl205-modal-body{overflow:auto;padding:13px 16px}.mvl205-form{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+      .mvl205-form .full{grid-column:1/-1}
+      .mvl205-modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:11px 16px;border-top:1px solid #e3ebf4;background:#fbfdff}
+      .mvl205-message{min-height:18px;color:#667b92;font-size:.64rem;font-weight:750;margin-top:7px}.mvl205-message.error{color:#b42318}.mvl205-message.ok{color:#087d34}
+      .mvl205-file-note{font-size:.58rem;color:#7d8c9c;margin-top:4px}
+      .mvl205-evidence-links{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.mvl205-evidence-links a{font-size:.58rem}
+      #dashboardObsCardV205 .mvl-v205-obs-badge,.mvl-v205-obs-badge{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:999px;font-size:.56rem;font-weight:900}
+      .mvl-v205-obs-badge.green{background:#edf9f0;color:#087d34}.mvl-v205-obs-badge.yellow{background:#fff7e5;color:#946000}.mvl-v205-obs-badge.red{background:#fff0f0;color:#b42318}
+      .mvl-v205-obs-config{margin-top:10px}
+      @media(max-width:720px){.mvl205-filters{grid-template-columns:1fr 1fr}.mvl205-summary{grid-template-columns:1fr 1fr}}
+      @media(max-width:500px){.mvl205-topbar{display:block}.mvl205-actions{margin-top:9px}.mvl205-filters,.mvl205-form{grid-template-columns:1fr}.mvl205-summary{grid-template-columns:1fr 1fr}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function statusClass205(status){
+    const s=norm205(status);
+    if(['APROBADO','BONO','SUBSANADO','CUMPLE'].includes(s)) return 'green';
+    if(['RECHAZADO','NO BONO','PENALIZADO','CRITICO'].includes(s)) return 'red';
+    if(['PENDIENTE','OBSERVADO','EN PROCESO','APELADO','ATENCION'].includes(s)) return 'yellow';
+    return 'blue';
+  }
+
+  function hideAppViews205(){
+    ['loginView','homeView','adminView','performanceView','mapViewV200','validationViewV205','observationsViewV205']
+      .forEach(id=>$205(id)?.classList.add('hidden'));
+  }
+
+  function returnHome205(){
+    hideAppViews205();
+    $205('homeView')?.classList.remove('hidden');
+    try { if(typeof renderHome==='function') renderHome(window.sessionData); } catch(_){}
+  }
+
+  function createBaseView205(id,title,subtitle){
+    let view=$205(id);
+    if(view) return view;
+    view=document.createElement('section');
+    view.id=id;
+    view.className='card app-card mvl205-view hidden';
+    view.innerHTML=`
+      <div class="mvl205-topbar">
+        <div>
+          <button type="button" class="mvl205-back">← Inicio</button>
+          <div class="mvl205-title"><h2>${esc205(title)}</h2><p>${esc205(subtitle)}</p></div>
+        </div>
+        <div class="mvl205-actions"></div>
+      </div>
+      <div class="mvl205-content"></div>`;
+    document.querySelector('main.shell')?.appendChild(view);
+    view.querySelector('.mvl205-back')?.addEventListener('click',returnHome205);
+    return view;
+  }
+
+  function activateCards205(){
+    [
+      ['Validación Técnica','Solicitudes RECABLEADO, GAR y VTR'],
+      ['Observaciones','Registro, descargos y seguimiento']
+    ].forEach(([name,subtitle])=>{
+      const card=document.querySelector(`#moduleList [data-module="${name}"]`);
+      const perm=modulePermission205(name);
+      if(!card||!perm?.ver) return;
+      card.classList.remove('disabled','module-disabled');
+      card.removeAttribute('disabled');
+      card.setAttribute('aria-disabled','false');
+      const small=card.querySelector('small');
+      if(small) small.textContent=subtitle;
+      const arrow=card.querySelector('.module-arrow');
+      if(arrow) arrow.textContent='›';
+    });
+  }
+
+  function moduleCardWatcher205(){
+    const list=$205('moduleList');
+    if(!list||list.dataset.v205Observed==='1') return;
+    list.dataset.v205Observed='1';
+    new MutationObserver(()=>activateCards205()).observe(list,{childList:true});
+    activateCards205();
+  }
+
+  // -------------------------
+  // VALIDACIÓN TÉCNICA
+  // -------------------------
+  const VAL205={data:null};
+
+  function validationView205(){
+    const view=createBaseView205('validationViewV205','VALIDACIÓN TÉCNICA','RECABLEADO, GAR y VTR · Lima');
+    const actions=view.querySelector('.mvl205-actions');
+    const content=view.querySelector('.mvl205-content');
+    if(!content.dataset.ready){
+      content.dataset.ready='1';
+      content.innerHTML=`
+        <div class="mvl205-filters">
+          <label>Periodo<input type="month" id="valPeriodV205" value="${esc205(period205())}"></label>
+          <label>Tipo<select id="valTypeV205"><option value="">Todos</option><option>RECABLEADO</option><option>GAR</option><option>VTR</option><option>OTRO</option></select></label>
+          <label>Estado<select id="valStateV205"><option value="">Todos</option><option>PENDIENTE</option><option>APROBADO</option><option>RECHAZADO</option><option>OBSERVADO</option><option>BONO</option><option>NO BONO</option><option value="SIN RESPUESTA">AUTOMÁTICA</option></select></label>
+          <label>Cuadrilla<select id="valCrewV205"><option value="">Todas</option></select></label>
+        </div>
+        <div class="mvl205-summary" id="valSummaryV205"></div>
+        <div class="mvl205-list" id="valListV205"><div class="mvl205-empty">Cargando…</div></div>`;
+      ['valPeriodV205','valTypeV205','valStateV205','valCrewV205'].forEach(id=>$205(id)?.addEventListener('change',loadValidation205));
+    }
+    if(!actions.dataset.ready){
+      actions.dataset.ready='1';
+      const refresh=document.createElement('button');refresh.className='mvl205-secondary';refresh.textContent='Actualizar';refresh.onclick=loadValidation205;actions.appendChild(refresh);
+      const add=document.createElement('button');add.id='newValidationV205';add.className='mvl205-primary';add.textContent='NUEVA VALIDACIÓN';add.onclick=openValidationCreate205;actions.appendChild(add);
+    }
+    return view;
+  }
+
+  function fillCrewSelect205(select,crews,allLabel='Todas'){
+    if(!select) return;
+    const prev=select.value;
+    select.innerHTML=`<option value="">${esc205(allLabel)}</option>`+(crews||[]).map(c=>`<option value="${esc205(c.id)}">${esc205(c.display)}</option>`).join('');
+    if([...select.options].some(o=>o.value===prev)) select.value=prev;
+  }
+
+  async function loadValidation205(){
+    const list=$205('valListV205');if(list) list.innerHTML='<div class="mvl205-empty">Cargando validaciones…</div>';
+    try{
+      const res=await api('technicalValidationList',{
+        token:token205(),period:$205('valPeriodV205')?.value||period205(),
+        type:$205('valTypeV205')?.value||'',state:$205('valStateV205')?.value||'',
+        crewId:$205('valCrewV205')?.value||''
+      });
+      if(!res?.ok) throw new Error(res?.error||'No se pudo cargar.');
+      VAL205.data=res;
+      fillCrewSelect205($205('valCrewV205'),res.crews,'Todas');
+      $205('newValidationV205')?.classList.toggle('hidden',!res.canRegister);
+      renderValidation205(res);
+    }catch(err){if(list) list.innerHTML=`<div class="mvl205-empty">${esc205(err.message)}</div>`;}
+  }
+
+  function renderValidation205(res){
+    const rows=res.rows||[];
+    const pending=rows.filter(r=>norm205(r.estado)==='PENDIENTE').length;
+    const auto=rows.filter(r=>norm205(r.resultadoFinal)==='APROBADO AUTOMATICAMENTE').length;
+    const sum=$205('valSummaryV205');
+    if(sum) sum.innerHTML=`<div><span>Registros</span><b>${rows.length}</b></div><div><span>Pendientes</span><b>${pending}</b></div><div><span>Automáticas</span><b>${auto}</b></div><div><span>Plazo RECABLEADO</span><b>${Number(res.autoMinutes||15)} min</b></div>`;
+    const list=$205('valListV205');
+    if(!rows.length){list.innerHTML='<div class="mvl205-empty">No hay validaciones para los filtros seleccionados.</div>';return;}
+    list.innerHTML=rows.map(r=>{
+      const canResolve=res.canValidate&&norm205(r.estado)==='PENDIENTE';
+      return `<article class="mvl205-card">
+        <div class="mvl205-card-head"><div><strong>${esc205(r.crewCode||r.cuadrilla)} · ${esc205(r.tipoValidacion)}</strong><small>${esc205(r.fechaRegistro)} ${esc205(r.horaRegistro)} · Código ${esc205(r.codigo)}</small></div><span class="mvl205-chip ${statusClass205(r.estadoVisible||r.estado)}">${esc205(r.resultadoVisible||r.estadoVisible||r.estado)}</span></div>
+        <div class="mvl205-meta"><span class="mvl205-chip blue">${esc205(r.ticketFinal||'NO APLICA')}</span>${r.origenOrden?`<span class="mvl205-chip">${esc205(r.origenOrden)}</span>`:''}<span class="mvl205-chip">${esc205(r.platform||'')}</span></div>
+        <p class="mvl205-desc">${esc205(r.motivoTecnico||'')}</p>
+        ${r.motivoValidacion?`<p class="mvl205-desc"><b>Respuesta:</b> ${esc205(r.motivoValidacion)}</p>`:''}
+        <div class="mvl205-card-actions">${canResolve?`<button type="button" data-val-resolve="${esc205(r.id)}">VALIDAR</button>`:''}</div>
+      </article>`;
+    }).join('');
+    list.querySelectorAll('[data-val-resolve]').forEach(b=>b.onclick=()=>openValidationResolve205(b.dataset.valResolve));
+  }
+
+  function simpleModal205(id,title,subtitle,body,saveLabel,onSave){
+    let modal=$205(id);
+    if(modal) modal.remove();
+    modal=document.createElement('div');modal.id=id;modal.className='mvl205-overlay';
+    modal.innerHTML=`<section class="mvl205-modal"><header class="mvl205-modal-head"><div><h3>${esc205(title)}</h3><p>${esc205(subtitle||'')}</p></div><button class="mvl205-close" type="button">×</button></header><div class="mvl205-modal-body">${body}<div class="mvl205-message"></div></div><footer class="mvl205-modal-footer"><button class="mvl205-secondary mvl205-cancel" type="button">Cancelar</button><button class="mvl205-primary mvl205-save" type="button">${esc205(saveLabel)}</button></footer></section>`;
+    document.body.appendChild(modal);
+    const close=()=>modal.remove();modal.querySelector('.mvl205-close').onclick=close;modal.querySelector('.mvl205-cancel').onclick=close;
+    modal.addEventListener('click',e=>{if(e.target===modal)close();});
+    modal.querySelector('.mvl205-save').onclick=async()=>{const msg=modal.querySelector('.mvl205-message');const btn=modal.querySelector('.mvl205-save');btn.disabled=true;try{await onSave(modal,msg);close();}catch(err){msg.textContent=err.message||String(err);msg.className='mvl205-message error';}finally{btn.disabled=false;}};
+    return modal;
+  }
+
+  function crewOptionsHtml205(crews,selected=''){return (crews||[]).map(c=>`<option value="${esc205(c.id)}" ${c.id===selected?'selected':''}>${esc205(c.display)}</option>`).join('');}
+
+  function openValidationCreate205(){
+    const crews=VAL205.data?.crews||[];
+    const body=`<div class="mvl205-form">
+      <label class="full">Cuadrilla<select id="valNewCrewV205">${crewOptionsHtml205(crews,crews.length===1?crews[0].id:'')}</select></label>
+      <label>Tipo de ticket<select id="valNewTicketTypeV205"><option value="AT-">AT- · RECABLEADO</option><option value="VTEXT-">VTEXT- · RECABLEADO</option><option value="GAR-">GAR-</option><option value="VTR-">VTR-</option><option value="NO APLICA">NO APLICA · OTRO</option></select></label>
+      <label>Número ticket<input id="valNewTicketNumberV205"></label>
+      <label>Código orden/cliente<input id="valNewCodeV205"></label>
+      <label>DNI cliente<input id="valNewDniV205"></label>
+      <label id="valOriginWrapV205" class="hidden">Origen orden<select id="valNewOriginV205"><option value="">Seleccionar</option><option>PROPIA</option><option>ASIGNADA</option></select></label>
+      <label class="full">Motivo técnico<textarea id="valNewMotiveV205"></textarea></label>
+    </div>`;
+    const modal=simpleModal205('validationCreateModalV205','NUEVA VALIDACIÓN TÉCNICA','RECABLEADO se aprueba automáticamente al vencer el plazo.',''+body,'Registrar',async(modal,msg)=>{
+      const res=await api('technicalValidationCreate',{
+        token:token205(),period:$205('valPeriodV205')?.value||period205(),
+        crewId:modal.querySelector('#valNewCrewV205')?.value||'',
+        ticketType:modal.querySelector('#valNewTicketTypeV205')?.value||'',
+        ticketNumber:modal.querySelector('#valNewTicketNumberV205')?.value||'',
+        code:modal.querySelector('#valNewCodeV205')?.value||'',
+        dni:modal.querySelector('#valNewDniV205')?.value||'',
+        originOrder:modal.querySelector('#valNewOriginV205')?.value||'',
+        motive:modal.querySelector('#valNewMotiveV205')?.value||''
+      });if(!res?.ok) throw new Error(res?.error||'No se pudo registrar.');await loadValidation205();
+    });
+    const ticket=modal.querySelector('#valNewTicketTypeV205'),wrap=modal.querySelector('#valOriginWrapV205'),num=modal.querySelector('#valNewTicketNumberV205');
+    const sync=()=>{const t=norm205(ticket.value);wrap.classList.toggle('hidden',!(t.includes('GAR')||t.includes('VTR')));num.disabled=t.includes('NO APLICA');if(num.disabled)num.value='';};ticket.onchange=sync;sync();
+  }
+
+  function openValidationResolve205(id){
+    const row=(VAL205.data?.rows||[]).find(r=>r.id===id);if(!row)return;
+    const profile=norm205(VAL205.data?.profile);
+    const garVtr=['GAR','VTR'].includes(norm205(row.tipoValidacion));
+    const options=garVtr&&profile!=='SUPERVISOR'?'<option>BONO</option><option>NO BONO</option>':'<option>APROBADO</option><option>RECHAZADO</option><option>OBSERVADO</option>';
+    const body=`<div class="mvl205-form"><label class="full">Resultado<select id="valResolveResultV205">${options}</select></label><label class="full">Motivo<textarea id="valResolveMotiveV205"></textarea></label></div>`;
+    simpleModal205('validationResolveModalV205','VALIDAR SOLICITUD',`${row.crewCode} · ${row.tipoValidacion} · ${row.codigo}`,body,'Guardar',async(modal)=>{
+      const res=await api('technicalValidationResolve',{token:token205(),id,result:modal.querySelector('#valResolveResultV205').value,motive:modal.querySelector('#valResolveMotiveV205').value});
+      if(!res?.ok) throw new Error(res?.error||'No se pudo validar.');await loadValidation205();
+    });
+  }
+
+  async function openValidation205(){
+    installStyles205();hideAppViews205();validationView205().classList.remove('hidden');await loadValidation205();
+  }
+
+  // -------------------------
+  // OBSERVACIONES
+  // -------------------------
+  const OBS205={data:null};
+
+  function observationsView205(){
+    const view=createBaseView205('observationsViewV205','OBSERVACIONES','Registro, descargos, estados e impacto por cuadrilla');
+    const actions=view.querySelector('.mvl205-actions'),content=view.querySelector('.mvl205-content');
+    if(!content.dataset.ready){
+      content.dataset.ready='1';
+      content.innerHTML=`<div class="mvl205-filters">
+        <label>Periodo<input type="month" id="obsPeriodV205" value="${esc205(period205())}"></label>
+        <label>Estado<select id="obsStateV205"><option value="">Todos</option><option>DERIVADO</option><option>EN PROCESO</option><option>PENALIZADO</option><option>SUBSANADO</option><option>APELADO</option><option>ANULADO</option></select></label>
+        <label>Cuadrilla<select id="obsCrewV205"><option value="">Todas</option></select></label>
+        <label>Buscar<input type="search" id="obsSearchV205" placeholder="Código, ticket, descripción..."></label>
+      </div><div class="mvl205-summary" id="obsSummaryV205"></div><div class="mvl205-list" id="obsListV205"><div class="mvl205-empty">Cargando…</div></div>`;
+      ['obsPeriodV205','obsStateV205','obsCrewV205'].forEach(id=>$205(id)?.addEventListener('change',loadObservations205));
+      $205('obsSearchV205')?.addEventListener('input',renderObservations205);
+    }
+    if(!actions.dataset.ready){
+      actions.dataset.ready='1';
+      const refresh=document.createElement('button');refresh.className='mvl205-secondary';refresh.textContent='Actualizar';refresh.onclick=loadObservations205;actions.appendChild(refresh);
+      const add=document.createElement('button');add.id='newObservationV205';add.className='mvl205-primary';add.textContent='NUEVA OBSERVACIÓN';add.onclick=openObservationCreate205;actions.appendChild(add);
+    }
+    return view;
+  }
+
+  async function loadObservations205(){
+    const list=$205('obsListV205');if(list)list.innerHTML='<div class="mvl205-empty">Cargando observaciones…</div>';
+    try{
+      const res=await api('observationsList',{token:token205(),period:$205('obsPeriodV205')?.value||period205(),state:$205('obsStateV205')?.value||'',crewId:$205('obsCrewV205')?.value||''});
+      if(!res?.ok)throw new Error(res?.error||'No se pudo cargar.');
+      OBS205.data=res;fillCrewSelect205($205('obsCrewV205'),res.crews,'Todas');
+      $205('newObservationV205')?.classList.toggle('hidden',!res.canRegister);renderObservations205();
+    }catch(err){if(list)list.innerHTML=`<div class="mvl205-empty">${esc205(err.message)}</div>`;}
+  }
+
+  function evidenceLinks205(text){
+    const links=String(text||'').split('|').filter(Boolean);if(!links.length)return '';
+    return `<div class="mvl205-evidence-links">${links.map((x,i)=>`<a href="${esc205(x)}" target="_blank" rel="noopener">Evidencia ${i+1}</a>`).join('')}</div>`;
+  }
+
+  function renderObservations205(){
+    const res=OBS205.data;if(!res)return;const q=norm205($205('obsSearchV205')?.value||'');
+    const rows=(res.rows||[]).filter(r=>!q||norm205([r.code,r.ticket,r.description,r.crewCode,r.crewName].join(' ')).includes(q));
+    const total=rows.length,active=rows.filter(r=>!['SUBSANADO','ANULADO'].includes(norm205(r.state))).length,impact=rows.reduce((a,r)=>a+Number(r.impactAmount||0),0),pen=rows.filter(r=>norm205(r.state)==='PENALIZADO').length;
+    $205('obsSummaryV205').innerHTML=`<div><span>Observaciones</span><b>${total}</b></div><div><span>Activas</span><b>${active}</b></div><div><span>Penalizadas</span><b>${pen}</b></div><div><span>Impacto</span><b>S/ ${impact.toFixed(2)}</b></div>`;
+    const list=$205('obsListV205');if(!rows.length){list.innerHTML='<div class="mvl205-empty">No hay observaciones para los filtros seleccionados.</div>';return;}
+    list.innerHTML=rows.map(r=>`<article class="mvl205-card">
+      <div class="mvl205-card-head"><div><strong>${esc205(r.crewCode||r.crew)} · ${esc205(r.type)}</strong><small>${esc205(r.date)} · ${esc205(r.source)} · Código ${esc205(r.code)}</small></div><span class="mvl205-chip ${statusClass205(r.state)}">${esc205(r.state)}</span></div>
+      <div class="mvl205-meta"><span class="mvl205-chip">${esc205(r.platform)}</span>${r.ticket?`<span class="mvl205-chip blue">${esc205(r.ticket)}</span>`:''}${Number(r.amount||0)?`<span class="mvl205-chip">S/ ${Number(r.amount).toFixed(2)}</span>`:''}</div>
+      <p class="mvl205-desc">${esc205(r.description)}</p>
+      ${r.descargo?`<p class="mvl205-desc"><b>Descargo:</b> ${esc205(r.descargo)}</p>${evidenceLinks205(r.evidence)}`:''}
+      ${r.stateReason?`<p class="mvl205-desc"><b>Última revisión:</b> ${esc205(r.stateReason)}</p>`:''}
+      <div class="mvl205-card-actions">${res.canDescargo?`<button type="button" data-obs-descargo="${esc205(r.id)}">DESCARGO</button>`:''}${res.canEdit?`<button type="button" data-obs-state="${esc205(r.id)}">CAMBIAR ESTADO</button>`:''}</div>
+    </article>`).join('');
+    list.querySelectorAll('[data-obs-descargo]').forEach(b=>b.onclick=()=>openObservationDescargo205(b.dataset.obsDescargo));
+    list.querySelectorAll('[data-obs-state]').forEach(b=>b.onclick=()=>openObservationState205(b.dataset.obsState));
+  }
+
+  function openObservationCreate205(){
+    const crews=OBS205.data?.crews||[];
+    const body=`<div class="mvl205-form">
+      <label class="full">Cuadrilla<select id="obsNewCrewV205">${crewOptionsHtml205(crews,crews.length===1?crews[0].id:'')}</select></label>
+      <label>Fuente<select id="obsNewSourceV205"><option>WIN</option><option>VISUAL</option></select></label>
+      <label>Tipo<select id="obsNewTypeV205"><option>SEGURIDAD</option><option>IMPLEMENTACIÓN</option><option>GESTIÓN TÉCNICA</option><option>OTRO</option></select></label>
+      <label>Código<input id="obsNewCodeV205"></label><label>Monto S/<input id="obsNewAmountV205" type="number" min="0" step="0.01" value="0"></label>
+      <label>Código orden<input id="obsNewOrderV205"></label><label>Código cliente<input id="obsNewClientV205"></label>
+      <label class="full">Ticket atención<input id="obsNewTicketV205"></label>
+      <label class="full">Descripción<textarea id="obsNewDescriptionV205"></textarea></label>
+    </div>`;
+    simpleModal205('observationCreateModalV205','NUEVA OBSERVACIÓN','Registro operativo de la cuadrilla.',body,'Registrar',async(modal)=>{
+      const res=await api('observationsCreate',{token:token205(),period:$205('obsPeriodV205')?.value||period205(),crewId:modal.querySelector('#obsNewCrewV205').value,source:modal.querySelector('#obsNewSourceV205').value,type:modal.querySelector('#obsNewTypeV205').value,code:modal.querySelector('#obsNewCodeV205').value,amount:modal.querySelector('#obsNewAmountV205').value,orderCode:modal.querySelector('#obsNewOrderV205').value,clientCode:modal.querySelector('#obsNewClientV205').value,ticket:modal.querySelector('#obsNewTicketV205').value,description:modal.querySelector('#obsNewDescriptionV205').value,state:'DERIVADO'});
+      if(!res?.ok)throw new Error(res?.error||'No se pudo registrar.');await loadObservations205();
+    });
+  }
+
+  async function filesBase64205(fileList){
+    const files=[...(fileList||[])];if(files.length>5)throw new Error('Máximo 5 evidencias.');
+    return Promise.all(files.map(file=>new Promise((resolve,reject)=>{
+      if(file.size>3*1024*1024)return reject(new Error(`${file.name}: máximo 3 MB.`));
+      const reader=new FileReader();reader.onload=()=>resolve({nombre:file.name,mime:file.type||'image/jpeg',base64:String(reader.result||'').split(',')[1]||''});reader.onerror=()=>reject(new Error('No se pudo leer '+file.name));reader.readAsDataURL(file);
+    })));
+  }
+
+  function openObservationDescargo205(id){
+    const row=(OBS205.data?.rows||[]).find(r=>r.id===id);if(!row)return;
+    const body=`<div class="mvl205-form"><label class="full">Descargo<textarea id="obsDescargoTextV205">${esc205(row.descargo||'')}</textarea></label><label class="full">Evidencias (máx. 5 imágenes, 3 MB c/u)<input id="obsDescargoFilesV205" type="file" accept="image/jpeg,image/png,image/webp" multiple><div class="mvl205-file-note">JPG, PNG o WEBP.</div></label></div>`;
+    simpleModal205('observationDescargoModalV205','REGISTRAR DESCARGO',`${row.crewCode} · ${row.code}`,body,'Guardar descargo',async(modal,msg)=>{
+      msg.textContent='Preparando evidencias…';const evidences=await filesBase64205(modal.querySelector('#obsDescargoFilesV205').files);
+      const res=await api('observationsDescargo',{token:token205(),id,descargo:modal.querySelector('#obsDescargoTextV205').value,evidences:JSON.stringify(evidences)});
+      if(!res?.ok)throw new Error(res?.error||'No se pudo guardar.');await loadObservations205();
+    });
+  }
+
+  function openObservationState205(id){
+    const row=(OBS205.data?.rows||[]).find(r=>r.id===id);if(!row)return;
+    const body=`<div class="mvl205-form"><label class="full">Nuevo estado<select id="obsStateNewV205">${['DERIVADO','EN PROCESO','PENALIZADO','SUBSANADO','APELADO','ANULADO'].map(s=>`<option ${s===row.state?'selected':''}>${s}</option>`).join('')}</select></label><label class="full">Motivo del cambio<textarea id="obsStateReasonV205"></textarea></label></div>`;
+    simpleModal205('observationStateModalV205','CAMBIAR ESTADO',`${row.crewCode} · ${row.code}`,body,'Actualizar',async(modal)=>{
+      const res=await api('observationsUpdate',{token:token205(),id,state:modal.querySelector('#obsStateNewV205').value,reason:modal.querySelector('#obsStateReasonV205').value});
+      if(!res?.ok)throw new Error(res?.error||'No se pudo actualizar.');await loadObservations205();
+    });
+  }
+
+  async function openObservations205(){
+    installStyles205();hideAppViews205();observationsView205().classList.remove('hidden');await loadObservations205();
+  }
+
+  // -------------------------
+  // OBSERVACIONES EN DASHBOARD / TÉCNICO
+  // -------------------------
+  function obsStatusInfo205(s){
+    const n=norm205(s);if(n==='CUMPLE')return{cls:'green',label:'Óptimo'};if(n==='ATENCION')return{cls:'yellow',label:'Moderado'};return{cls:'red',label:'Crítico'};
+  }
+
+  function filtersRows205(rows){
+    const f={visual:$205('dashboardVisualTypeV19')?.value||'',platform:$205('dashboardPlatformV19')?.value||'',composition:$205('dashboardCompositionV19')?.value||'',state:$205('dashboardStateV19')?.value||'',supervisor:$205('dashboardSupervisor')?.value||'',crew:$205('dashboardCrew')?.value||''};
+    return (rows||[]).filter(r=>{
+      if(f.visual&&norm205(r.visualType)!==norm205(f.visual))return false;if(f.platform&&norm205(r.platform)!==norm205(f.platform))return false;if(f.composition&&norm205(r.composition)!==norm205(f.composition))return false;if(f.state&&norm205(r.state)!==norm205(f.state))return false;
+      if(f.supervisor){if(f.supervisor==='__GG__'){if(norm205(r.supervisor)!=='GG'&&r.supervisorId!=='__GG__')return false;}else if(String(r.supervisorId||'')!==String(f.supervisor))return false;}
+      if(f.crew&&String(r.crewId)!==String(f.crew))return false;return true;
+    });
+  }
+
+  function renderDashboardObs205(){
+    if(!V205.dashboard?.ok)return;const rows=filtersRows205(V205.dashboard.rows);const count=rows.reduce((a,r)=>a+Number(r.observationsCount||0),0),active=rows.reduce((a,r)=>a+Number(r.observationsActive||0),0),impact=rows.reduce((a,r)=>a+Number(r.observationsImpact||0),0),avg=rows.length?count/rows.length:0;
+    const card=$205('dashboardObsCardV205');if(!card)return;const strong=$205('dashboardTotalObsV205'),small=$205('dashboardTotalObsHelpV205');if(strong)strong.textContent=`${count} obs.`;if(small)small.textContent=`${active} activas · S/ ${impact.toFixed(2)} impacto · ${avg.toFixed(1)}/cuadrilla`;
+    card.querySelector('.mvl-v205-obs-badge')?.remove();const cfg=V205.dashboard.indicatorConfigs?.[$205('dashboardVisualTypeV19')?.value||'TODOS']||V205.dashboard.indicatorConfig||{};const o=cfg.observations||{optimalMax:0,moderateMax:1};const st=avg<=Number(o.optimalMax??0)?'CUMPLE':avg<=Number(o.moderateMax??1)?'ATENCION':'CRITICO';const info=obsStatusInfo205(st);card.insertAdjacentHTML('beforeend',`<span class="mvl-v205-obs-badge ${info.cls}">${info.label}</span>`);
+  }
+
+  function ensureTechObsCard205(rootId='performanceTechPanel'){
+    const root=$205(rootId);if(!root)return null;let card=[...root.querySelectorAll('.performance-card')].find(c=>norm205(c.querySelector('.performance-label')?.textContent).includes('OBSERV'));
+    if(card)return card;const grid=root.querySelector('.performance-grid');if(!grid)return null;card=document.createElement('article');card.className='performance-card';card.innerHTML='<span class="performance-label">Observaciones</span><strong>—</strong><small>Sin datos</small>';grid.appendChild(card);window.refreshIndicatorDetailButtonsV204?.();return card;
+  }
+
+  function renderTechObs205(){
+    if(!V205.tech?.ok)return;const s=V205.tech.summary||{},card=ensureTechObsCard205('performanceTechPanel');if(!card)return;card.classList.remove('under-construction');card.querySelector('strong').textContent=`${Number(s.observationsCount||0)} obs.`;let small=card.querySelector('small');small.textContent=`${Number(s.observationsActive||0)} activas · S/ ${Number(s.observationsImpact||0).toFixed(2)} impacto`;card.querySelector('.mvl-v205-obs-badge')?.remove();const info=obsStatusInfo205(s.observationsStatus||'CUMPLE');card.insertAdjacentHTML('beforeend',`<span class="mvl-v205-obs-badge ${info.cls}">${info.label}</span>`);window.refreshIndicatorDetailButtonsV204?.();
+  }
+
+  // Dashboard detalle de cuadrilla: se actualiza cuando performanceSummary se pide para una cuadrilla.
+  function renderDashboardCrewObs205(){
+    const s=V205.tech?.summary;if(!s)return;const root=$205('dashboardCrewDetail');if(!root||root.classList.contains('hidden'))return;const card=[...root.querySelectorAll('.performance-card')].find(c=>norm205(c.querySelector('.performance-label')?.textContent).includes('OBSERV'));if(!card)return;card.classList.remove('under-construction');card.querySelector('strong').textContent=`${Number(s.observationsCount||0)} obs.`;let small=card.querySelector('small');if(!small){small=document.createElement('small');card.appendChild(small);}small.textContent=`${Number(s.observationsActive||0)} activas · S/ ${Number(s.observationsImpact||0).toFixed(2)} impacto`;window.refreshIndicatorDetailButtonsV204?.();
+  }
+
+  // -------------------------
+  // OBSERVACIONES EN PONER INDICADORES
+  // -------------------------
+  function ensureObsConfig205(){
+    const modal=$205('indicatorConfigModalV113');if(!modal||modal.dataset.v205Obs==='1')return;
+    const goals=$205('cfgGoalsPanelV123'),ind=$205('cfgIndicatorsPanelV123');if(!goals||!ind)return;
+    [...goals.querySelectorAll('.mvl-v124-pending-goal')].forEach(r=>{if(norm205(r.textContent).includes('OBSERV'))r.remove();});
+    [...ind.querySelectorAll('.mvl-v113-construction-item')].forEach(r=>{if(norm205(r.textContent).includes('OBSERV'))r.remove();});
+    const goal=document.createElement('section');goal.className='mvl-v124-goal-card mvl-v205-obs-config';goal.innerHTML=`<h4>Observaciones</h4><div class="mvl-v113-config-grid"><label class="mvl-v113-field">Meta máxima ÓPTIMA · cantidad<input id="cfgObsOptimalV205" type="number" min="0" max="1000" step="1"></label></div><div class="mvl-v124-goal-note">Cantidad máxima de observaciones por cuadrilla para mantener nivel ÓPTIMO.</div>`;goals.appendChild(goal);
+    const sem=document.createElement('section');sem.className='mvl-v113-config-section';sem.innerHTML=`<h4>Semáforo de Observaciones</h4><div class="mvl-v113-config-grid"><label class="mvl-v113-field">Máximo MODERADO · cantidad<input id="cfgObsModerateV205" type="number" min="0" max="1000" step="1"></label></div><div class="mvl-v114-levels"><div class="mvl-v114-level green"><strong>🟢 ÓPTIMO</strong><span id="cfgObsRangeGreenV205">—</span></div><div class="mvl-v114-level yellow"><strong>🟡 MODERADO</strong><span id="cfgObsRangeYellowV205">—</span></div><div class="mvl-v114-level red"><strong>🔴 CRÍTICO</strong><span id="cfgObsRangeRedV205">—</span></div></div>`;ind.appendChild(sem);
+    ['cfgObsOptimalV205','cfgObsModerateV205'].forEach(id=>$205(id)?.addEventListener('input',updateObsRanges205));modal.dataset.v205Obs='1';
+  }
+
+  function updateObsRanges205(){
+    const o=Number($205('cfgObsOptimalV205')?.value),m=Number($205('cfgObsModerateV205')?.value);if($205('cfgObsRangeGreenV205'))$205('cfgObsRangeGreenV205').textContent=Number.isFinite(o)?`0 a ${o}`:'—';if($205('cfgObsRangeYellowV205'))$205('cfgObsRangeYellowV205').textContent=Number.isFinite(o)&&Number.isFinite(m)?`>${o} a ${m}`:'—';if($205('cfgObsRangeRedV205'))$205('cfgObsRangeRedV205').textContent=Number.isFinite(m)?`>${m}`:'—';
+  }
+
+  function fillObsConfig205(cfg){
+    ensureObsConfig205();const o=cfg?.observations||{};if($205('cfgObsOptimalV205'))$205('cfgObsOptimalV205').value=Number(o.optimalMax??0);if($205('cfgObsModerateV205'))$205('cfgObsModerateV205').value=Number(o.moderateMax??1);updateObsRanges205();
+  }
+
+
+  function observationConfig205(){
+    const type=norm205($205('dashboardVisualTypeV19')?.value||'TODOS')||'TODOS';
+    return V205.dashboard?.indicatorConfigs?.[type]?.observations
+      || V205.dashboard?.indicatorConfigs?.TODOS?.observations
+      || V205.dashboard?.indicatorConfig?.observations
+      || {optimalMax:0,moderateMax:1};
+  }
+
+  function renderSupervisorObservations205(){
+    if(!V205.dashboard?.ok) return;
+    const compare=$205('dashboardCompareByV116')?.value||'CUADRILLAS';
+    const indicator=$205('dashboardIndicator')?.value||'PRODUCCION';
+    if(compare!=='SUPERVISORES') return;
+
+    const rows=filtersRows205(V205.dashboard.rows);
+    const list=$205('dashboardRankingList');
+    const title=$205('dashboardRankingTitle');
+    const help=$205('dashboardRankingHelp');
+    if(!list) return;
+
+    const groups=new Map();
+    rows.forEach(r=>{
+      const name=norm205(r.supervisor)==='GG'||r.supervisorId==='__GG__'?'GG':(r.supervisor||'Sin supervisor');
+      if(!groups.has(name)) groups.set(name,{name,crews:0,count:0,active:0,impact:0});
+      const g=groups.get(name);g.crews++;g.count+=Number(r.observationsCount||0);g.active+=Number(r.observationsActive||0);g.impact+=Number(r.observationsImpact||0);
+    });
+
+    if(indicator==='OBSERVACIONES'){
+      const cfg=observationConfig205();
+      const arr=[...groups.values()].sort((a,b)=>(a.count-b.count)||a.name.localeCompare(b.name,'es'));
+      if(title)title.textContent='Ranking de Supervisores · Observaciones';
+      if(help)help.textContent='Menor cantidad de observaciones primero. El semáforo usa el promedio por cuadrilla.';
+      list.innerHTML=arr.length?arr.map((g,i)=>{
+        const avg=g.crews?g.count/g.crews:0;
+        const st=avg<=Number(cfg.optimalMax??0)?'CUMPLE':avg<=Number(cfg.moderateMax??1)?'ATENCION':'CRITICO';
+        const info=obsStatusInfo205(st);
+        return `<div class="mvl-v126-supervisor-all">
+          <div class="mvl-v126-supervisor-head"><strong>#${i+1} · ${esc205(g.name)}</strong><small>${g.crews} cuadrilla${g.crews===1?'':'s'}</small></div>
+          <div class="mvl-v126-kpi-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+            <div><span>Observaciones</span><b>${g.count} obs.</b><span class="mvl-v113-status ${info.cls}">${info.label}</span></div>
+            <div><span>Activas</span><b>${g.active}</b></div>
+            <div><span>Impacto</span><b>S/ ${g.impact.toFixed(2)}</b></div>
+          </div>
+        </div>`;
+      }).join(''):'<p class="empty">No hay Supervisores para los filtros seleccionados.</p>';
+      return;
+    }
+
+    if(indicator==='ALL'){
+      document.querySelectorAll('#dashboardRankingList .mvl-v126-supervisor-all').forEach(card=>{
+        const name=card.querySelector('.mvl-v126-supervisor-head strong')?.textContent?.replace(/^#\d+\s*·\s*/,'').trim();
+        const g=groups.get(name);const grid=card.querySelector('.mvl-v126-kpi-grid');if(!g||!grid)return;
+        let cell=grid.querySelector('[data-v205-obs-supervisor]');
+        if(!cell){cell=document.createElement('div');cell.dataset.v205ObsSupervisor='1';grid.appendChild(cell);}
+        cell.innerHTML=`<span>Observaciones</span><b>${g.count} obs.</b><small>${g.active} activas</small>`;
+        grid.style.gridTemplateColumns='repeat(5,minmax(0,1fr))';
+      });
+    }
+  }
+
+  // -------------------------
+  // API WRAPPER / EVENTOS
+  // -------------------------
+  function wrapApi205(){
+    if(V205.apiWrapped||typeof api!=='function')return false;V205.apiWrapped=true;const prev=api;
+    api=async function(action,params={}){
+      const result=await prev(action,params);
+      if(action==='performanceDashboard'&&result?.ok){V205.dashboard=result;Object.entries(result.indicatorConfigs||{}).forEach(([k,v])=>V205.configByType.set(norm205(k),v));setTimeout(()=>{renderDashboardObs205();renderSupervisorObservations205();},55);}
+      if(action==='performanceSummary'&&result?.ok){V205.tech=result;setTimeout(()=>{renderTechObs205();renderDashboardCrewObs205();},45);}
+      if((action==='performanceIndicatorConfigGet'||action==='performanceIndicatorConfigSave')&&result?.ok&&result.config){V205.configByType.set(norm205(result.config.visualType||params.visualType||'TODOS'),result.config);setTimeout(()=>fillObsConfig205(result.config),0);}
+      return result;
+    };return true;
+  }
+
+  document.addEventListener('click',e=>{
+    const card=e.target?.closest?.('#moduleList [data-module]');
+    if(card){
+      const name=card.dataset.module;if(name==='Validación Técnica'){e.preventDefault();e.stopImmediatePropagation();openValidation205();return;}
+      if(name==='Observaciones'){e.preventDefault();e.stopImmediatePropagation();openObservations205();return;}
+    }
+    if(e.target?.closest?.('#putIndicatorsButtonV113'))setTimeout(()=>{ensureObsConfig205();const type=norm205($205('cfgVisualTypeV114')?.value||'TODOS');fillObsConfig205(V205.configByType.get(type)||V205.dashboard?.indicatorConfigs?.[type]||V205.dashboard?.indicatorConfig);},10);
+  },true);
+
+  document.addEventListener('change',e=>{
+    const id=e.target?.id||'';if(['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19','dashboardSupervisor','dashboardCrew','dashboardIndicator','dashboardCompareByV116'].includes(id))setTimeout(()=>{renderDashboardObs205();renderSupervisorObservations205();},70);
+    if(id==='cfgVisualTypeV114')setTimeout(()=>{const type=norm205(e.target.value||'TODOS');fillObsConfig205(V205.configByType.get(type)||V205.dashboard?.indicatorConfigs?.[type]||V205.dashboard?.indicatorConfig);},100);
+  },true);
+
+  function init205(){
+    installStyles205();moduleCardWatcher205();activateCards205();wrapApi205();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init205,200),{once:true});else setTimeout(init205,200);
+  const timer=setInterval(()=>{activateCards205();if(wrapApi205()&&$205('moduleList'))clearInterval(timer);},300);
+  setTimeout(()=>clearInterval(timer),10000);
+
+  console.info('[MI VISUAL LIMA] V2.05: Validación Técnica + Observaciones activos.');
+})();

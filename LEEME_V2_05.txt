@@ -1,0 +1,188 @@
+MI VISUAL LIMA - V2.05
+VALIDACIÓN TÉCNICA + OBSERVACIONES
+
+BASE
+Esta versión parte de V2.04 y conserva:
+- Dashboard V1.27
+- Mapa Operativo
+- SLA y TIEMPOS SLA
+- Detalle por indicador
+- Administración / Usuarios / Cuadrillas
+- Optimización de carga
+
+==================================================
+1. VALIDACIÓN TÉCNICA
+==================================================
+Módulo activo desde Inicio.
+
+TIPOS:
+- RECABLEADO
+- GAR
+- VTR
+- OTRO / NO APLICA
+
+TICKETS:
+- AT- -> RECABLEADO
+- VTEXT- -> RECABLEADO
+- GAR- -> GAR
+- VTR- -> VTR
+- NO APLICA -> OTRO
+
+RECABLEADO
+- Técnico puede registrar.
+- Supervisor puede validar dentro de sus cuadrillas.
+- Jefatura de Calidad, Jefatura de Operaciones y Administrador pueden validar.
+- Resultado:
+  APROBADO / RECHAZADO / OBSERVADO.
+- Si pasan 15 minutos sin respuesta:
+  SIN RESPUESTA + APROBADO AUTOMATICAMENTE.
+- Para el Técnico se visualiza como APROBADO / VALIDACIÓN AUTOMÁTICA.
+
+GAR / VTR
+- Se exige ORIGEN DE ORDEN:
+  PROPIA / ASIGNADA.
+- Resolución:
+  BONO / NO BONO.
+- GAR/VTR no puede ser resuelto por Supervisor.
+
+ALCANCE
+- Técnico: su cuadrilla.
+- Supervisor: cuadrillas asignadas.
+- Back / Jefaturas / Gerencia / Administrador: según alcance y permisos actuales.
+
+==================================================
+2. OBSERVACIONES
+==================================================
+Módulo activo desde Inicio.
+
+REGISTRO
+- Cuadrilla
+- Fuente WIN / VISUAL
+- Código
+- Tipo:
+  SEGURIDAD
+  IMPLEMENTACIÓN
+  GESTIÓN TÉCNICA
+  OTRO
+- Descripción
+- Monto
+- Código orden
+- Código cliente
+- Ticket
+
+ESTADOS
+- DERIVADO
+- EN PROCESO
+- PENALIZADO
+- SUBSANADO
+- APELADO
+- ANULADO
+
+DESCARGO
+- Técnico ve observaciones de su cuadrilla.
+- Puede registrar descargo.
+- Máximo 5 evidencias.
+- JPG / PNG / WEBP.
+- Evidencias se guardan en Drive:
+  MI VISUAL LIMA - ARCHIVOS / OBSERVACIONES - EVIDENCIAS
+
+REVISIÓN
+Los perfiles con permiso EDITAR pueden cambiar estado.
+El motivo del cambio es obligatorio.
+
+==================================================
+3. OBSERVACIONES EN DASHBOARD
+==================================================
+Observaciones deja de estar En construcción.
+
+DASHBOARD:
+- Total observaciones.
+- Observaciones activas.
+- Impacto económico.
+- Promedio por cuadrilla.
+- Ranking por cuadrilla.
+- Comparación por Supervisores.
+- Todos los indicadores.
+- Mi Desempeño del Técnico.
+- Detalle por día / cliente.
+
+SEMÁFORO INICIAL:
+- ÓPTIMO: 0 observaciones por cuadrilla.
+- MODERADO: 1 observación.
+- CRÍTICO: más de 1.
+
+PONER INDICADORES:
+La meta y el máximo Moderado de Observaciones son editables.
+También pueden configurarse por:
+TODOS / PDG / PLANILLA / PRODUCCIÓN / DISPONIBILIDAD.
+
+El monto de impacto mantiene la regla heredada de MI VISUAL:
+- SUBSANADO / ANULADO: 20% del monto.
+- Otros estados: 100%.
+
+==================================================
+4. CAMBIOS HECHOS DIRECTAMENTE EN GOOGLE SHEETS
+==================================================
+NO CREAR ESTAS HOJAS NUEVAMENTE.
+
+Ya existen:
+- VALIDACION_TECNICA
+- OBSERVACIONES
+- RESUMEN_OBSERVACIONES
+- ACTIVIDAD_CAMPO
+- CHECKLIST_ALMACEN
+- HERRAMIENTAS_DETALLE
+- CATALOGO_HERRAMIENTAS
+- ACTAS_ESCANEADAS
+- CARGOS_ACTAS
+- PROGRAMACION_DESCANSOS
+
+PERMISOS ACTUALIZADOS:
+- Técnico / Validación Técnica / REGISTRAR = SI
+- Supervisor / Validación Técnica / VALIDAR = SI
+
+CONFIG:
+- VALIDACION_RECABLEADO_AUTO_MIN = 15
+- OBSERVACIONES_PLAZO_HORAS = 24
+- CARPETA_ARCHIVOS_ID configurada
+- CARPETA_OBSERVACIONES_ID configurada
+
+CONFIG_DESEMPENO:
+- OBSERVACIONES activo.
+- OBSERVACIONES_OPTIMO_HASTA = 0
+- OBSERVACIONES_MODERADO_HASTA = 1
+
+==================================================
+5. ORDEN DE ACTUALIZACIÓN
+==================================================
+PASO 1 - APPS SCRIPT
+- Reemplazar Code.gs por Code_V2_05_VALIDACION_OBSERVACIONES.gs
+- Guardar
+- Implementar -> Administrar implementaciones
+- Editar implementación existente
+- Crear NUEVA VERSIÓN
+- Mantener la misma URL
+
+PASO 2 - GITHUB
+- Subir TODO el contenido del ZIP GITHUB COMPLETO
+- Reemplazar los archivos existentes
+- No borrar archivos adicionales del repositorio
+- Esperar GitHub Pages = Éxito
+
+PASO 3
+- Cerrar la pestaña anterior
+- Abrir MI VISUAL LIMA nuevamente
+- Preferible cerrar sesión e ingresar otra vez para refrescar PERMISOS
+
+PRUEBA RECOMENDADA
+1. Administrador -> Observaciones -> registrar 1 observación.
+2. Técnico de esa cuadrilla -> Observaciones -> registrar descargo.
+3. Administrador/Supervisor -> cambiar estado.
+4. Dashboard -> confirmar que Observaciones ya muestra datos.
+5. Técnico -> Validación Técnica -> registrar RECABLEADO.
+6. Supervisor -> resolver RECABLEADO.
+7. Probar GAR/VTR con Jefatura.
+
+SIGUIENTE BLOQUE DESPUÉS DE VALIDAR V2.05
+- Actividad en Campo
+- Checklist
