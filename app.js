@@ -2312,10 +2312,14 @@
 
     if (!canEditIndicators113()) {
       existing?.remove();
+      window.ensureSlaParamsButtonV203?.(false);
       return;
     }
 
-    if (existing) return;
+    if (existing) {
+      window.ensureSlaParamsButtonV203?.(true);
+      return;
+    }
 
     const loading = document.getElementById('dashboardSummaryLoadingV112');
     let actions = head.querySelector('.mvl-v113-summary-actions');
@@ -2336,6 +2340,7 @@
     button.addEventListener('click', openConfig113);
 
     actions.insertBefore(button, loading || null);
+    window.ensureSlaParamsButtonV203?.(true);
   }
 
   function dashboardCacheKey115(params = {}) {
@@ -6589,3 +6594,1142 @@ console.info('[MI VISUAL LIMA] V2.00: Mapa Operativo + Tiempo de gestión / SLA 
 console.info('[MI VISUAL LIMA] V2.01 DEFINITIVA: arranque no bloqueante + núcleo cacheado + mapa diferido.');
 
 console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en mapa.');
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.03
+   EDITAR TIEMPOS SLA DESDE DASHBOARD
+   ========================================================== */
+(() => {
+  const $203 = id => document.getElementById(id);
+  const esc203 = value => String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+
+  const SLA203 = {
+    parameters: [],
+    catalog: [],
+    originalMinutes: new Map(),
+    loading: false
+  };
+
+  function installSlaParamStyles203() {
+    if ($203('mvlV203SlaParamStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'mvlV203SlaParamStyles';
+    style.textContent = `
+      .mvl-v203-sla-button{
+        border:1px solid #9cc8f7;
+        background:#eef6ff;
+        color:#0758b7;
+        border-radius:10px;
+        min-height:36px;
+        padding:7px 12px;
+        font-size:.68rem;
+        font-weight:900;
+        white-space:nowrap;
+      }
+      .mvl-v203-sla-button:hover{background:#e3f0ff}
+
+      .mvl-v203-overlay{
+        position:fixed;
+        inset:0;
+        z-index:99999;
+        background:rgba(15,35,58,.42);
+        display:flex;
+        justify-content:center;
+        align-items:center;
+        padding:18px;
+      }
+      .mvl-v203-overlay.hidden{display:none!important}
+
+      .mvl-v203-modal{
+        width:min(920px,96vw);
+        max-height:92vh;
+        display:flex;
+        flex-direction:column;
+        background:#fff;
+        border-radius:18px;
+        box-shadow:0 24px 70px rgba(15,35,58,.24);
+        overflow:hidden;
+      }
+
+      .mvl-v203-head{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:14px;
+        padding:16px 18px 13px;
+        border-bottom:1px solid #e2ebf5;
+      }
+      .mvl-v203-head h3{
+        margin:0;
+        color:#082f5b;
+        font-size:1rem;
+      }
+      .mvl-v203-head p{
+        margin:4px 0 0;
+        color:#667b92;
+        font-size:.70rem;
+      }
+      .mvl-v203-close{
+        width:34px;
+        height:34px;
+        border:0;
+        border-radius:10px;
+        background:#eef3f8;
+        color:#24496f;
+        font-weight:900;
+        font-size:1rem;
+      }
+
+      .mvl-v203-body{
+        overflow:auto;
+        padding:14px 18px 16px;
+      }
+
+      .mvl-v203-toolbar{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:9px;
+        align-items:end;
+        margin-bottom:11px;
+      }
+      .mvl-v203-toolbar label{
+        color:#536a84;
+        font-size:.66rem;
+        font-weight:800;
+      }
+      .mvl-v203-toolbar input{
+        width:100%;
+        margin-top:4px;
+        min-height:38px;
+        padding:8px 10px;
+        border:1px solid #c9d9ea;
+        border-radius:10px;
+        font:inherit;
+      }
+      .mvl-v203-count{
+        padding:8px 10px;
+        border-radius:999px;
+        background:#eef6ff;
+        color:#0758b7;
+        font-size:.65rem;
+        font-weight:850;
+      }
+
+      .mvl-v203-add{
+        padding:11px;
+        border:1px solid #d9e6f3;
+        border-radius:13px;
+        background:#f8fbff;
+        margin-bottom:12px;
+      }
+      .mvl-v203-add-title{
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:center;
+        margin-bottom:8px;
+      }
+      .mvl-v203-add-title strong{
+        color:#123b68;
+        font-size:.75rem;
+      }
+      .mvl-v203-add-grid{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) 150px auto;
+        gap:8px;
+      }
+      .mvl-v203-add select,
+      .mvl-v203-add input{
+        min-height:38px;
+        width:100%;
+        border:1px solid #c9d9ea;
+        border-radius:10px;
+        padding:7px 9px;
+        background:#fff;
+      }
+      .mvl-v203-add button{
+        border:0;
+        border-radius:10px;
+        padding:7px 14px;
+        background:#1264c5;
+        color:#fff;
+        font-weight:850;
+      }
+
+      .mvl-v203-message{
+        min-height:18px;
+        margin:7px 0;
+        color:#667b92;
+        font-size:.68rem;
+        font-weight:750;
+      }
+      .mvl-v203-message.error{color:#b42318}
+      .mvl-v203-message.ok{color:#157347}
+
+      .mvl-v203-list{
+        display:grid;
+        gap:7px;
+      }
+      .mvl-v203-row{
+        display:grid;
+        grid-template-columns:74px minmax(0,1fr) 120px;
+        gap:10px;
+        align-items:center;
+        padding:10px 11px;
+        border:1px solid #e0e9f3;
+        border-radius:12px;
+        background:#fff;
+      }
+      .mvl-v203-code{
+        color:#0758b7;
+        font-size:.70rem;
+        font-weight:900;
+      }
+      .mvl-v203-part strong{
+        display:block;
+        color:#12395f;
+        font-size:.72rem;
+        line-height:1.25;
+      }
+      .mvl-v203-part small{
+        display:block;
+        margin-top:3px;
+        color:#8190a2;
+        font-size:.60rem;
+      }
+      .mvl-v203-minutes{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:5px;
+        align-items:center;
+      }
+      .mvl-v203-minutes input{
+        width:100%;
+        min-width:0;
+        height:36px;
+        padding:7px 8px;
+        border:1px solid #bfd1e4;
+        border-radius:9px;
+        text-align:right;
+        font-weight:900;
+        color:#0d3561;
+      }
+      .mvl-v203-minutes span{
+        color:#667b92;
+        font-size:.62rem;
+        font-weight:800;
+      }
+
+      .mvl-v203-footer{
+        display:flex;
+        justify-content:flex-end;
+        gap:9px;
+        padding:12px 18px;
+        border-top:1px solid #e2ebf5;
+        background:#fbfdff;
+      }
+      .mvl-v203-footer button{
+        min-height:38px;
+        border-radius:10px;
+        padding:8px 14px;
+        font-weight:900;
+      }
+      .mvl-v203-cancel{
+        border:1px solid #cbd9e7;
+        background:#fff;
+        color:#395875;
+      }
+      .mvl-v203-save{
+        border:0;
+        background:#1264c5;
+        color:#fff;
+      }
+
+      @media(max-width:620px){
+        .mvl-v203-toolbar{grid-template-columns:1fr}
+        .mvl-v203-add-grid{grid-template-columns:1fr}
+        .mvl-v203-row{
+          grid-template-columns:60px minmax(0,1fr);
+        }
+        .mvl-v203-minutes{
+          grid-column:1/-1;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function token203() {
+    try { return typeof token === 'function' ? token() : ''; }
+    catch (_) { return ''; }
+  }
+
+  function currentPeriod203() {
+    return $203('dashboardPeriod')?.value || '2026-08';
+  }
+
+  function setMsg203(text='', type='') {
+    const el=$203('slaParamMessageV203');
+    if(!el) return;
+    el.textContent=text;
+    el.className='mvl-v203-message' + (type ? ' ' + type : '');
+  }
+
+  function createModal203() {
+    if ($203('slaParamsModalV203')) return;
+    installSlaParamStyles203();
+
+    const overlay=document.createElement('div');
+    overlay.id='slaParamsModalV203';
+    overlay.className='mvl-v203-overlay hidden';
+    overlay.innerHTML=`
+      <section class="mvl-v203-modal" role="dialog" aria-modal="true">
+        <header class="mvl-v203-head">
+          <div>
+            <h3>PARÁMETROS SLA / TIEMPOS DE GESTIÓN</h3>
+            <p>Edita los minutos permitidos por tipo de partida. Los cambios recalculan el periodo seleccionado.</p>
+          </div>
+          <button type="button" class="mvl-v203-close" id="slaParamCloseV203">×</button>
+        </header>
+
+        <div class="mvl-v203-body">
+          <div class="mvl-v203-toolbar">
+            <label>
+              Buscar partida
+              <input id="slaParamSearchV203" type="search" placeholder="Ej. traslado, recableado, T0023...">
+            </label>
+            <span class="mvl-v203-count" id="slaParamCountV203">0 partidas</span>
+          </div>
+
+          <section class="mvl-v203-add" id="slaParamAddWrapV203">
+            <div class="mvl-v203-add-title">
+              <strong>Agregar parámetro para una partida nueva</strong>
+            </div>
+            <div class="mvl-v203-add-grid">
+              <select id="slaParamNewTariffV203">
+                <option value="">Seleccionar partida sin SLA</option>
+              </select>
+              <input id="slaParamNewMinutesV203" type="number" min="1" max="1440" step="1" placeholder="Minutos">
+              <button type="button" id="slaParamAddButtonV203">Agregar</button>
+            </div>
+          </section>
+
+          <div class="mvl-v203-message" id="slaParamMessageV203"></div>
+          <div class="mvl-v203-list" id="slaParamListV203"></div>
+        </div>
+
+        <footer class="mvl-v203-footer">
+          <button type="button" class="mvl-v203-cancel" id="slaParamCancelV203">Cancelar</button>
+          <button type="button" class="mvl-v203-save" id="slaParamSaveV203">Guardar tiempos SLA</button>
+        </footer>
+      </section>`;
+
+    document.body.appendChild(overlay);
+
+    const close=()=>overlay.classList.add('hidden');
+    $203('slaParamCloseV203')?.addEventListener('click',close);
+    $203('slaParamCancelV203')?.addEventListener('click',close);
+    overlay.addEventListener('click',e=>{
+      if(e.target===overlay) close();
+    });
+
+    $203('slaParamSearchV203')?.addEventListener('input',renderRows203);
+    $203('slaParamAddButtonV203')?.addEventListener('click',addLocalParam203);
+    $203('slaParamSaveV203')?.addEventListener('click',saveParams203);
+  }
+
+  function renderAddOptions203() {
+    const select=$203('slaParamNewTariffV203');
+    const wrap=$203('slaParamAddWrapV203');
+    if(!select||!wrap) return;
+
+    const current=new Set(SLA203.parameters.map(p=>String(p.idTarifa||'')));
+    const missing=(SLA203.catalog||[]).filter(c=>c.idTarifa&&!current.has(String(c.idTarifa)));
+
+    select.innerHTML='<option value="">Seleccionar partida sin SLA</option>' +
+      missing.map(c=>`<option value="${esc203(c.idTarifa)}">${esc203(c.idTarifa)} · ${esc203(c.tipoPartida)}</option>`).join('');
+
+    wrap.style.display=missing.length?'block':'none';
+  }
+
+  function renderRows203() {
+    const list=$203('slaParamListV203');
+    if(!list) return;
+
+    const q=String($203('slaParamSearchV203')?.value||'').trim().toUpperCase();
+
+    const rows=SLA203.parameters
+      .filter(p=>{
+        if(!q) return true;
+        return [p.idTarifa,p.tipoPartida,p.clasificacion]
+          .join(' ')
+          .toUpperCase()
+          .includes(q);
+      })
+      .sort((a,b)=>String(a.idTarifa).localeCompare(String(b.idTarifa),'es',{numeric:true}));
+
+    const count=$203('slaParamCountV203');
+    if(count) count.textContent=`${rows.length} partida${rows.length===1?'':'s'}`;
+
+    if(!rows.length){
+      list.innerHTML='<p class="empty">No hay partidas que coincidan con la búsqueda.</p>';
+      return;
+    }
+
+    list.innerHTML=rows.map(p=>`
+      <article class="mvl-v203-row">
+        <div class="mvl-v203-code">${esc203(p.idTarifa)}</div>
+        <div class="mvl-v203-part">
+          <strong>${esc203(p.tipoPartida)}</strong>
+          <small>${esc203(p.clasificacion||'')} ${p.fuente ? '· '+esc203(p.fuente) : ''}</small>
+        </div>
+        <label class="mvl-v203-minutes">
+          <input
+            type="number"
+            min="1"
+            max="1440"
+            step="1"
+            data-sla-tariff="${esc203(p.idTarifa)}"
+            value="${esc203(p.slaMinutes)}"
+          >
+          <span>min</span>
+        </label>
+      </article>
+    `).join('');
+  }
+
+  async function loadParams203() {
+    setMsg203('Cargando tiempos SLA…');
+    const res=await api('slaParametersGet',{token:token203()});
+    if(!res?.ok) throw new Error(res?.error||'No se pudieron cargar los parámetros SLA.');
+
+    SLA203.parameters=(res.parameters||[]).map(p=>({...p}));
+    SLA203.catalog=(res.catalog||[]).map(c=>({...c}));
+    SLA203.originalMinutes=new Map(
+      SLA203.parameters.map(p=>[String(p.idTarifa),Number(p.slaMinutes)])
+    );
+
+    renderAddOptions203();
+    renderRows203();
+    setMsg203('');
+  }
+
+  async function openParams203() {
+    createModal203();
+    const modal=$203('slaParamsModalV203');
+    modal?.classList.remove('hidden');
+
+    if(SLA203.loading) return;
+    SLA203.loading=true;
+
+    try {
+      await loadParams203();
+    } catch(err) {
+      setMsg203(err.message||'No se pudieron cargar los tiempos SLA.','error');
+    } finally {
+      SLA203.loading=false;
+    }
+  }
+
+  function addLocalParam203() {
+    const tariff=$203('slaParamNewTariffV203')?.value||'';
+    const minutes=Number($203('slaParamNewMinutesV203')?.value);
+
+    if(!tariff){
+      setMsg203('Selecciona una partida para agregar.','error');
+      return;
+    }
+    if(!Number.isFinite(minutes)||minutes<=0||minutes>1440){
+      setMsg203('Ingresa un tiempo SLA válido en minutos.','error');
+      return;
+    }
+
+    const catalog=SLA203.catalog.find(c=>String(c.idTarifa)===String(tariff));
+    if(!catalog){
+      setMsg203('No se encontró esa partida en el catálogo.','error');
+      return;
+    }
+
+    if(SLA203.parameters.some(p=>String(p.idTarifa)===String(tariff))){
+      setMsg203('Esa partida ya tiene parámetro SLA.','error');
+      return;
+    }
+
+    SLA203.parameters.push({
+      idTarifa:tariff,
+      tipoPartida:catalog.tipoPartida,
+      clasificacion:catalog.grupo||catalog.plataforma||'',
+      slaMinutes:minutes,
+      estado:'ACTIVO',
+      fuente:'APP_MI_VISUAL_LIMA',
+      isNew:true
+    });
+
+    $203('slaParamNewTariffV203').value='';
+    $203('slaParamNewMinutesV203').value='';
+    renderAddOptions203();
+    renderRows203();
+    setMsg203('Partida agregada. Pulsa Guardar tiempos SLA para confirmar.','ok');
+  }
+
+  function collectChanges203() {
+    const inputMap=new Map();
+    document.querySelectorAll('[data-sla-tariff]').forEach(input=>{
+      inputMap.set(String(input.dataset.slaTariff),Number(input.value));
+    });
+
+    const changes=[];
+
+    SLA203.parameters.forEach(p=>{
+      const id=String(p.idTarifa||'');
+      const value=inputMap.has(id) ? inputMap.get(id) : Number(p.slaMinutes);
+
+      if(!Number.isFinite(value)||value<=0||value>1440){
+        throw new Error(`Tiempo inválido para ${id}.`);
+      }
+
+      const original=SLA203.originalMinutes.get(id);
+      if(p.isNew || original===undefined || Number(original)!==Number(value)){
+        changes.push({idTarifa:id,slaMinutes:value});
+      }
+    });
+
+    return changes;
+  }
+
+  async function refreshDashboardAfterSla203() {
+    try {
+      const btn=$203('refreshDashboardButton');
+      if(btn){
+        btn.click();
+        await new Promise(resolve=>setTimeout(resolve,650));
+      }
+    } catch(_) {}
+  }
+
+  async function saveParams203() {
+    let changes;
+    try {
+      changes=collectChanges203();
+    } catch(err) {
+      setMsg203(err.message,'error');
+      return;
+    }
+
+    if(!changes.length){
+      setMsg203('No hay cambios pendientes.','ok');
+      return;
+    }
+
+    const button=$203('slaParamSaveV203');
+    if(button){
+      button.disabled=true;
+      button.textContent='Guardando…';
+    }
+    setMsg203('Guardando parámetros y recalculando SLA…');
+
+    try {
+      const res=await api('slaParametersSave',{
+        token:token203(),
+        period:currentPeriod203(),
+        items:JSON.stringify(changes)
+      });
+
+      if(!res?.ok) throw new Error(res?.error||'No se pudieron guardar los tiempos SLA.');
+
+      SLA203.parameters=(res.parameters||[]).map(p=>({...p}));
+      SLA203.catalog=(res.catalog||[]).map(c=>({...c}));
+      SLA203.originalMinutes=new Map(
+        SLA203.parameters.map(p=>[String(p.idTarifa),Number(p.slaMinutes)])
+      );
+
+      renderAddOptions203();
+      renderRows203();
+
+      const summary=res.slaSummary;
+      const suffix=summary && summary.evaluables!=null
+        ? ` · ${summary.cumplen||0}/${summary.evaluables||0} dentro de SLA`
+        : '';
+
+      setMsg203(`Tiempos SLA actualizados${suffix}.`,'ok');
+
+      await refreshDashboardAfterSla203();
+
+      setTimeout(()=>{
+        $203('slaParamsModalV203')?.classList.add('hidden');
+      },450);
+    } catch(err) {
+      setMsg203(err.message||'No se pudieron guardar los tiempos SLA.','error');
+    } finally {
+      if(button){
+        button.disabled=false;
+        button.textContent='Guardar tiempos SLA';
+      }
+    }
+  }
+
+  window.ensureSlaParamsButtonV203 = function(allowed=true) {
+    const old=$203('slaParamsButtonV203');
+
+    if(!allowed){
+      old?.remove();
+      return;
+    }
+
+    const actions=$203('putIndicatorsButtonV113')?.parentElement;
+    if(!actions||old) return;
+
+    installSlaParamStyles203();
+
+    const button=document.createElement('button');
+    button.type='button';
+    button.id='slaParamsButtonV203';
+    button.className='mvl-v203-sla-button';
+    button.textContent='TIEMPOS SLA';
+    button.addEventListener('click',openParams203);
+
+    const indicatorButton=$203('putIndicatorsButtonV113');
+    actions.insertBefore(button,indicatorButton||null);
+  };
+
+  // Respaldo: al entrar al Dashboard, intentar insertar el botón sin observer global.
+  document.addEventListener('click',e=>{
+    if(e.target?.closest?.('[data-module="Mi Desempeño"]')){
+      setTimeout(()=>{
+        const p=String(sessionData?.user?.profile||'').toUpperCase();
+        window.ensureSlaParamsButtonV203?.(p==='GERENCIA'||p==='ADMINISTRADOR');
+      },900);
+    }
+  },true);
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>{
+      setTimeout(()=>{
+        const p=String(sessionData?.user?.profile||'').toUpperCase();
+        window.ensureSlaParamsButtonV203?.(p==='GERENCIA'||p==='ADMINISTRADOR');
+      },1000);
+    },{once:true});
+  }
+
+  console.info('[MI VISUAL LIMA] V2.03: botón TIEMPOS SLA + edición por partida.');
+})();
+
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.04
+   BOTÓN DETALLE POR INDICADOR
+   ========================================================== */
+(() => {
+  const $204 = id => document.getElementById(id);
+
+  const esc204 = value => String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+
+  const norm204 = value => String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .trim()
+    .toUpperCase();
+
+  const IND204 = {
+    PRODUCCION:'Producción',
+    EFECTIVIDAD:'Efectividad',
+    RECABLEADO:'% Recableado',
+    VTR_GAR:'VTR / GAR',
+    SLA:'Tiempo de gestión / SLA',
+    OBSERVACIONES:'Observaciones'
+  };
+
+  function installStyles204() {
+    if ($204('mvlV204Styles')) return;
+
+    const style=document.createElement('style');
+    style.id='mvlV204Styles';
+    style.textContent=`
+      .mvl-v204-detail-btn{
+        display:block;
+        width:100%;
+        margin-top:10px;
+        min-height:31px;
+        border:1px solid #c8d9eb;
+        border-radius:9px;
+        background:#f8fbff;
+        color:#0758b7;
+        font-size:.63rem;
+        font-weight:900;
+        letter-spacing:.01em;
+      }
+      .mvl-v204-detail-btn:hover{
+        background:#eaf4ff;
+      }
+
+      .mvl-v204-overlay{
+        position:fixed;
+        inset:0;
+        z-index:100020;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:16px;
+        background:rgba(13,35,60,.44);
+      }
+      .mvl-v204-overlay.hidden{display:none!important}
+
+      .mvl-v204-modal{
+        width:min(900px,96vw);
+        max-height:92vh;
+        display:flex;
+        flex-direction:column;
+        background:#fff;
+        border-radius:18px;
+        box-shadow:0 24px 70px rgba(13,35,60,.24);
+        overflow:hidden;
+      }
+
+      .mvl-v204-head{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:14px;
+        padding:15px 17px 12px;
+        border-bottom:1px solid #e2ebf4;
+      }
+      .mvl-v204-head .eyebrow{
+        margin:0 0 3px;
+      }
+      .mvl-v204-head h3{
+        margin:0;
+        color:#082f5b;
+        font-size:1rem;
+      }
+      .mvl-v204-head p{
+        margin:4px 0 0;
+        color:#667b92;
+        font-size:.68rem;
+      }
+      .mvl-v204-close{
+        width:34px;
+        height:34px;
+        border:0;
+        border-radius:10px;
+        background:#edf3f8;
+        color:#24496f;
+        font-size:1rem;
+        font-weight:900;
+      }
+
+      .mvl-v204-body{
+        overflow:auto;
+        padding:13px 16px 16px;
+      }
+
+      .mvl-v204-loading{
+        padding:22px 10px;
+        text-align:center;
+        color:#5e748c;
+        font-size:.72rem;
+        font-weight:750;
+      }
+
+      .mvl-v204-day{
+        border:1px solid #dbe6f2;
+        border-radius:13px;
+        overflow:hidden;
+        background:#fff;
+        margin-bottom:9px;
+      }
+      .mvl-v204-day summary{
+        list-style:none;
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:10px;
+        align-items:center;
+        padding:10px 12px;
+        cursor:pointer;
+        background:#f8fbff;
+      }
+      .mvl-v204-day summary::-webkit-details-marker{display:none}
+      .mvl-v204-day-title strong{
+        display:block;
+        color:#0a3c70;
+        font-size:.75rem;
+      }
+      .mvl-v204-day-title small{
+        display:block;
+        margin-top:2px;
+        color:#73849a;
+        font-size:.60rem;
+      }
+      .mvl-v204-day-value{
+        text-align:right;
+      }
+      .mvl-v204-day-value b{
+        display:block;
+        color:#082f5b;
+        font-size:.78rem;
+      }
+      .mvl-v204-day-value span{
+        display:block;
+        color:#72839a;
+        font-size:.58rem;
+      }
+
+      .mvl-v204-client-list{
+        padding:4px 10px 10px;
+      }
+      .mvl-v204-client{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:10px;
+        padding:9px 3px;
+        border-bottom:1px solid #edf2f7;
+      }
+      .mvl-v204-client:last-child{border-bottom:0}
+      .mvl-v204-client strong{
+        display:block;
+        color:#163b63;
+        font-size:.69rem;
+        line-height:1.22;
+      }
+      .mvl-v204-client small{
+        display:block;
+        margin-top:3px;
+        color:#748499;
+        font-size:.58rem;
+        line-height:1.28;
+      }
+      .mvl-v204-client-meta{
+        text-align:right;
+        min-width:105px;
+      }
+      .mvl-v204-client-meta b{
+        display:block;
+        color:#0c3d71;
+        font-size:.67rem;
+      }
+      .mvl-v204-client-meta span{
+        display:inline-block;
+        margin-top:4px;
+        padding:2px 5px;
+        border-radius:999px;
+        background:#eef3f8;
+        color:#5e7288;
+        font-size:.54rem;
+        font-weight:850;
+      }
+      .mvl-v204-client-meta span.good{
+        background:#eef9f1;
+        color:#087d34;
+      }
+      .mvl-v204-client-meta span.bad{
+        background:#fff1f1;
+        color:#b42318;
+      }
+      .mvl-v204-client-meta span.warn{
+        background:#fff7e5;
+        color:#946000;
+      }
+
+      .mvl-v204-empty{
+        padding:20px 12px;
+        text-align:center;
+        color:#6c7f94;
+        font-size:.72rem;
+      }
+
+      @media(max-width:520px){
+        .mvl-v204-client{
+          grid-template-columns:1fr;
+        }
+        .mvl-v204-client-meta{
+          text-align:left;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function indicatorFromCard204(card) {
+    const label=norm204(card?.querySelector('.performance-label')?.textContent || '');
+
+    if(label.includes('PRODUC')) return 'PRODUCCION';
+    if(label.includes('EFECT')) return 'EFECTIVIDAD';
+    if(label.includes('RECABLE')) return 'RECABLEADO';
+    if(label.includes('VTR') || label.includes('GAR')) return 'VTR_GAR';
+    if(label.includes('SLA') || label.includes('TIEMPO DE GESTION')) return 'SLA';
+    if(label.includes('OBSERV')) return 'OBSERVACIONES';
+
+    return '';
+  }
+
+  function buttonContext204(button) {
+    const dashboardDetail=button.closest('#dashboardCrewDetail');
+    const tech=button.closest('#performanceTechPanel');
+
+    if(dashboardDetail){
+      return {
+        crewId:$204('dashboardCrew')?.value || '',
+        period:$204('dashboardPeriod')?.value || '2026-08'
+      };
+    }
+
+    if(tech){
+      return {
+        crewId:$204('performanceCrewSelect')?.value || '',
+        period:$204('performancePeriod')?.value || '2026-08'
+      };
+    }
+
+    return {crewId:'',period:'2026-08'};
+  }
+
+  function createModal204() {
+    if($204('indicatorDetailModalV204')) return;
+    installStyles204();
+
+    const modal=document.createElement('div');
+    modal.id='indicatorDetailModalV204';
+    modal.className='mvl-v204-overlay hidden';
+    modal.innerHTML=`
+      <section class="mvl-v204-modal" role="dialog" aria-modal="true">
+        <header class="mvl-v204-head">
+          <div>
+            <p class="eyebrow" id="indicatorDetailEyebrowV204">DETALLE</p>
+            <h3 id="indicatorDetailTitleV204">Indicador</h3>
+            <p id="indicatorDetailSubtitleV204"></p>
+          </div>
+          <button type="button" class="mvl-v204-close" id="indicatorDetailCloseV204">×</button>
+        </header>
+        <div class="mvl-v204-body" id="indicatorDetailBodyV204"></div>
+      </section>`;
+
+    document.body.appendChild(modal);
+
+    const close=()=>modal.classList.add('hidden');
+    $204('indicatorDetailCloseV204')?.addEventListener('click',close);
+    modal.addEventListener('click',e=>{
+      if(e.target===modal) close();
+    });
+  }
+
+  function statusClass204(item, indicator) {
+    const s=norm204(item.status);
+
+    if(indicator==='SLA'){
+      return s==='DENTRO_SLA' ? 'good' : 'bad';
+    }
+
+    if(indicator==='EFECTIVIDAD'){
+      return s==='FINALIZADA' ? 'good' : 'warn';
+    }
+
+    if(indicator==='RECABLEADO'){
+      return item.isRecable ? 'good' : 'warn';
+    }
+
+    return '';
+  }
+
+  function statusText204(item, indicator) {
+    if(indicator==='SLA'){
+      return norm204(item.status)==='DENTRO_SLA' ? 'Dentro SLA' : 'Fuera SLA';
+    }
+
+    if(indicator==='RECABLEADO'){
+      return item.isRecable ? 'Recableado' : 'No recableado';
+    }
+
+    return String(item.status || '').replaceAll('_',' ');
+  }
+
+  function clientTitle204(item) {
+    if(item.clientName) return item.clientName;
+    if(item.clientCode) return `Cliente ${item.clientCode}`;
+    if(item.orderId) return `Orden ${item.orderId}`;
+    return 'Cliente';
+  }
+
+  function renderDetail204(data) {
+    const body=$204('indicatorDetailBodyV204');
+    if(!body) return;
+
+    const indicator=data.indicator || '';
+    $204('indicatorDetailEyebrowV204').textContent=IND204[indicator] || 'DETALLE';
+    $204('indicatorDetailTitleV204').textContent=data.crew?.display || data.crew?.code || 'Cuadrilla';
+    $204('indicatorDetailSubtitleV204').textContent=`Periodo ${data.period || ''} · clientes/órdenes agrupados por día`;
+
+    if(data.construction){
+      body.innerHTML=`
+        <div class="mvl-v204-empty">
+          <strong>${esc204(IND204[indicator] || 'Indicador')}</strong><br>
+          El detalle se habilitará cuando integremos su fuente de datos.
+        </div>`;
+      return;
+    }
+
+    const days=data.days || [];
+    if(!days.length){
+      body.innerHTML='<div class="mvl-v204-empty">No hay registros para este indicador en el periodo seleccionado.</div>';
+      return;
+    }
+
+    body.innerHTML=days.map((day,index)=>`
+      <details class="mvl-v204-day" ${index===0?'open':''}>
+        <summary>
+          <div class="mvl-v204-day-title">
+            <strong>${esc204(day.dateLabel || day.date)}</strong>
+            <small>${esc204(day.secondary || '')}</small>
+          </div>
+          <div class="mvl-v204-day-value">
+            <b>${esc204(day.primary || '—')}</b>
+            <span>${Number(day.count||0)} registro${Number(day.count||0)===1?'':'s'}</span>
+          </div>
+        </summary>
+
+        <div class="mvl-v204-client-list">
+          ${(day.items||[]).map(item=>`
+            <article class="mvl-v204-client">
+              <div>
+                <strong>${esc204(clientTitle204(item))}</strong>
+                <small>
+                  ${item.clientCode ? `Código cliente: ${esc204(item.clientCode)}` : ''}
+                  ${item.orderId ? `${item.clientCode?' · ':''}Orden: ${esc204(item.orderId)}` : ''}
+                </small>
+                <small>
+                  ${item.typePartida ? esc204(item.typePartida) : esc204(item.typeAtencion || '')}
+                </small>
+                ${item.address ? `<small>${esc204(item.address)}</small>` : ''}
+              </div>
+              <div class="mvl-v204-client-meta">
+                <b>${esc204(item.metric || '')}</b>
+                <span class="${statusClass204(item,indicator)}">${esc204(statusText204(item,indicator))}</span>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      </details>
+    `).join('');
+  }
+
+  async function openDetail204(button) {
+    createModal204();
+
+    const indicator=button.dataset.indicatorDetail || '';
+    const context=buttonContext204(button);
+    const modal=$204('indicatorDetailModalV204');
+
+    modal?.classList.remove('hidden');
+    $204('indicatorDetailEyebrowV204').textContent=IND204[indicator] || 'DETALLE';
+    $204('indicatorDetailTitleV204').textContent='Cargando detalle…';
+    $204('indicatorDetailSubtitleV204').textContent='';
+    $204('indicatorDetailBodyV204').innerHTML='<div class="mvl-v204-loading">Cargando clientes y órdenes…</div>';
+
+    try{
+      const res=await api('performanceIndicatorDetail',{
+        token:typeof token==='function' ? token() : '',
+        period:context.period,
+        crewId:context.crewId,
+        indicator
+      });
+
+      if(!res?.ok){
+        if(res?.expired && typeof clearSession==='function') clearSession();
+        throw new Error(res?.error || 'No se pudo cargar el detalle.');
+      }
+
+      renderDetail204(res);
+    }catch(err){
+      $204('indicatorDetailBodyV204').innerHTML=
+        `<div class="mvl-v204-empty">${esc204(err.message || 'No se pudo cargar el detalle.')}</div>`;
+    }
+  }
+
+  function ensureDetailButtonsIn204(root) {
+    if(!root) return;
+
+    root.querySelectorAll('.performance-card').forEach(card=>{
+      const indicator=indicatorFromCard204(card);
+      if(!indicator) return;
+
+      let btn=card.querySelector(':scope > .mvl-v204-detail-btn');
+      if(btn){
+        btn.dataset.indicatorDetail=indicator;
+        return;
+      }
+
+      btn=document.createElement('button');
+      btn.type='button';
+      btn.className='mvl-v204-detail-btn';
+      btn.dataset.indicatorDetail=indicator;
+      btn.textContent='DETALLE';
+      btn.addEventListener('click',()=>openDetail204(btn));
+      card.appendChild(btn);
+    });
+  }
+
+  function refreshButtons204() {
+    ensureDetailButtonsIn204($204('performanceTechPanel'));
+    ensureDetailButtonsIn204($204('dashboardCrewDetail'));
+  }
+
+  // Exponer para las capas visuales existentes.
+  window.refreshIndicatorDetailButtonsV204=refreshButtons204;
+
+  document.addEventListener('click',e=>{
+    if(
+      e.target?.id==='refreshPerformanceButton' ||
+      e.target?.id==='refreshDashboardButton' ||
+      e.target?.closest?.('[data-dashboard-crew]')
+    ){
+      setTimeout(refreshButtons204,180);
+      setTimeout(refreshButtons204,700);
+    }
+  },true);
+
+  document.addEventListener('change',e=>{
+    if(
+      e.target?.id==='performancePeriod' ||
+      e.target?.id==='performanceCrewSelect' ||
+      e.target?.id==='dashboardCrew' ||
+      e.target?.id==='dashboardPeriod'
+    ){
+      setTimeout(refreshButtons204,200);
+    }
+  },true);
+
+  // El panel Técnico y el detalle Dashboard se renderizan asíncronamente.
+  const target=$204('performanceView');
+  if(target){
+    let scheduled=false;
+    new MutationObserver(()=>{
+      if(scheduled) return;
+      scheduled=true;
+      requestAnimationFrame(()=>{
+        scheduled=false;
+        refreshButtons204();
+      });
+    }).observe(target,{childList:true,subtree:true});
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>{
+      setTimeout(refreshButtons204,800);
+    },{once:true});
+  }else{
+    setTimeout(refreshButtons204,800);
+  }
+
+  console.info('[MI VISUAL LIMA] V2.04: detalle por indicador y clientes por día.');
+})();
+

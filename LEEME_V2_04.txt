@@ -1,0 +1,76 @@
+MI VISUAL LIMA - V2.04
+DETALLE DE INDICADORES POR DÍA Y CLIENTE
+
+NUEVO
+Debajo de cada tarjeta de indicador aparece el botón:
+DETALLE
+
+SE APLICA EN:
+- Mi Desempeño del Técnico.
+- Detalle de cuadrilla desde Dashboard para Supervisor/Jefaturas/Gerencia/Admin.
+
+INDICADORES CON DETALLE
+1. Producción
+   - Agrupa por día.
+   - Cliente / código cliente / orden.
+   - Tipo de partida.
+   - Puntos por orden.
+   - Total de puntos y finalizadas por día.
+
+2. Efectividad
+   - Agrupa por día.
+   - Muestra las órdenes del denominador:
+     FINALIZADA / CANCELADA / REPROGRAMADA / ANULADA / REGESTION.
+   - Resultado diario = finalizadas / total.
+
+3. % Recableado
+   - Agrupa LOS ROJO por día.
+   - Indica qué clientes fueron recableados y cuáles no.
+   - Resultado diario = recableados / LOS ROJO.
+
+4. Tiempo de gestión / SLA
+   - Agrupa por día.
+   - Cliente / orden.
+   - Tipo de partida.
+   - Minutos reales / minutos SLA.
+   - Dentro SLA / Fuera SLA.
+
+5. VTR/GAR y Observaciones
+   - El botón queda visible.
+   - Mientras la fuente siga En construcción, el detalle informa que todavía no está disponible.
+
+CLIENTE
+Cuando la orden existe en MAPA_ORDENES se muestra el nombre del cliente.
+Si todavía no existe en Mapa, se muestra el CODIGO_CLIENTE y/o OrdenId de ORDENES_DETALLE.
+
+RENDIMIENTO
+El detalle completo de un indicador se solicita en UNA SOLA llamada.
+No se hace una llamada por cada día.
+
+NO CAMBIA
+- Fórmulas actuales de Producción.
+- Fórmula de Efectividad.
+- Regla de Recableado.
+- Regla SLA.
+- Parámetros SLA V2.03.
+- Dashboard.
+- Filtros.
+- Semáforos.
+- Google Sheets.
+
+ACTUALIZACIÓN
+1. Apps Script:
+   reemplazar Code.gs por Code_V2_04_DETALLE_INDICADORES.gs
+   Guardar.
+   Implementar > Administrar implementaciones > Nueva versión.
+   Mantener la misma URL.
+
+2. GitHub:
+   subir el ZIP completo V2.04 reemplazando archivos actuales.
+   Esperar GitHub Pages = Éxito.
+
+3. Cerrar la pestaña anterior y abrir nuevamente la APP.
+
+VALIDACIÓN
+- app.js: sintaxis OK.
+- Code.gs: sintaxis OK.
