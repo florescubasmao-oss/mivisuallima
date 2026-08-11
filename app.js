@@ -887,6 +887,7 @@
   const STATE = {
     config: null,
     configVisualType: 'TODOS',
+    configByVisualType: new Map(),
     dashboards: new Map(),
     dashboardFastCache: new Map(),
     dashboardCacheTtlMs: 120000,
@@ -1452,6 +1453,143 @@
     }, 0);
   }
 
+  function installConfigTabsStyles123() {
+    if (document.getElementById('mvlV123ConfigTabsStyles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'mvlV123ConfigTabsStyles';
+    style.textContent = `
+      #indicatorConfigModalV113 .mvl-v123-tabs{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:7px;
+        margin:10px 0 13px;
+        padding:4px;
+        border-radius:12px;
+        background:#f1f5f9;
+      }
+      #indicatorConfigModalV113 .mvl-v123-tab{
+        min-height:38px;
+        padding:8px 10px;
+        border-radius:9px;
+        background:transparent;
+        color:#53657b;
+        font-size:.72rem;
+        font-weight:850;
+      }
+      #indicatorConfigModalV113 .mvl-v123-tab.active{
+        background:#fff;
+        color:#0758b7;
+        box-shadow:0 2px 8px rgba(15,52,95,.09);
+      }
+      #indicatorConfigModalV113 .mvl-v123-panel.hidden{
+        display:none !important;
+      }
+      #indicatorConfigModalV113 .mvl-v123-goals-help{
+        margin:8px 0 0;
+        padding:8px 10px;
+        border:1px solid #d9e8f8;
+        border-radius:10px;
+        background:#f7fbff;
+        color:#526b85;
+        font-size:.67rem;
+        line-height:1.35;
+      }
+      #indicatorConfigModalV113 .mvl-v123-panel .mvl-v113-config-section{
+        margin-top:10px !important;
+      }
+      @media(max-width:480px){
+        #indicatorConfigModalV113 .mvl-v123-tabs{
+          grid-template-columns:1fr;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function showConfigTab123(tab = 'metas') {
+    const modal = document.getElementById('indicatorConfigModalV113');
+    if (!modal) return;
+
+    const selected = tab === 'indicadores' ? 'indicadores' : 'metas';
+    modal.querySelectorAll('[data-v123-tab]').forEach(button => {
+      button.classList.toggle('active', button.dataset.v123Tab === selected);
+    });
+
+    modal.querySelector('#cfgGoalsPanelV123')?.classList.toggle('hidden', selected !== 'metas');
+    modal.querySelector('#cfgIndicatorsPanelV123')?.classList.toggle('hidden', selected !== 'indicadores');
+  }
+
+  function setupConfigTabs123(modal) {
+    if (!modal || modal.dataset.v123Tabs === '1') return;
+    installConfigTabsStyles123();
+
+    const scope = modal.querySelector('.mvl-v114-scope');
+    const sections = [...modal.querySelectorAll('.mvl-v113-config-section')];
+    const actions = modal.querySelector('.mvl-v113-modal-actions');
+    const message = modal.querySelector('#indicatorConfigMessageV113');
+    if (!scope || !sections.length || !actions) return;
+
+    const tabs = document.createElement('div');
+    tabs.className = 'mvl-v123-tabs';
+    tabs.innerHTML = `
+      <button type="button" class="mvl-v123-tab active" data-v123-tab="metas">METAS</button>
+      <button type="button" class="mvl-v123-tab" data-v123-tab="indicadores">SEMÁFOROS / INDICADORES</button>
+    `;
+
+    const goals = document.createElement('div');
+    goals.id = 'cfgGoalsPanelV123';
+    goals.className = 'mvl-v123-panel';
+
+    const indicators = document.createElement('div');
+    indicators.id = 'cfgIndicatorsPanelV123';
+    indicators.className = 'mvl-v123-panel hidden';
+
+    scope.insertAdjacentElement('afterend', tabs);
+    tabs.insertAdjacentElement('afterend', goals);
+    goals.insertAdjacentElement('afterend', indicators);
+
+    // Separar las metas de Producción de los límites del semáforo
+    // sin cambiar los IDs existentes.
+    const productionSection = sections.find(section =>
+      String(section.querySelector('h4')?.textContent || '').trim().toUpperCase() === 'PRODUCCIÓN'
+    );
+
+    if (productionSection) {
+      const grid = productionSection.querySelector('.mvl-v113-config-grid');
+      const labels = [...(grid?.querySelectorAll(':scope > label') || [])];
+
+      const goalSection = document.createElement('section');
+      goalSection.className = 'mvl-v113-config-section';
+      goalSection.innerHTML = `
+        <h4>Metas de Producción</h4>
+        <div class="mvl-v113-config-grid mvl-v123-goal-grid"></div>
+        <div class="mvl-v123-goals-help">
+          Estas metas se usan para calcular Meta diaria general, Meta al corte y Meta mensual.
+          Puedes definirlas para TODOS o crear valores específicos para PDG, PLANILLA,
+          PRODUCCIÓN y DISPONIBILIDAD.
+        </div>
+      `;
+
+      const goalGrid = goalSection.querySelector('.mvl-v123-goal-grid');
+      if (labels[0]) goalGrid.appendChild(labels[0]);
+      if (labels[1]) goalGrid.appendChild(labels[1]);
+      goals.appendChild(goalSection);
+
+      const title = productionSection.querySelector('h4');
+      if (title) title.textContent = 'Semáforo de Producción';
+    }
+
+    sections.forEach(section => indicators.appendChild(section));
+
+    tabs.querySelectorAll('[data-v123-tab]').forEach(button => {
+      button.addEventListener('click', () => showConfigTab123(button.dataset.v123Tab));
+    });
+
+    modal.dataset.v123Tabs = '1';
+    showConfigTab123('metas');
+  }
+
   function createModal113() {
     if (document.getElementById('indicatorConfigModalV113')) return;
 
@@ -1539,7 +1677,7 @@
         </section>
 
         <section class="mvl-v113-config-section">
-          <h4>Siguientes indicadores</h4>
+          <h4>Indicadores pendientes</h4>
           <div class="mvl-v113-construction-list">
             <div class="mvl-v113-construction-item"><span>Tiempo de gestión / SLA</span><strong>EN CONSTRUCCIÓN</strong></div>
             <div class="mvl-v113-construction-item"><span>Observaciones</span><strong>EN CONSTRUCCIÓN</strong></div>
@@ -1555,6 +1693,7 @@
       </div>`;
 
     document.body.appendChild(modal);
+    setupConfigTabs123(modal);
     const close = () => modal.classList.add('hidden');
     document.getElementById('closeIndicatorConfigV113')?.addEventListener('click', close);
     document.getElementById('cancelIndicatorConfigV113')?.addEventListener('click', close);
@@ -1562,9 +1701,18 @@
     document.getElementById('saveIndicatorConfigV113')?.addEventListener('click', () => saveConfig113(false));
     document.getElementById('inheritIndicatorConfigV114')?.addEventListener('click', () => saveConfig113(true));
     document.getElementById('cfgVisualTypeV114')?.addEventListener('change', async event => {
+      const type = event.target.value || 'TODOS';
+      const cached = peekConfig113(type);
+
+      if (cached) {
+        fillConfig113(cached);
+        modalMessage113('');
+        return;
+      }
+
       modalMessage113('Cargando metas…');
       try {
-        const config = await getConfig113(true, event.target.value);
+        const config = await getConfig113(false, type);
         fillConfig113(config);
         modalMessage113('');
       } catch (err) {
@@ -1714,32 +1862,93 @@
     el.className = `mvl-v113-modal-message ${type}`.trim();
   }
 
+  function cacheConfig113(config, visualType = 'TODOS') {
+    if (!config) return null;
+    const type = String(config.visualType || visualType || 'TODOS').toUpperCase();
+    STATE.configByVisualType.set(type, config);
+    STATE.config = config;
+    STATE.configVisualType = type;
+    return config;
+  }
+
+  function configFromDashboard113(visualType = 'TODOS') {
+    const type = String(visualType || 'TODOS').toUpperCase();
+    const data = bestDashboard113();
+    if (!data?.ok) return null;
+
+    const all = data.indicatorConfigs || {};
+    if (all[type]) return all[type];
+
+    const single = data.indicatorConfig;
+    if (single) {
+      const singleType = String(single.visualType || 'TODOS').toUpperCase();
+      if (singleType === type) return single;
+    }
+    return null;
+  }
+
+  function peekConfig113(visualType = 'TODOS') {
+    const type = String(visualType || 'TODOS').toUpperCase();
+
+    if (STATE.configByVisualType.has(type)) {
+      return STATE.configByVisualType.get(type);
+    }
+
+    if (STATE.config && String(STATE.configVisualType || 'TODOS').toUpperCase() === type) {
+      STATE.configByVisualType.set(type, STATE.config);
+      return STATE.config;
+    }
+
+    const dashboardConfig = configFromDashboard113(type);
+    if (dashboardConfig) return cacheConfig113(dashboardConfig, type);
+
+    return null;
+  }
+
   async function getConfig113(force = false, visualType = 'TODOS') {
-    const type = visualType || 'TODOS';
-    if (STATE.config && !force && STATE.configVisualType === type) return STATE.config;
-    if (typeof api !== 'function') throw new Error('La conexión con el sistema todavía no está disponible.');
+    const type = String(visualType || 'TODOS').toUpperCase();
+
+    if (!force) {
+      const cached = peekConfig113(type);
+      if (cached) return cached;
+    }
+
+    if (typeof api !== 'function') {
+      throw new Error('La conexión con el sistema todavía no está disponible.');
+    }
 
     const res = await api('performanceIndicatorConfigGet', {
       token: tokenSafe113(),
       visualType: type
     });
     if (!res?.ok) throw new Error(res?.error || 'No se pudieron cargar los indicadores.');
-    STATE.config = res.config || null;
-    STATE.configVisualType = res.config?.visualType || type;
-    return STATE.config;
+
+    return cacheConfig113(res.config || null, type);
   }
 
   async function openConfig113() {
     if (!canEditIndicators113()) return;
+
     createModal113();
     const modal = document.getElementById('indicatorConfigModalV113');
     const selector = document.getElementById('cfgVisualTypeV114');
     if (selector) selector.value = 'TODOS';
+
     modal?.classList.remove('hidden');
+    showConfigTab123('metas');
+
+    // V1.23: si el Dashboard ya trajo las metas, abre de inmediato.
+    const cached = peekConfig113('TODOS');
+    if (cached) {
+      fillConfig113(cached);
+      modalMessage113('');
+      return;
+    }
+
     modalMessage113('Cargando configuración…');
 
     try {
-      const config = await getConfig113(true, 'TODOS');
+      const config = await getConfig113(false, 'TODOS');
       fillConfig113(config);
       modalMessage113('');
     } catch (err) {
@@ -1809,8 +2018,7 @@
       });
       if (!res?.ok) throw new Error(res?.error || 'No se pudieron guardar los indicadores.');
 
-      STATE.config = res.config || STATE.config;
-      STATE.configVisualType = res.config?.visualType || visualType;
+      cacheConfig113(res.config || STATE.config, visualType);
       STATE.dashboards.clear();
       try { if (typeof invalidateFastCache115 === 'function') invalidateFastCache115(); } catch (_) {}
       fillConfig113(STATE.config);
@@ -1953,11 +2161,15 @@
             data: result
           });
 
+          // V1.23: guardar todas las configuraciones que ya viajan con el Dashboard.
+          Object.entries(result.indicatorConfigs || {}).forEach(([type, cfg]) => {
+            if (cfg) STATE.configByVisualType.set(String(type || 'TODOS').toUpperCase(), cfg);
+          });
+
           if (result.indicatorConfig && !document.getElementById('indicatorConfigModalV113')?.classList.contains('hidden')) {
             // El modal controla su propio alcance; no sobrescribirlo desde el Dashboard.
           } else if (result.indicatorConfig) {
-            STATE.config = result.indicatorConfig;
-            STATE.configVisualType = result.indicatorConfig.visualType || 'TODOS';
+            cacheConfig113(result.indicatorConfig, result.indicatorConfig.visualType || 'TODOS');
           }
           window.setTimeout(refreshSemaphores113, 0);
         }
@@ -1968,8 +2180,10 @@
           result?.ok &&
           result.config
         ) {
-          STATE.config = result.config;
-          STATE.configVisualType = result.config.visualType || STATE.configVisualType || 'TODOS';
+          cacheConfig113(
+            result.config,
+            result.config.visualType || params?.visualType || STATE.configVisualType || 'TODOS'
+          );
         }
 
         if (
