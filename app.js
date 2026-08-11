@@ -7218,7 +7218,7 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
   document.addEventListener('click',e=>{
     if(e.target?.closest?.('[data-module="Mi Desempeño"]')){
       setTimeout(()=>{
-        const p=String(sessionData?.user?.profile||'').toUpperCase();
+        const p=String(session205()?.user?.profile||'').toUpperCase();
         window.ensureSlaParamsButtonV203?.(p==='GERENCIA'||p==='ADMINISTRADOR');
       },900);
     }
@@ -7227,7 +7227,7 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',()=>{
       setTimeout(()=>{
-        const p=String(sessionData?.user?.profile||'').toUpperCase();
+        const p=String(session205()?.user?.profile||'').toUpperCase();
         window.ensureSlaParamsButtonV203?.(p==='GERENCIA'||p==='ADMINISTRADOR');
       },1000);
     },{once:true});
@@ -7777,13 +7777,20 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
     catch(_) { return ''; }
   }
 
+  function session205(){
+    try {
+      if (typeof sessionData !== 'undefined' && sessionData) return sessionData;
+    } catch (_) {}
+    return window.sessionData || null;
+  }
+
   function currentUser205(){
-    return window.sessionData?.user || {};
+    return session205()?.user || {};
   }
 
   function modulePermission205(name){
     const target=norm205(name);
-    return (window.sessionData?.modules || []).find(m=>norm205(m.module)===target)?.permissions || null;
+    return (session205()?.modules || []).find(m=>norm205(m.module)===target)?.permissions || null;
   }
 
   function period205(){
@@ -7895,7 +7902,9 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
       const card=document.querySelector(`#moduleList [data-module="${name}"]`);
       const perm=modulePermission205(name);
       if(!card||!perm?.ver) return;
+      card.disabled = false;
       card.classList.remove('disabled','module-disabled');
+      card.classList.add('module-active');
       card.removeAttribute('disabled');
       card.setAttribute('aria-disabled','false');
       const small=card.querySelector('small');
@@ -8270,6 +8279,19 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
     }
   }
 
+
+  function wrapRenderHome205(){
+    if(window.__mvlRenderHome205Wrapped || typeof renderHome !== 'function') return false;
+    window.__mvlRenderHome205Wrapped=true;
+    const prev=renderHome;
+    renderHome=function(data){
+      const result=prev(data);
+      window.setTimeout(()=>{activateCards205();moduleCardWatcher205();},0);
+      return result;
+    };
+    return true;
+  }
+
   // -------------------------
   // API WRAPPER / EVENTOS
   // -------------------------
@@ -8299,11 +8321,13 @@ console.info('[MI VISUAL LIMA] V2.02: SLA homologado + etiquetas de cuadrilla en
   },true);
 
   function init205(){
-    installStyles205();moduleCardWatcher205();activateCards205();wrapApi205();
+    installStyles205();wrapRenderHome205();moduleCardWatcher205();activateCards205();wrapApi205();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init205,200),{once:true});else setTimeout(init205,200);
-  const timer=setInterval(()=>{activateCards205();if(wrapApi205()&&$205('moduleList'))clearInterval(timer);},300);
+  const timer=setInterval(()=>{wrapRenderHome205();activateCards205();if(wrapApi205()&&$205('moduleList')&&session205())clearInterval(timer);},300);
   setTimeout(()=>clearInterval(timer),10000);
 
   console.info('[MI VISUAL LIMA] V2.05: Validación Técnica + Observaciones activos.');
 })();
+
+console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y Validación Técnica.');
