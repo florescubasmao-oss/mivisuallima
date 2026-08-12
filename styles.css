@@ -2672,3 +2672,277 @@ body {
 #dashboardTotalSummaryV19 .mvl-v207-track {
   border: 1px solid rgba(255,255,255,.22);
 }
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.09 DEFINITIVA
+   PALETA FIJA + DELINEADOS + LOGIN CLARO
+   ========================================================== */
+:root {
+  --v209-bg: #eaf4ff;
+  --v209-bg-soft: #f4f9ff;
+  --v209-white: #ffffff;
+  --v209-blue: #0b67c7;
+  --v209-blue-dark: #073b70;
+  --v209-blue-mid: #4f98d8;
+  --v209-blue-line: #74afe2;
+  --v209-blue-line-strong: #2f7fc7;
+  --v209-blue-soft: #dfefff;
+  --v209-text: #0b3159;
+  --v209-muted: #607d99;
+}
+
+/* Fondo general fijo: celeste + blanco, sin apariencia lavada */
+body {
+  background: var(--v209-bg) !important;
+  color: var(--v209-text) !important;
+}
+body:not(.login-mode) {
+  background:
+    linear-gradient(180deg, #e7f3ff 0%, #f4f9ff 38%, #eef6fd 100%) !important;
+}
+
+/* Login: imagen más visible / menos capa blanca */
+body.login-mode {
+  background:
+    linear-gradient(90deg, rgba(231,243,255,.10) 0%, rgba(231,243,255,.18) 42%, rgba(241,248,255,.46) 66%, rgba(248,251,255,.58) 100%),
+    url("./assets/login-bg-1600x900.jpg") center center / cover no-repeat fixed !important;
+}
+body.login-mode::before {
+  background: transparent !important;
+}
+body.login-mode #loginView {
+  background: rgba(255,255,255,.965) !important;
+  border: 2px solid var(--v209-blue-line) !important;
+  box-shadow: 0 14px 34px rgba(7,59,112,.18), inset 0 0 0 1px #ffffff !important;
+}
+body.login-mode #loginView .brand-mark-image {
+  border: 2px solid #0b67c7;
+  border-radius: 12px;
+  box-shadow: 0 3px 9px rgba(11,103,199,.14);
+}
+body.login-mode #loginView input {
+  background: #e8f2ff !important;
+  border: 1.5px solid #9fc5e9 !important;
+  color: #102f4f !important;
+}
+body.login-mode #loginView input:focus {
+  border-color: #0b67c7 !important;
+  box-shadow: 0 0 0 3px rgba(11,103,199,.12) !important;
+}
+body.login-mode #loginButton {
+  background: #0b67c7 !important;
+  border: 2px solid #0755a7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 5px 12px rgba(11,103,199,.18) !important;
+}
+
+/* Contenedor principal con delineado visible */
+#homeView,
+.app-card,
+.card {
+  background: #ffffff !important;
+  border: 2px solid #9cc6eb !important;
+  box-shadow: 0 9px 25px rgba(7,72,130,.09), inset 0 0 0 1px #ffffff !important;
+}
+
+/* Cabecera */
+#homeView .topbar {
+  padding-bottom: 10px !important;
+  border-bottom: 2px solid #d6e8f8 !important;
+}
+#homeView .eyebrow {
+  color: var(--v209-blue) !important;
+  font-weight: 950 !important;
+  letter-spacing: .10em !important;
+}
+#homeView #userName {
+  color: var(--v209-blue-dark) !important;
+  font-weight: 950 !important;
+  text-shadow: 0 1px 0 #fff, 0 0 1px rgba(7,59,112,.20);
+}
+#homeView #userProfile {
+  color: #557695 !important;
+  font-weight: 650 !important;
+}
+
+/* Secciones del menú */
+#homeView .mvl-v208-section-label {
+  color: #174f83 !important;
+  font-size: .63rem !important;
+  font-weight: 950 !important;
+  letter-spacing: .075em !important;
+  text-shadow: 0 1px 0 #ffffff !important;
+}
+#homeView .mvl-v208-section-label::before {
+  width: 22px !important;
+  height: 4px !important;
+  background: #0b67c7 !important;
+  border: 1px solid #0756a8 !important;
+  box-shadow: none !important;
+}
+
+/* Tarjetas: colores FIJOS y bordes definidos */
+#homeView .module-card,
+#homeView .module-card.mvl-v208-featured {
+  min-height: 80px !important;
+  padding: 11px 12px !important;
+  border: 2px solid var(--v209-blue-line) !important;
+  border-radius: 13px !important;
+  background: #ffffff !important;
+  box-shadow: 0 5px 12px rgba(7,72,130,.07), inset 0 0 0 1px #f8fbff !important;
+}
+#homeView .module-card.module-active::before {
+  width: 5px !important;
+  background: var(--v209-blue) !important;
+  border-right: 1px solid #0755a7;
+}
+#homeView .module-card.module-active:hover {
+  transform: translateY(-1px) !important;
+  background: #f5faff !important;
+  border-color: var(--v209-blue-line-strong) !important;
+  box-shadow: 0 8px 17px rgba(7,72,130,.12), inset 0 0 0 1px #ffffff !important;
+}
+#homeView .module-icon {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  border-radius: 10px !important;
+  background: var(--v209-blue-soft) !important;
+  color: #075db6 !important;
+  border: 2px solid #9cc8ed !important;
+  box-shadow: inset 0 0 0 1px #ffffff !important;
+  font-weight: 950 !important;
+}
+#homeView .module-copy strong {
+  color: #082f58 !important;
+  font-size: .93rem !important;
+  font-weight: 950 !important;
+  text-shadow: 0 1px 0 #ffffff, 0 0 1px rgba(8,47,88,.18) !important;
+}
+#homeView .module-copy small {
+  color: #66819c !important;
+  font-size: .65rem !important;
+  font-weight: 600 !important;
+}
+#homeView .module-arrow {
+  color: var(--v209-blue) !important;
+  font-size: 1.10rem !important;
+  font-weight: 950 !important;
+}
+#homeView .mvl-v208-counter {
+  background: #edf6ff !important;
+  color: #155c9d !important;
+  border: 1.5px solid #b4d4f0 !important;
+  font-weight: 950 !important;
+  box-shadow: none !important;
+}
+
+/* Administración: SOLO tuerca al lado de Cerrar sesión */
+.mvl-v208-header-tools {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-left: auto !important;
+}
+#mvlV208AdminQuick {
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 2px solid #88b9e4 !important;
+  border-radius: 11px !important;
+  background: #e5f2ff !important;
+  color: #075db6 !important;
+  box-shadow: 0 3px 8px rgba(7,93,182,.10) !important;
+}
+#mvlV208AdminQuick:hover {
+  background: #d7ebff !important;
+  border-color: #2f7fc7 !important;
+}
+#mvlV208AdminQuick .mvl-v208-admin-icon {
+  color: #075db6 !important;
+  font-size: 1.08rem !important;
+  font-weight: 950 !important;
+}
+#logoutButton {
+  border: 1.5px solid #c4dbef !important;
+  background: #f2f8fe !important;
+  color: #104a80 !important;
+  font-weight: 900 !important;
+}
+
+/* Dashboard: semáforos con colores sólidos, bordes oscuros y mejor lectura */
+#dashboardTotalSummaryV19 .mvl-v207-linear {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-radius: 11px !important;
+  box-shadow: 0 5px 12px rgba(20,50,80,.09), inset 0 0 0 1px rgba(255,255,255,.15) !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-green {
+  background: #349b58 !important;
+  border-color: #1c6f3c !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow {
+  background: #dfb52b !important;
+  border-color: #9e7903 !important;
+  color: #17334f !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-orange {
+  background: #e4772f !important;
+  border-color: #a84a10 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-red {
+  background: #d44646 !important;
+  border-color: #962929 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-neutral {
+  background: #407ec4 !important;
+  border-color: #225995 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-name,
+#dashboardTotalSummaryV19 .mvl-v207-value strong {
+  font-weight: 950 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear:not(.status-yellow) .mvl-v207-name,
+#dashboardTotalSummaryV19 .mvl-v207-linear:not(.status-yellow) .mvl-v207-detail,
+#dashboardTotalSummaryV19 .mvl-v207-linear:not(.status-yellow) .mvl-v207-value strong,
+#dashboardTotalSummaryV19 .mvl-v207-linear:not(.status-yellow) .mvl-v207-value small,
+#dashboardTotalSummaryV19 .mvl-v207-linear:not(.status-yellow) .mvl-v207-meter b {
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,.42), 0 0 1px rgba(0,0,0,.16) !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-name,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-detail,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-value strong,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-value small,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-meter b {
+  color: #183650 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.40) !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-state {
+  background: #ffffff !important;
+  color: #153e64 !important;
+  border: 1.5px solid rgba(20,70,110,.22) !important;
+  font-weight: 950 !important;
+  text-shadow: none !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-track {
+  border: 1px solid rgba(255,255,255,.40) !important;
+}
+
+@media (max-width:700px) {
+  body.login-mode {
+    background:
+      linear-gradient(rgba(235,245,255,.12), rgba(235,245,255,.36)),
+      url("./assets/login-bg-1600x900.jpg") 27% center / cover no-repeat scroll !important;
+  }
+  #homeView .module-card,
+  #homeView .module-card.mvl-v208-featured {
+    min-height: 68px !important;
+    padding: 9px 10px !important;
+    border-width: 1.8px !important;
+  }
+}

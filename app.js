@@ -176,7 +176,7 @@
 
       // Una llamada API nunca debe dejar la APP bloqueada indefinidamente.
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 15000);
+      const timer = window.setTimeout(() => controller.abort(), 60000);
       const originalSignal = init?.signal;
 
       if (originalSignal) {
@@ -242,6 +242,14 @@
     try {
       const source = await getCoreTextV201();
       executeCoreV201(source);
+
+      // V2.09: precalienta Apps Script en segundo plano. No bloquea el Login.
+      // Reduce la espera del primer ingreso cuando Google Apps Script está frío.
+      try {
+        if (typeof API_URL !== 'undefined' && API_URL) {
+          window.fetch(API_URL, { method:'GET', cache:'no-store' }).catch(() => {});
+        }
+      } catch (_) {}
 
       if (loginButton) {
         loginButton.disabled = false;
@@ -8717,10 +8725,13 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     .trim()
     .toUpperCase();
 
+  // V2.09: usar SIEMPRE el nombre real del módulo guardado en PERMISOS/MODULOS.
+  // "Mi Desempeño" se muestra como "Dashboard Desempeño" en perfiles de gestión,
+  // pero su data-module sigue siendo Mi Desempeño.
   const GROUPS208 = [
     {
       label:'Control Operativo',
-      items:['Dashboard Desempeño','Mapa Operativo'],
+      items:['Mi Desempeño','Mapa Operativo'],
       featured:true
     },
     {
@@ -8734,16 +8745,11 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     {
       label:'Administrativo',
       items:['Gestión de Actas','Descansos Programados']
-    },
-    {
-      label:'Sistema',
-      items:['Administración'],
-      system:true
     }
   ];
 
   const ICONS208 = {
-    'Dashboard Desempeño':'↗',
+    'Mi Desempeño':'↗',
     'Mapa Operativo':'⌖',
     'Validación Técnica':'✓',
     'Observaciones':'!',
@@ -8755,7 +8761,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   };
 
   const NAV_LABELS208 = {
-    'Dashboard Desempeño':'Dashboard',
+    'Mi Desempeño':'Dashboard',
     'Mapa Operativo':'Mapa',
     'Validación Técnica':'Validación',
     'Observaciones':'Observ.'
@@ -8763,8 +8769,23 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
 
   function isAdminProfile208() {
     const s = session208();
-    const profile = norm208(s?.profile || s?.perfil || '');
+    const profile = norm208(s?.user?.profile || s?.profile || s?.perfil || '');
     return profile === 'ADMINISTRADOR';
+  }
+
+  function hasAdminPermission208() {
+    const s = session208();
+    if (!isAdminProfile208()) return false;
+    const module = (s?.modules || []).find(m => normalizeName208(m?.module) === normalizeName208('Administración'));
+    return Boolean(module?.permissions?.administrar);
+  }
+
+  function displayName208(name) {
+    if (normalizeName208(name) === normalizeName208('Mi Desempeño')) {
+      const profile = norm208(session208()?.user?.profile || '');
+      return profile === 'TECNICO' ? 'Mi Desempeño' : 'Dashboard Desempeño';
+    }
+    return name;
   }
 
   function visibleAvailableModuleNames208() {
@@ -8841,7 +8862,12 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
 
   function applyAllCounts208() {
     const counts = V208.lastCounts?.counts || {};
-    Object.entries(counts).forEach(([name,data]) => applyCount208(name,data));
+    Object.entries(counts).forEach(([name,data]) => {
+      const canonical = normalizeName208(name) === normalizeName208('Dashboard Desempeño')
+        ? 'Mi Desempeño'
+        : name;
+      applyCount208(canonical,data);
+    });
 
     // Para módulos visibles que todavía no tienen respuesta.
     document.querySelectorAll('#moduleList [data-module]').forEach(card => {
@@ -8919,7 +8945,14 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       });
     });
 
-    const leftovers = cards.filter(card => !used.has(card) && normalizeName208(card.dataset.module || '') !== normalizeName208('Administración'));
+    // Administración nunca participa del menú Bento: solo se accede por tuerca del Administrador.
+    const adminCardForMenu = visibleCard208('Administración');
+    if (adminCardForMenu) adminCardForMenu.style.display = 'none';
+
+    const leftovers = cards.filter(card =>
+      !used.has(card) &&
+      normalizeName208(card.dataset.module || '') !== normalizeName208('Administración')
+    );
     if (leftovers.length) {
       const label = document.createElement('div');
       label.className = 'mvl-v208-section-label';
@@ -8973,7 +9006,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
 
   function navItems208() {
     const priority = [
-      'Dashboard Desempeño',
+      'Mi Desempeño',
       'Mapa Operativo',
       'Validación Técnica',
       'Observaciones'
@@ -8985,9 +9018,16 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   }
 
   function relocateAdmin208() {
-    const adminCard = visibleCard208('Administración');
     const logout = document.getElementById('logoutButton');
     if (!logout) return;
+
+    // Ocultar siempre la tarjeta Administración del menú, para todos los perfiles.
+    const adminCard = visibleCard208('Administración');
+    if (adminCard) {
+      adminCard.style.display = 'none';
+      adminCard.setAttribute('aria-hidden','true');
+      adminCard.dataset.v209HiddenAdmin = '1';
+    }
 
     let wrap = document.getElementById('mvlV208HeaderTools');
     if (!wrap) {
@@ -8996,15 +9036,12 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       wrap.className = 'mvl-v208-header-tools';
       logout.parentElement?.insertBefore(wrap, logout);
       wrap.appendChild(logout);
+    } else if (logout.parentElement !== wrap) {
+      wrap.appendChild(logout);
     }
 
     let btn = document.getElementById('mvlV208AdminQuick');
-    const showQuick = isAdminProfile208() && cardIsAvailable208(adminCard);
-
-    if (adminCard) {
-      adminCard.style.display = 'none';
-      adminCard.dataset.v208HiddenAdmin = '1';
-    }
+    const showQuick = hasAdminPermission208();
 
     if (!showQuick) {
       if (btn) btn.remove();
@@ -9018,12 +9055,21 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       btn.className = 'ghost mvl-v208-admin-quick';
       btn.setAttribute('aria-label', 'Administración');
       btn.title = 'Administración';
-      btn.innerHTML = '<span class="mvl-v208-admin-icon">⚙</span>';
+      btn.innerHTML = '<span class="mvl-v208-admin-icon" aria-hidden="true">⚙</span>';
       wrap.prepend(btn);
-      btn.addEventListener('click', () => {
-        if (adminCard) adminCard.click();
-      });
     }
+
+    // Reasignar SIEMPRE el click porque renderHome reconstruye las tarjetas.
+    btn.onclick = () => {
+      const currentAdminCard = visibleCard208('Administración');
+      if (currentAdminCard) {
+        currentAdminCard.style.display = '';
+        currentAdminCard.click();
+        currentAdminCard.style.display = 'none';
+      } else if (typeof openAdmin === 'function') {
+        openAdmin();
+      }
+    };
   }
 
   function buildMobileNav208() {
@@ -9044,7 +9090,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       ${items.map(name => `
         <button type="button" data-v208-nav="${name}">
           <span class="mvl-v208-nav-icon">${ICONS208[name] || '•'}</span>
-          <span class="mvl-v208-nav-label">${NAV_LABELS208[name] || name}</span>
+          <span class="mvl-v208-nav-label">${displayName208(name) === 'Dashboard Desempeño' ? 'Dashboard' : (NAV_LABELS208[name] || displayName208(name))}</span>
         </button>`).join('')}
       <button type="button" data-v208-nav="MORE">
         <span class="mvl-v208-nav-icon">•••</span>
@@ -9066,7 +9112,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
         btn.dataset.v208Nav = name;
         btn.innerHTML = `
           <span class="mvl-v208-nav-icon">${ICONS208[name] || '•'}</span>
-          <span class="mvl-v208-nav-label">${NAV_LABELS208[name] || name}</span>`;
+          <span class="mvl-v208-nav-label">${displayName208(name) === 'Dashboard Desempeño' ? 'Dashboard' : (NAV_LABELS208[name] || displayName208(name))}</span>`;
         nav.insertBefore(btn, moreButton);
       });
     }
@@ -9134,7 +9180,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
         <button type="button" data-v208-more-module="${name}">
           <span class="more-icon">${ICONS208[name] || '•'}</span>
           <span>
-            <strong>${name}</strong>
+            <strong>${displayName208(name)}</strong>
             <small>${data?.label || 'Abrir módulo'}</small>
           </span>
         </button>`;
@@ -9163,12 +9209,30 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
 
     const prev = api;
     api = async function(action,params={}) {
-      const result = await prev(action,params);
+      const isLogin = action === 'login';
+      const loginButton = document.getElementById('loginButton');
+      const loginMessage = document.getElementById('loginMessage');
 
-      if (WRITE_ACTIONS208.has(action) && result?.ok) {
-        V208.lastCountsAt = 0;
+      if (isLogin) {
+        if (loginButton) loginButton.textContent = 'Ingresando…';
+        if (loginMessage) {
+          loginMessage.textContent = 'Validando acceso…';
+          loginMessage.classList.remove('success-message');
+        }
       }
-      return result;
+
+      try {
+        const result = await prev(action,params);
+        if (WRITE_ACTIONS208.has(action) && result?.ok) V208.lastCountsAt = 0;
+        return result;
+      } catch (err) {
+        if (isLogin && (err?.name === 'AbortError' || /aborted|signal/i.test(String(err?.message || '')))) {
+          throw new Error('El servidor está tardando en responder. Intente ingresar nuevamente.');
+        }
+        throw err;
+      } finally {
+        if (isLogin && loginButton) loginButton.textContent = 'Ingresar';
+      }
     };
     return true;
   }
@@ -9237,6 +9301,6 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     setTimeout(init208,250);
   }
 
-  console.info('[MI VISUAL LIMA] V2.08: Control Center Bento + contadores + navegación móvil.');
+  console.info('[MI VISUAL LIMA] V2.09 DEFINITIVA: Control Operativo + Administración por tuerca + login estable.');
 })();
 

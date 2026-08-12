@@ -1,0 +1,77 @@
+MI VISUAL LIMA - V2.09 DEFINITIVA
+
+BASE
+Esta versión fue construida SOBRE el ZIP actual entregado por el usuario: mivisuallima-main (5).zip.
+No parte de una copia anterior generada por ChatGPT.
+
+CORRECCIONES DEFINITIVAS
+1. Dashboard / Mi Desempeño
+- La hoja y PERMISOS usan el nombre real: Mi Desempeño.
+- Para perfiles de gestión se sigue mostrando: Dashboard Desempeño.
+- Queda PRIMERO en CONTROL OPERATIVO.
+- Mapa Operativo queda segundo en el mismo bloque.
+- Ya no debe aparecer Dashboard en OTROS.
+
+2. Administración
+- Se elimina visualmente del menú Bento para TODOS los perfiles.
+- SOLO Administrador con permiso ADMINISTRAR ve la tuerca junto a Cerrar sesión.
+- La tuerca usa el módulo Administración existente; no crea otra lógica.
+- El click se actualiza después de cada renderHome para no quedar apuntando a una tarjeta vieja.
+
+3. Login / velocidad
+- Se mantiene el Login visible inmediatamente.
+- Se precalienta Apps Script en segundo plano cuando termina de cargar el núcleo.
+- Se elimina el corte agresivo de 15 segundos: ahora permite hasta 60 segundos a Apps Script.
+- Si Google demora excepcionalmente, ya no debe mostrar el mensaje crudo "signal is aborted without reason".
+
+4. Fondo Login
+- Se conserva la imagen original.
+- Se reduce considerablemente la capa blanca/celeste para que el técnico y el fondo se vean más claros.
+- La tarjeta mantiene contraste para usuario y contraseña.
+
+5. Colores / delineados
+- Paleta FIJA: celeste + azul corporativo + blanco.
+- Tarjetas blancas con borde azul/celeste de 2 px.
+- Franja azul izquierda en módulos activos.
+- Iconos celeste sólido con delineado.
+- Textos azul oscuro con contraste mayor.
+- Dashboard conserva semáforos pero ahora con colores sólidos y bordes más oscuros.
+
+NO SE CAMBIÓ
+- lógica de negocio
+- alcances
+- reglas de Dashboard
+- cálculos de SLA
+- permisos de las hojas
+- módulos operativos
+- datos existentes
+
+HOJAS VALIDADAS
+La BD conectada mantiene MODULOS con Mi Desempeño (no Dashboard Desempeño).
+Administración sigue controlada por PERMISOS. La interfaz V2.09 usa ADMINISTRAR para mostrar la tuerca.
+
+ACTUALIZACIÓN
+A) APPS SCRIPT
+1. Reemplazar Code.gs por Code_V2_09_DEFINITIVA.gs.
+2. Guardar.
+3. Implementar > Administrar implementaciones > Editar.
+4. Nueva versión.
+5. Mantener la misma URL.
+
+B) GITHUB
+1. Subir TODO el contenido del ZIP GitHub completo.
+2. Reemplazar los archivos actuales.
+3. Esperar GitHub Pages = Éxito.
+4. Cerrar la pestaña anterior.
+5. Abrir nuevamente y usar Ctrl+F5 una vez.
+
+PRUEBA RÁPIDA
+Administrador:
+- Control Operativo: Dashboard Desempeño + Mapa Operativo.
+- No debe existir sección Sistema/Administración en el menú.
+- Debe verse la tuerca al lado de Cerrar sesión.
+
+Supervisor/Jefaturas/Gerencia/Técnico:
+- No debe verse la tuerca de Administración.
+- No debe verse tarjeta Administración.
+- Mi Desempeño/Dashboard permanece según perfil y permisos.
