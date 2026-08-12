@@ -8436,3 +8436,259 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   const timer=setInterval(()=>{wrapHome206();activateOperationalCards206();if($206('moduleList')&&session206())clearInterval(timer);},350);setTimeout(()=>clearInterval(timer),10000);
   console.info('[MI VISUAL LIMA] V2.06: módulos operativos implementados.');
 })();
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.07
+   RESUMEN GENERAL LINEAL + 4 NIVELES DE COLOR
+   ========================================================== */
+(() => {
+  const V207 = { wrapped:false, dashboardAll:null, dashboardLatest:null, rendering:false };
+  const $207 = id => document.getElementById(id);
+  const norm207 = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  const esc207 = v => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const num207 = (v,f=0) => Number.isFinite(Number(v)) ? Number(v) : f;
+  const pct207 = (v,d=1) => Number.isFinite(Number(v)) ? `${(Number(v)*100).toFixed(d)}%` : '—';
+
+  function rowMatches207(row){
+    const visual=norm207($207('dashboardVisualTypeV19')?.value||'');
+    const platform=norm207($207('dashboardPlatformV19')?.value||'');
+    const composition=norm207($207('dashboardCompositionV19')?.value||'');
+    const state=norm207($207('dashboardStateV19')?.value||'');
+    const supervisor=String($207('dashboardSupervisor')?.value||'');
+    const crew=String($207('dashboardCrew')?.value||'');
+    if(visual && norm207(row.visualType)!==visual) return false;
+    if(platform && norm207(row.platform)!==platform) return false;
+    if(composition){
+      const c=norm207(row.composition)==='INDIVIDUAL'?'SOLO':norm207(row.composition);
+      if(c!==composition) return false;
+    }
+    if(state){
+      const rs=norm207(row.state);
+      if(rs!==state && !(state==='ACTIVO'&&rs==='ACTIVA')) return false;
+    }
+    if(supervisor){
+      if(supervisor==='__GG__'){
+        if(!(String(row.supervisorId||'')==='__GG__'||norm207(row.supervisor)==='GG')) return false;
+      } else if(String(row.supervisorId||'')!==supervisor) return false;
+    }
+    if(crew && String(row.crewId||'')!==crew) return false;
+    return true;
+  }
+
+  function summary207(data){
+    const rows=(data?.rows||[]).filter(rowMatches207);
+    const withData=rows.filter(r=>r.hasData || num207(r.finalized)>0 || num207(r.points)>0);
+    const points=rows.reduce((a,r)=>a+num207(r.points),0);
+    const finalized=rows.reduce((a,r)=>a+num207(r.finalized),0);
+    const total=rows.reduce((a,r)=>a+num207(r.totalGeneral ?? r.total ?? r.ordersTotal),0);
+    const los=rows.reduce((a,r)=>a+num207(r.losRojo),0);
+    const rec=rows.reduce((a,r)=>a+num207(r.recables),0);
+    const target=rows.reduce((a,r)=>a+num207(r.productionTargetToDate),0);
+    const monthTarget=rows.reduce((a,r)=>a+num207(r.productionMonthlyTarget),0);
+    const slaEval=rows.reduce((a,r)=>a+num207(r.slaEvaluables),0);
+    const slaOk=rows.reduce((a,r)=>a+num207(r.slaCumplen),0);
+    const obs=rows.reduce((a,r)=>a+num207(r.observationsCount),0);
+    const obsActive=rows.reduce((a,r)=>a+num207(r.observationsActive),0);
+    const obsImpact=rows.reduce((a,r)=>a+num207(r.observationsImpact),0);
+    return {
+      rows, withData, points, finalized,
+      effectiveness: total>0?finalized/total:null,
+      los, recables:rec, recable:los>0?rec/los:null,
+      target, monthTarget,
+      productionRatio:target>0?points/target:null,
+      monthProgress:monthTarget>0?points/monthTarget:null,
+      slaEval, slaOk, sla:slaEval>0?slaOk/slaEval:null,
+      obs, obsActive, obsImpact, obsAvg:rows.length?obs/rows.length:0
+    };
+  }
+
+  function cfg207(data){
+    const visual=norm207($207('dashboardVisualTypeV19')?.value||'TODOS')||'TODOS';
+    return data?.indicatorConfigs?.[visual] || data?.indicatorConfigs?.TODOS || data?.indicatorConfig || {};
+  }
+
+  function positive4(value, rule, kind){
+    if(value==null || !Number.isFinite(Number(value))) return 'neutral';
+    const v=Number(value);
+    let moderate, optimal;
+    if(kind==='production'){
+      moderate=num207(rule?.moderateFromRatio ?? rule?.attentionRatio,.70);
+      optimal=num207(rule?.optimalFromRatio ?? rule?.greenRatio,1);
+      const redCut=moderate>.5?.5:moderate*.70;
+      if(v>=optimal) return 'green';
+      if(v>=moderate) return 'yellow';
+      if(v>=redCut) return 'orange';
+      return 'red';
+    }
+    moderate=num207(rule?.moderateFrom ?? rule?.criticalBelow, kind==='sla'?.80:.50);
+    optimal=num207(rule?.optimalFrom ?? rule?.greenAbove, kind==='sla'?.90:.70);
+    const mid=moderate + Math.max(0,optimal-moderate)/2;
+    if(v>=optimal) return 'green';
+    if(v>=mid) return 'yellow';
+    if(v>=moderate) return 'orange';
+    return 'red';
+  }
+
+  function negative4(value, rule){
+    if(value==null || !Number.isFinite(Number(value)) || !rule?.configured) return 'neutral';
+    const v=Number(value), opt=num207(rule.optimalMax,0), mod=num207(rule.moderateMax,opt);
+    const mid=opt + Math.max(0,mod-opt)/2;
+    if(v<=opt) return 'green';
+    if(v<=mid) return 'yellow';
+    if(v<=mod) return 'orange';
+    return 'red';
+  }
+
+  function observation4(value,rule){
+    if(value==null || !Number.isFinite(Number(value))) return 'neutral';
+    const v=Number(value), opt=num207(rule?.optimalMax,0), mod=num207(rule?.moderateMax,1);
+    const mid=opt + Math.max(0,mod-opt)/2;
+    if(v<=opt) return 'green';
+    if(v<=mid) return 'yellow';
+    if(v<=mod) return 'orange';
+    return 'red';
+  }
+
+  function stateLabel207(status){
+    return ({green:'EN META',yellow:'CERCA',orange:'ALEJADO',red:'CRÍTICO',neutral:'SIN DATO'})[status]||'SIN DATO';
+  }
+
+  function clamp207(v){ return Math.max(0,Math.min(100,Number(v)||0)); }
+
+  function row207({id,name,value,status,detail,target,meter,meterText,extraClass=''}){
+    const meterHtml = meter==null ? '' : `
+      <div class="mvl-v207-meter">
+        <div class="mvl-v207-track"><i style="width:${clamp207(meter).toFixed(1)}%"></i></div>
+        <b>${esc207(meterText||`${clamp207(meter).toFixed(0)}%`)}</b>
+      </div>`;
+    return `<article class="dashboard-v19-total-card mvl-v207-linear status-${status} ${extraClass}">
+      <span class="mvl-v207-name">${esc207(name)}</span>
+      <div class="mvl-v207-detail">${esc207(detail||'')}</div>
+      <div class="mvl-v207-value"><strong id="${esc207(id)}">${esc207(value)}</strong><small>${esc207(target||'')} <span class="mvl-v207-state">${stateLabel207(status)}</span></small></div>
+      ${meterHtml}
+    </article>`;
+  }
+
+  function render207(){
+    if(V207.rendering) return;
+    const data=V207.dashboardAll?.ok?V207.dashboardAll:V207.dashboardLatest;
+    const section=$207('dashboardTotalSummaryV19');
+    const grid=section?.querySelector('.dashboard-v19-summary-grid');
+    if(!data?.ok || !grid) return;
+    V207.rendering=true;
+    try{
+      const s=summary207(data), cfg=cfg207(data);
+      const pStatus=positive4(s.productionRatio,cfg.production,'production');
+      const eStatus=positive4(s.effectiveness,cfg.effectiveness,'effectiveness');
+      const rStatus=negative4(s.recable,cfg.recableado);
+      const slaStatus=positive4(s.sla,cfg.sla,'sla');
+      const obsStatus=observation4(s.obsAvg,cfg.observations);
+      const pOptimal=num207(cfg?.production?.optimalFromRatio ?? cfg?.production?.greenRatio,1);
+      const eOptimal=num207(cfg?.effectiveness?.optimalFrom ?? cfg?.effectiveness?.greenAbove,.70);
+      const recOptimal=cfg?.recableado?.configured?num207(cfg.recableado.optimalMax,0):null;
+      const slaOptimal=num207(cfg?.sla?.optimalFrom ?? cfg?.sla?.greenAbove,.90);
+      const obsOptimal=num207(cfg?.observations?.optimalMax,0);
+
+      const fp=JSON.stringify([
+        s.rows.length,s.withData.length,s.points,s.finalized,s.effectiveness,s.recable,s.productionRatio,s.monthProgress,
+        s.sla,s.obs,s.obsAvg,$207('dashboardVisualTypeV19')?.value,$207('dashboardPlatformV19')?.value,
+        $207('dashboardSupervisor')?.value,$207('dashboardCompositionV19')?.value,$207('dashboardStateV19')?.value,$207('dashboardCrew')?.value
+      ]);
+      const hasForeign=!!grid.querySelector('.mvl-v118-production-meta,.mvl-v118-status-chip,.mvl-v113-status');
+      if(grid.dataset.v207Fp===fp && grid.classList.contains('mvl-v207-linear-grid') && !hasForeign) return;
+
+      const head=section.querySelector('.dashboard-v19-summary-head h3');
+      const sub=section.querySelector('.dashboard-v19-summary-head .section-subtitle');
+      if(head) head.textContent='Resumen de indicadores';
+      if(sub) sub.textContent='Estado al corte según las metas configuradas.';
+      $207('dashboardSummaryLoadingV112')?.classList.add('hidden');
+
+      grid.classList.add('mvl-v207-linear-grid');
+      grid.innerHTML=`
+        <div class="mvl-v207-crew-strip"><span>Cuadrillas evaluadas</span><strong id="dashboardTotalCrewsV19">${s.rows.length} · ${s.withData.length} con movimiento</strong></div>
+        ${row207({
+          id:'dashboardTotalPointsV19',name:'Producción',value:`${s.points.toFixed(2)} pts`,status:pStatus,
+          detail:`${s.finalized} órdenes finalizadas · Meta al corte ${s.target.toFixed(2)} pts · Meta mensual ${s.monthTarget.toFixed(2)} pts`,
+          target:`Cumplimiento ${pct207(s.productionRatio,0)}`,
+          meter:s.monthProgress==null?0:s.monthProgress*100,meterText:`Avance mes ${pct207(s.monthProgress,0)}`
+        })}
+        ${row207({
+          id:'dashboardTotalEffectivenessV19',name:'Efectividad',value:pct207(s.effectiveness,1),status:eStatus,
+          detail:`${s.finalized} finalizadas`,target:`Meta ≥ ${(eOptimal*100).toFixed(0)}%`,meter:s.effectiveness==null?0:s.effectiveness*100,meterText:pct207(s.effectiveness,0)
+        })}
+        ${row207({
+          id:'dashboardTotalRecableV19',name:'% Recableado',value:pct207(s.recable,1),status:rStatus,
+          detail:`${s.los} LOS ROJO · ${s.recables} recableados`,target:recOptimal==null?'Meta pendiente':`Meta ≤ ${(recOptimal*100).toFixed(0)}%`,meter:s.recable==null?0:s.recable*100,meterText:pct207(s.recable,0)
+        })}
+        ${row207({
+          id:'dashboardTotalSlaV207',name:'Tiempo de gestión / SLA',value:pct207(s.sla,1),status:slaStatus,
+          detail:s.slaEval?`${s.slaOk} de ${s.slaEval} órdenes dentro de SLA`:'Sin órdenes evaluables',target:`Meta ≥ ${(slaOptimal*100).toFixed(0)}%`,meter:s.sla==null?0:s.sla*100,meterText:pct207(s.sla,0)
+        })}
+        ${row207({
+          id:'dashboardTotalObsV205',name:'Observaciones',value:`${s.obs} obs.`,status:obsStatus,
+          detail:`${s.obsActive} activas · S/ ${s.obsImpact.toFixed(2)} impacto · ${s.obsAvg.toFixed(1)} por cuadrilla`,target:`Meta ≤ ${obsOptimal} por cuadrilla`,meter:null,extraClass:'',
+        }).replace('dashboard-v19-total-card mvl-v207-linear','dashboard-v19-total-card mvl-v207-linear').replace('<article ','<article id="dashboardObsCardV205" ')}
+        ${row207({
+          id:'dashboardTotalVtrGarV207',name:'VTR / GAR',value:'En construcción',status:'neutral',detail:'La fuente aún no está integrada.',target:'Pendiente',meter:null
+        })}
+        <span id="dashboardTotalFinalizedV19" class="hidden">${s.finalized} órdenes finalizadas</span>
+        <span id="dashboardTotalEffectivenessHelpV19" class="hidden">Resultado del filtro seleccionado</span>
+        <span id="dashboardTotalRecableHelpV19" class="hidden">${s.los} LOS ROJO · ${s.recables} recableados</span>
+        <span id="dashboardTotalObsHelpV205" class="hidden">${s.obsActive} activas</span>`;
+      grid.dataset.v207Fp=fp;
+    } finally {
+      V207.rendering=false;
+    }
+  }
+
+  function wrapApi207(){
+    if(V207.wrapped || typeof api!=='function') return false;
+    V207.wrapped=true;
+    const prev=api;
+    api=async function(action,params={}){
+      const result=await prev(action,params);
+      if(action==='performanceDashboard' && result?.ok){
+        V207.dashboardLatest=result;
+        if(norm207(params?.indicator)==='ALL') V207.dashboardAll=result;
+        setTimeout(render207,80);
+        setTimeout(render207,320);
+      }
+      return result;
+    };
+    return true;
+  }
+
+  function installObserver207(){
+    const section=$207('dashboardTotalSummaryV19');
+    const grid=section?.querySelector('.dashboard-v19-summary-grid');
+    if(!grid || grid.dataset.v207Observed==='1') return;
+    grid.dataset.v207Observed='1';
+    let timer=null;
+    new MutationObserver(()=>{
+      if(V207.rendering) return;
+      clearTimeout(timer);
+      timer=setTimeout(render207,40);
+    }).observe(grid,{childList:true,subtree:true});
+  }
+
+  document.addEventListener('change',e=>{
+    if(['dashboardVisualTypeV19','dashboardPlatformV19','dashboardCompositionV19','dashboardStateV19','dashboardSupervisor','dashboardCrew','dashboardPeriod'].includes(e.target?.id||'')){
+      setTimeout(render207,40);
+    }
+  },true);
+  document.addEventListener('click',e=>{
+    if(e.target?.id==='refreshDashboardButton' || norm207(e.target?.textContent)==='APLICAR'){
+      setTimeout(render207,100);setTimeout(render207,350);
+    }
+  },true);
+
+  function init207(){
+    wrapApi207();installObserver207();render207();
+  }
+  const timer=setInterval(()=>{ if(wrapApi207()) { installObserver207(); } },250);
+  setTimeout(()=>clearInterval(timer),12000);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(init207,250),{once:true});
+  else setTimeout(init207,250);
+
+  console.info('[MI VISUAL LIMA] V2.07: paleta compacta global + Dashboard lineal de 4 estados.');
+})();
