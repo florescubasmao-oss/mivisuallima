@@ -1,0 +1,4 @@
+MI VISUAL LIMA V2.08.1
+- Corrección visual y orden de Dashboard en Control Operativo.
+- Colores más compactos, bordes y delineados más notorios.
+- Solo GitHub. Apps Script no cambia.

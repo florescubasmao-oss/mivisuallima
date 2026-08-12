@@ -2560,3 +2560,115 @@ body {
   font-weight: 900 !important;
   border: 1px solid rgba(14,72,123,.12);
 }
+
+
+/* ================= V2.08.2 FIXES ================= */
+/* Restituir imagen de login con más presencia */
+body.login-mode {
+  background:
+    linear-gradient(90deg, rgba(232,241,250,.56) 0%, rgba(232,241,250,.78) 42%, rgba(238,245,251,.92) 62%),
+    url("./assets/login-bg-1600x900.jpg") left center / cover no-repeat fixed !important;
+}
+body.login-mode::before {
+  content:'';
+  position: fixed;
+  inset: 0;
+  pointer-events:none;
+  background: radial-gradient(circle at 22% 34%, rgba(86,170,233,.13), transparent 23%);
+}
+body.login-mode #loginView {
+  border: 2px solid #9fc7e8 !important;
+  box-shadow: 0 16px 34px rgba(8,66,124,.12), inset 0 0 0 1px rgba(255,255,255,.75) !important;
+}
+
+/* colores más compactos y delineados */
+body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(84,170,233,.13), transparent 24%),
+    linear-gradient(180deg, #edf5fd 0%, #f5f9fe 40%, #fbfdff 100%) !important;
+}
+.shell {
+  border-color: #a7c9e7 !important;
+  box-shadow: 0 12px 32px rgba(9,78,139,.08), inset 0 0 0 1px rgba(255,255,255,.66);
+}
+#homeView .module-card {
+  min-height: 78px !important;
+  padding: 11px 12px !important;
+  border: 2px solid #9fc8ec !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg,#ffffff 0%,#fafdff 64%,#edf6ff 100%) !important;
+  box-shadow: 0 7px 18px rgba(9,78,139,.06), inset 0 0 0 1px rgba(255,255,255,.85) !important;
+}
+#homeView .module-card.mvl-v208-featured {
+  border-color: #82b6e3 !important;
+}
+#homeView .module-copy strong {
+  font-size: .94rem !important;
+  font-weight: 950 !important;
+  color: #07345f !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.95), 0 0 1px rgba(7,52,95,.18);
+}
+#homeView .module-copy small {
+  color: #6b87a3 !important;
+  font-size: .66rem !important;
+}
+#homeView .module-arrow {
+  font-size: 1.08rem !important;
+  font-weight: 900 !important;
+}
+#homeView .module-icon {
+  border: 1.5px solid #c2def7;
+}
+#homeView .mvl-v208-counter {
+  margin-top: 5px;
+  font-size: .56rem;
+  border-width: 1.5px;
+}
+#homeView .mvl-v208-section-label {
+  color: #4e7090;
+  font-size: .60rem;
+  letter-spacing: .08em;
+}
+
+/* Herramientas cabecera */
+.mvl-v208-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.mvl-v208-admin-quick {
+  min-width: 44px;
+  width: 44px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  border: 1.5px solid #bdd8f1 !important;
+  background: linear-gradient(180deg,#f8fbff,#edf6ff) !important;
+  box-shadow: 0 2px 7px rgba(10,103,199,.08);
+}
+.mvl-v208-admin-quick .mvl-v208-admin-icon {
+  font-size: 1rem;
+  color: #0a67c7;
+  line-height: 1;
+}
+
+/* Dashboard barras más remarcadas */
+#dashboardTotalSummaryV19 .mvl-v207-linear {
+  border-radius: 12px !important;
+  border: 2px solid rgba(255,255,255,.26) !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-name {
+  font-size: .96rem !important;
+  font-weight: 950 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-detail,
+#dashboardTotalSummaryV19 .mvl-v207-value small,
+#dashboardTotalSummaryV19 .mvl-v207-meter b {
+  font-weight: 800 !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-track {
+  border: 1px solid rgba(255,255,255,.22);
+}

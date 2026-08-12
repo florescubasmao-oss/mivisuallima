@@ -1,0 +1,156 @@
+MI VISUAL LIMA - V2.08
+CONTROL CENTER / BENTO + CONTADORES + BARRA MÓVIL
+
+OBJETIVO
+Modernizar TODA la experiencia visual SIN modificar la lógica de negocio,
+permisos, alcance, hojas, cálculos ni flujos de los módulos existentes.
+
+==================================================
+1. MISMO ORDEN PARA TODOS LOS PERFILES
+==================================================
+El orden visual es fijo:
+
+CONTROL OPERATIVO
+- Dashboard Desempeño
+- Mapa Operativo
+
+GESTIÓN TÉCNICA
+- Validación Técnica
+- Observaciones
+
+CAMPO
+- Actividad en Campo
+- Checklist
+
+ADMINISTRATIVO
+- Gestión de Actas
+- Descansos Programados
+
+SISTEMA
+- Administración
+
+IMPORTANTE:
+Un módulo SOLO aparece si el perfil ya tiene permiso VER.
+V2.08 no habilita, no oculta ni cambia permisos.
+Solo ordena las tarjetas que ya entregó el backend.
+
+==================================================
+2. BENTO MODERNO
+==================================================
+- Dashboard y Mapa quedan destacados.
+- Módulos restantes compactos.
+- Administración queda al final.
+- Dos columnas en PC/tablet.
+- Una columna en celular.
+- No se recrean tarjetas: se reutilizan las tarjetas actuales, por lo que
+  conservan todos sus eventos y lógica.
+
+==================================================
+3. CONTADORES REALES
+==================================================
+Se agrega UNA sola llamada liviana después de mostrar el Inicio.
+
+Ejemplos:
+- Dashboard: 34 cuadrillas
+- Mapa: 83 órdenes
+- Validación Técnica: 4 pendientes
+- Observaciones: 3 activas
+- Actividad en Campo: 8 registros hoy
+- Checklist: 5 pendientes
+- Gestión de Actas: 12 por gestionar
+- Descansos: 6 descansos hoy
+- Administración: usuarios activos
+
+Los contadores respetan:
+- perfil;
+- módulos con VER;
+- cuadrillas dentro del alcance del usuario.
+
+Los contadores NO bloquean el Login ni el Inicio.
+
+==================================================
+4. BARRA INFERIOR MÓVIL
+==================================================
+En celular aparece una barra inferior:
+- Inicio
+- accesos principales disponibles según permiso
+- Más
+
+"Más" abre todos los módulos que el perfil ya puede ver.
+
+Los botones NO crean rutas nuevas:
+usan las tarjetas existentes para abrir cada módulo y conservar la lógica actual.
+
+==================================================
+5. PALETA GLOBAL
+==================================================
+Toda la APP se unifica en:
+- blanco;
+- celeste suave;
+- azul corporativo;
+- azul marino para textos.
+
+Verde / amarillo / naranja / rojo se mantienen principalmente para:
+- metas;
+- estados;
+- alertas;
+- semáforos.
+
+==================================================
+6. DASHBOARD
+==================================================
+Las barras lineales V2.07 se conservan.
+Se mejora legibilidad:
+- texto con sombra/delineado sutil;
+- cápsula de estado blanca;
+- mayor contraste sin cambiar valores ni colores del semáforo.
+
+==================================================
+7. APPS SCRIPT
+==================================================
+El único cambio backend es:
+homeModuleCounts
+
+Esta función:
+- es de solo lectura;
+- no escribe ninguna hoja;
+- no cambia permisos;
+- no altera cálculos;
+- devuelve únicamente contadores del Inicio.
+
+==================================================
+8. ACTUALIZACIÓN
+==================================================
+PASO 1 - APPS SCRIPT
+Reemplazar Code.gs por:
+Code_V2_08_CONTROL_CENTER.gs
+
+Guardar.
+Implementar > Administrar implementaciones > Editar.
+Crear NUEVA VERSIÓN.
+Mantener la misma URL.
+
+PASO 2 - GITHUB
+Subir TODO el contenido de:
+MI_VISUAL_LIMA_V2_08_GITHUB_COMPLETO.zip
+
+Reemplazar archivos actuales.
+Esperar GitHub Pages = Éxito.
+
+PASO 3
+Cerrar completamente la pestaña anterior.
+Abrir nuevamente MI VISUAL LIMA.
+En celular, volver a abrir para que aparezca la barra inferior.
+
+VALIDACIÓN
+- app.js: sintaxis OK.
+- Code.gs: sintaxis OK.
+- No se modifican hojas.
+- No se modifican PERMISOS.
+- No se modifican MODULOS.
+
+
+AJUSTE V2.08.1
+- Dashboard vuelve a Control Operativo por coincidencia normalizada del nombre del módulo.
+- Se refuerzan bordes, delineados y contraste general en toda la app.
+- Se mantiene la misma lógica, permisos y backend V2.08.

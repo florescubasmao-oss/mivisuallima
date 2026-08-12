@@ -8761,6 +8761,16 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     'Observaciones':'Observ.'
   };
 
+  function isAdminProfile208() {
+    const s = session208();
+    const profile = norm208(s?.profile || s?.perfil || '');
+    return profile === 'ADMINISTRADOR';
+  }
+
+  function visibleAvailableModuleNames208() {
+    return GROUPS208.flatMap(g => g.items).filter(name => cardIsAvailable208(visibleCard208(name)));
+  }
+
   const WRITE_ACTIONS208 = new Set([
     'mapImport',
     'technicalValidationCreate','technicalValidationResolve',
@@ -8909,7 +8919,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       });
     });
 
-    const leftovers = cards.filter(card => !used.has(card));
+    const leftovers = cards.filter(card => !used.has(card) && normalizeName208(card.dataset.module || '') !== normalizeName208('Administración'));
     if (leftovers.length) {
       const label = document.createElement('div');
       label.className = 'mvl-v208-section-label';
@@ -8924,6 +8934,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       });
     }
 
+    relocateAdmin208();
     buildMobileNav208();
     applyAllCounts208();
 
@@ -8973,6 +8984,48 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       .slice(0,3);
   }
 
+  function relocateAdmin208() {
+    const adminCard = visibleCard208('Administración');
+    const logout = document.getElementById('logoutButton');
+    if (!logout) return;
+
+    let wrap = document.getElementById('mvlV208HeaderTools');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'mvlV208HeaderTools';
+      wrap.className = 'mvl-v208-header-tools';
+      logout.parentElement?.insertBefore(wrap, logout);
+      wrap.appendChild(logout);
+    }
+
+    let btn = document.getElementById('mvlV208AdminQuick');
+    const showQuick = isAdminProfile208() && cardIsAvailable208(adminCard);
+
+    if (adminCard) {
+      adminCard.style.display = 'none';
+      adminCard.dataset.v208HiddenAdmin = '1';
+    }
+
+    if (!showQuick) {
+      if (btn) btn.remove();
+      return;
+    }
+
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'mvlV208AdminQuick';
+      btn.className = 'ghost mvl-v208-admin-quick';
+      btn.setAttribute('aria-label', 'Administración');
+      btn.title = 'Administración';
+      btn.innerHTML = '<span class="mvl-v208-admin-icon">⚙</span>';
+      wrap.prepend(btn);
+      btn.addEventListener('click', () => {
+        if (adminCard) adminCard.click();
+      });
+    }
+  }
+
   function buildMobileNav208() {
     let nav = $208('mvlV208MobileNav');
     if (!nav) {
@@ -9004,7 +9057,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     if (currentButtons.length < 5) {
       const used = new Set(['HOME','MORE',...items]);
       const extras = GROUPS208.flatMap(g => g.items)
-        .filter(name => !used.has(name) && cardIsAvailable208(visibleCard208(name)));
+        .filter(name => !used.has(name) && cardIsAvailable208(visibleCard208(name)) && normalizeName208(name) !== normalizeName208('Administración'));
 
       const moreButton = nav.querySelector('[data-v208-nav="MORE"]');
       extras.slice(0, 5 - currentButtons.length).forEach(name => {
@@ -9073,7 +9126,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     if (!grid) return;
 
     const names = GROUPS208.flatMap(g => g.items)
-      .filter(name => cardIsAvailable208(visibleCard208(name)));
+      .filter(name => cardIsAvailable208(visibleCard208(name)) && normalizeName208(name) !== normalizeName208('Administración'));
 
     grid.innerHTML = names.map(name => {
       const data = V208.lastCounts?.counts?.[name];
