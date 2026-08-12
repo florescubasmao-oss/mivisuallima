@@ -8692,3 +8692,492 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
 
   console.info('[MI VISUAL LIMA] V2.07: paleta compacta global + Dashboard lineal de 4 estados.');
 })();
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.08
+   CENTRO DE CONTROL BENTO + CONTADORES + NAVEGACIÓN MÓVIL
+   Respeta estrictamente los módulos que ya entrega PERMISOS.
+   ========================================================== */
+(() => {
+  const V208 = {
+    lastCounts: null,
+    lastCountsAt: 0,
+    loadingCounts: false,
+    apiWrapped: false,
+    homeWrapped: false,
+    observerInstalled: false,
+    activeModule: ''
+  };
+
+  const $208 = id => document.getElementById(id);
+  const norm208 = v => String(v ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .trim()
+    .toUpperCase();
+
+  const GROUPS208 = [
+    {
+      label:'Control Operativo',
+      items:['Dashboard Desempeño','Mapa Operativo'],
+      featured:true
+    },
+    {
+      label:'Gestión Técnica',
+      items:['Validación Técnica','Observaciones']
+    },
+    {
+      label:'Campo',
+      items:['Actividad en Campo','Checklist']
+    },
+    {
+      label:'Administrativo',
+      items:['Gestión de Actas','Descansos Programados']
+    },
+    {
+      label:'Sistema',
+      items:['Administración'],
+      system:true
+    }
+  ];
+
+  const ICONS208 = {
+    'Dashboard Desempeño':'↗',
+    'Mapa Operativo':'⌖',
+    'Validación Técnica':'✓',
+    'Observaciones':'!',
+    'Actividad en Campo':'◎',
+    'Checklist':'☑',
+    'Gestión de Actas':'▤',
+    'Descansos Programados':'◷',
+    'Administración':'⚙'
+  };
+
+  const NAV_LABELS208 = {
+    'Dashboard Desempeño':'Dashboard',
+    'Mapa Operativo':'Mapa',
+    'Validación Técnica':'Validación',
+    'Observaciones':'Observ.'
+  };
+
+  const WRITE_ACTIONS208 = new Set([
+    'mapImport',
+    'technicalValidationCreate','technicalValidationResolve',
+    'observationsCreate','observationsDescargo','observationsUpdate',
+    'fieldActivityCreate','fieldActivityUpdate',
+    'checklistCreate','checklistValidate',
+    'actsCreate','actsReplacePdf','actsReview','actsPhysicalDelivery','actsCargoCreate',
+    'restsSchedule','restsRequestChange','restsReviewSupervisor','restsReviewManagement',
+    'adminCreateUser','adminUpdateUser','adminSetUserStatus',
+    'adminCreateCrew','adminUpdateCrew','adminReplaceCrewTechnician',
+    'adminCreateSupervisor','adminCreateStaff',
+    'adminImportFinish'
+  ]);
+
+  function session208() {
+    try {
+      if (typeof sessionData !== 'undefined' && sessionData) return sessionData;
+    } catch (_) {}
+    return window.sessionData || null;
+  }
+
+  function token208() {
+    try { return typeof token === 'function' ? token() : ''; }
+    catch (_) { return ''; }
+  }
+
+  function visibleCard208(name) {
+    return document.querySelector(`#moduleList [data-module="${CSS.escape(name)}"]`);
+  }
+
+  function cardIsAvailable208(card) {
+    if (!card) return false;
+    if (card.disabled) return false;
+    if (card.getAttribute('aria-disabled') === 'true') return false;
+    return card.classList.contains('module-active') || !card.classList.contains('module-disabled');
+  }
+
+  function ensureCounter208(card) {
+    const copy = card?.querySelector('.module-copy');
+    if (!copy) return null;
+
+    let counter = copy.querySelector('.mvl-v208-counter');
+    if (!counter) {
+      counter = document.createElement('span');
+      counter.className = 'mvl-v208-counter tone-muted';
+      counter.textContent = 'Actualizando…';
+      copy.appendChild(counter);
+    }
+    return counter;
+  }
+
+  function applyCount208(name, data) {
+    const card = visibleCard208(name);
+    if (!card || !data) return;
+
+    const counter = ensureCounter208(card);
+    if (!counter) return;
+
+    counter.textContent = data.label || '';
+    counter.className = `mvl-v208-counter tone-${data.tone || 'blue'}`;
+  }
+
+  function applyAllCounts208() {
+    const counts = V208.lastCounts?.counts || {};
+    Object.entries(counts).forEach(([name,data]) => applyCount208(name,data));
+
+    // Para módulos visibles que todavía no tienen respuesta.
+    document.querySelectorAll('#moduleList [data-module]').forEach(card => {
+      const name = card.dataset.module || '';
+      if (counts[name]) return;
+      const counter = ensureCounter208(card);
+      if (counter && counter.textContent === 'Actualizando…') {
+        counter.textContent = 'Disponible';
+        counter.className = 'mvl-v208-counter tone-muted';
+      }
+    });
+
+    updateMoreSheet208();
+  }
+
+  async function loadCounts208(force=false) {
+    if (V208.loadingCounts || typeof api !== 'function' || !token208()) return;
+
+    const fresh = Date.now() - V208.lastCountsAt < 30000;
+    if (!force && fresh && V208.lastCounts) {
+      applyAllCounts208();
+      return;
+    }
+
+    V208.loadingCounts = true;
+    try {
+      const result = await api('homeModuleCounts',{token:token208()});
+      if (result?.ok) {
+        V208.lastCounts = result;
+        V208.lastCountsAt = Date.now();
+        applyAllCounts208();
+      }
+    } catch (_) {
+      // Los contadores son complementarios; nunca bloquean el Inicio.
+    } finally {
+      V208.loadingCounts = false;
+    }
+  }
+
+  function clearBentoLabels208(list) {
+    list.querySelectorAll(':scope > .mvl-v208-section-label').forEach(el => el.remove());
+  }
+
+  function enhanceHome208() {
+    const list = $208('moduleList');
+    if (!list) return;
+
+    list.classList.add('mvl-v208-bento');
+    clearBentoLabels208(list);
+
+    const cards = [...list.querySelectorAll(':scope > .module-card, :scope > [data-module]')];
+    const byName = new Map(cards.map(card => [card.dataset.module || '', card]));
+    const used = new Set();
+    let order = 10;
+
+    GROUPS208.forEach(group => {
+      const groupCards = group.items
+        .map(name => byName.get(name))
+        .filter(Boolean);
+
+      if (!groupCards.length) return;
+
+      const label = document.createElement('div');
+      label.className = 'mvl-v208-section-label';
+      label.textContent = group.label;
+      label.style.order = String(order++);
+      list.appendChild(label);
+
+      groupCards.forEach(card => {
+        used.add(card);
+        card.style.order = String(order++);
+        card.classList.toggle('mvl-v208-featured', !!group.featured);
+        card.classList.toggle('mvl-v208-system', !!group.system);
+        ensureCounter208(card);
+      });
+    });
+
+    const leftovers = cards.filter(card => !used.has(card));
+    if (leftovers.length) {
+      const label = document.createElement('div');
+      label.className = 'mvl-v208-section-label';
+      label.textContent = 'Otros';
+      label.style.order = String(order++);
+      list.appendChild(label);
+
+      leftovers.forEach(card => {
+        card.style.order = String(order++);
+        card.classList.remove('mvl-v208-featured','mvl-v208-system');
+        ensureCounter208(card);
+      });
+    }
+
+    buildMobileNav208();
+    applyAllCounts208();
+
+    // Contadores se cargan después de pintar el Inicio.
+    setTimeout(() => loadCounts208(false), 180);
+  }
+
+  function goHome208() {
+    try {
+      const s = session208();
+      if (typeof renderHome === 'function' && s) {
+        renderHome(s);
+        V208.activeModule = '';
+        setTimeout(() => {
+          enhanceHome208();
+          setActiveNav208('HOME');
+        }, 20);
+        return;
+      }
+    } catch (_) {}
+
+    $208('homeView')?.classList.remove('hidden');
+    setActiveNav208('HOME');
+  }
+
+  function openModule208(name) {
+    const card = visibleCard208(name);
+    if (!card || !cardIsAvailable208(card)) return false;
+
+    V208.activeModule = name;
+    closeMore208();
+    setActiveNav208(name);
+    card.click();
+    return true;
+  }
+
+  function navItems208() {
+    const priority = [
+      'Dashboard Desempeño',
+      'Mapa Operativo',
+      'Validación Técnica',
+      'Observaciones'
+    ];
+
+    return priority
+      .filter(name => cardIsAvailable208(visibleCard208(name)))
+      .slice(0,3);
+  }
+
+  function buildMobileNav208() {
+    let nav = $208('mvlV208MobileNav');
+    if (!nav) {
+      nav = document.createElement('nav');
+      nav.id = 'mvlV208MobileNav';
+      nav.className = 'mvl-v208-mobile-nav';
+      document.body.appendChild(nav);
+    }
+
+    const items = navItems208();
+    nav.innerHTML = `
+      <button type="button" data-v208-nav="HOME">
+        <span class="mvl-v208-nav-icon">⌂</span>
+        <span class="mvl-v208-nav-label">Inicio</span>
+      </button>
+      ${items.map(name => `
+        <button type="button" data-v208-nav="${name}">
+          <span class="mvl-v208-nav-icon">${ICONS208[name] || '•'}</span>
+          <span class="mvl-v208-nav-label">${NAV_LABELS208[name] || name}</span>
+        </button>`).join('')}
+      <button type="button" data-v208-nav="MORE">
+        <span class="mvl-v208-nav-icon">•••</span>
+        <span class="mvl-v208-nav-label">Más</span>
+      </button>
+    `;
+
+    // Siempre 5 columnas visuales: si faltan módulos, rellena con los siguientes disponibles.
+    const currentButtons = [...nav.querySelectorAll('button[data-v208-nav]')];
+    if (currentButtons.length < 5) {
+      const used = new Set(['HOME','MORE',...items]);
+      const extras = GROUPS208.flatMap(g => g.items)
+        .filter(name => !used.has(name) && cardIsAvailable208(visibleCard208(name)));
+
+      const moreButton = nav.querySelector('[data-v208-nav="MORE"]');
+      extras.slice(0, 5 - currentButtons.length).forEach(name => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.v208Nav = name;
+        btn.innerHTML = `
+          <span class="mvl-v208-nav-icon">${ICONS208[name] || '•'}</span>
+          <span class="mvl-v208-nav-label">${NAV_LABELS208[name] || name}</span>`;
+        nav.insertBefore(btn, moreButton);
+      });
+    }
+
+    // Adaptar columnas al número real, sin inventar permisos.
+    const count = nav.querySelectorAll('button[data-v208-nav]').length;
+    nav.style.gridTemplateColumns = `repeat(${Math.max(2,count)},minmax(0,1fr))`;
+
+    nav.querySelectorAll('button[data-v208-nav]').forEach(btn => {
+      btn.onclick = () => {
+        const target = btn.dataset.v208Nav;
+        if (target === 'HOME') goHome208();
+        else if (target === 'MORE') openMore208();
+        else openModule208(target);
+      };
+    });
+
+    setActiveNav208(V208.activeModule || 'HOME');
+    updateMoreSheet208();
+  }
+
+  function setActiveNav208(target) {
+    const nav = $208('mvlV208MobileNav');
+    if (!nav) return;
+    nav.querySelectorAll('button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.v208Nav === target);
+    });
+  }
+
+  function ensureMoreSheet208() {
+    let sheet = $208('mvlV208MoreSheet');
+    if (sheet) return sheet;
+
+    sheet = document.createElement('div');
+    sheet.id = 'mvlV208MoreSheet';
+    sheet.className = 'mvl-v208-more-sheet hidden';
+    sheet.innerHTML = `
+      <section class="mvl-v208-more-card">
+        <div class="mvl-v208-more-head">
+          <strong>Todos mis módulos</strong>
+          <button type="button" data-v208-close>×</button>
+        </div>
+        <div class="mvl-v208-more-grid"></div>
+      </section>`;
+    document.body.appendChild(sheet);
+
+    sheet.querySelector('[data-v208-close]').onclick = closeMore208;
+    sheet.addEventListener('click',e => {
+      if (e.target === sheet) closeMore208();
+    });
+    return sheet;
+  }
+
+  function updateMoreSheet208() {
+    const sheet = ensureMoreSheet208();
+    const grid = sheet.querySelector('.mvl-v208-more-grid');
+    if (!grid) return;
+
+    const names = GROUPS208.flatMap(g => g.items)
+      .filter(name => cardIsAvailable208(visibleCard208(name)));
+
+    grid.innerHTML = names.map(name => {
+      const data = V208.lastCounts?.counts?.[name];
+      return `
+        <button type="button" data-v208-more-module="${name}">
+          <span class="more-icon">${ICONS208[name] || '•'}</span>
+          <span>
+            <strong>${name}</strong>
+            <small>${data?.label || 'Abrir módulo'}</small>
+          </span>
+        </button>`;
+    }).join('');
+
+    grid.querySelectorAll('[data-v208-more-module]').forEach(btn => {
+      btn.onclick = () => openModule208(btn.dataset.v208MoreModule);
+    });
+  }
+
+  function openMore208() {
+    const sheet = ensureMoreSheet208();
+    updateMoreSheet208();
+    sheet.classList.remove('hidden');
+    setActiveNav208('MORE');
+  }
+
+  function closeMore208() {
+    $208('mvlV208MoreSheet')?.classList.add('hidden');
+    setActiveNav208(V208.activeModule || 'HOME');
+  }
+
+  function wrapApi208() {
+    if (V208.apiWrapped || typeof api !== 'function') return false;
+    V208.apiWrapped = true;
+
+    const prev = api;
+    api = async function(action,params={}) {
+      const result = await prev(action,params);
+
+      if (WRITE_ACTIONS208.has(action) && result?.ok) {
+        V208.lastCountsAt = 0;
+      }
+      return result;
+    };
+    return true;
+  }
+
+  function wrapHome208() {
+    if (V208.homeWrapped || typeof renderHome !== 'function') return false;
+    V208.homeWrapped = true;
+
+    const prev = renderHome;
+    renderHome = function(data) {
+      const result = prev(data);
+      V208.activeModule = '';
+      setTimeout(() => {
+        enhanceHome208();
+        setActiveNav208('HOME');
+      }, 20);
+      return result;
+    };
+    return true;
+  }
+
+  function installObserver208() {
+    const list = $208('moduleList');
+    if (!list || list.dataset.v208Observed === '1') return;
+    list.dataset.v208Observed = '1';
+
+    let timer = null;
+    new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => enhanceHome208(), 35);
+    }).observe(list,{childList:true});
+
+    V208.observerInstalled = true;
+  }
+
+  // Cualquier clic real sobre tarjeta conserva toda la lógica previa.
+  document.addEventListener('click',e => {
+    const card = e.target?.closest?.('#moduleList [data-module]');
+    if (card && cardIsAvailable208(card)) {
+      V208.activeModule = card.dataset.module || '';
+      setActiveNav208(V208.activeModule);
+    }
+  },true);
+
+  function init208() {
+    wrapApi208();
+    wrapHome208();
+    installObserver208();
+    enhanceHome208();
+  }
+
+  const timer = setInterval(() => {
+    wrapApi208();
+    wrapHome208();
+    installObserver208();
+    if ($208('moduleList') && session208()) {
+      enhanceHome208();
+      clearInterval(timer);
+    }
+  },250);
+  setTimeout(() => clearInterval(timer),12000);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded',() => setTimeout(init208,250),{once:true});
+  } else {
+    setTimeout(init208,250);
+  }
+
+  console.info('[MI VISUAL LIMA] V2.08: Control Center Bento + contadores + navegación móvil.');
+})();
+
