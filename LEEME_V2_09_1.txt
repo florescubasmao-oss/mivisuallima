@@ -1,0 +1,9 @@
+MI VISUAL LIMA - V2.09.1
+CORRECCIÓN VISUAL LOGIN
+
+- "Validando acceso…" aparece únicamente después de enviar el formulario de Login.
+- Se mantiene visible solo mientras la solicitud está en curso.
+- Al terminar, desaparece o el Login muestra el error real correspondiente.
+- Al editar Usuario/Contraseña no queda un mensaje de validación antiguo.
+- No cambia Apps Script.
+- No cambia permisos, módulos, Dashboard, hojas ni lógica operativa.

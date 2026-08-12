@@ -8715,7 +8715,8 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     apiWrapped: false,
     homeWrapped: false,
     observerInstalled: false,
-    activeModule: ''
+    activeModule: '',
+    loginPending: false
   };
 
   const $208 = id => document.getElementById(id);
@@ -9214,6 +9215,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
       const loginMessage = document.getElementById('loginMessage');
 
       if (isLogin) {
+        V208.loginPending = true;
         if (loginButton) loginButton.textContent = 'Ingresando…';
         if (loginMessage) {
           loginMessage.textContent = 'Validando acceso…';
@@ -9231,7 +9233,14 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
         }
         throw err;
       } finally {
-        if (isLogin && loginButton) loginButton.textContent = 'Ingresar';
+        if (isLogin) {
+          V208.loginPending = false;
+          if (loginButton) loginButton.textContent = 'Ingresar';
+          // "Validando acceso…" solo existe mientras la solicitud de Login está realmente en curso.
+          if (loginMessage && loginMessage.textContent.trim() === 'Validando acceso…') {
+            loginMessage.textContent = '';
+          }
+        }
       }
     };
     return true;
@@ -9277,10 +9286,29 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     }
   },true);
 
+  function clearIdleLoginMessage2091() {
+    const message = document.getElementById('loginMessage');
+    if (!message || V208.loginPending) return;
+    if (message.textContent.trim() === 'Validando acceso…') message.textContent = '';
+  }
+
+  function installLoginMessageGuard2091() {
+    ['usuario','clave'].forEach(id => {
+      const input = document.getElementById(id);
+      if (!input || input.dataset.mvl2091Guard === '1') return;
+      input.dataset.mvl2091Guard = '1';
+      input.addEventListener('input', clearIdleLoginMessage2091);
+      input.addEventListener('focus', clearIdleLoginMessage2091);
+    });
+    window.addEventListener('pageshow', () => setTimeout(clearIdleLoginMessage2091, 0));
+    clearIdleLoginMessage2091();
+  }
+
   function init208() {
     wrapApi208();
     wrapHome208();
     installObserver208();
+    installLoginMessageGuard2091();
     enhanceHome208();
   }
 
@@ -9288,6 +9316,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     wrapApi208();
     wrapHome208();
     installObserver208();
+    installLoginMessageGuard2091();
     if ($208('moduleList') && session208()) {
       enhanceHome208();
       clearInterval(timer);
