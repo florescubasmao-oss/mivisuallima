@@ -2440,3 +2440,123 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
+
+
+/* ================= V2.08.1 AJUSTE VISUAL ================= */
+:root {
+  --mvl208-bg: #eef6fd;
+  --mvl208-bg-2: #dfeffd;
+  --mvl208-surface: #ffffff;
+  --mvl208-soft: #e4f1ff;
+  --mvl208-line: #a9cdef;
+  --mvl208-line-strong: #6aa8df;
+  --mvl208-blue: #0b69c9;
+  --mvl208-blue-2: #1d8ae3;
+  --mvl208-navy: #073865;
+  --mvl208-text: #0a2f57;
+}
+
+body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(56,145,222,.16), transparent 26%),
+    linear-gradient(180deg, #eaf4fd 0%, #f2f8fe 38%, #f8fbff 100%) !important;
+}
+
+.shell, .card, .app-card {
+  border-color: #b7d4ef !important;
+}
+
+.card, .app-card, .mvl205-card, .mvl206-section {
+  box-shadow: 0 8px 26px rgba(9,84,145,.055), inset 0 0 0 1px rgba(255,255,255,.55) !important;
+}
+
+#homeView .mvl-v208-section-label {
+  color: #497096;
+  text-shadow: 0 1px 0 rgba(255,255,255,.9);
+}
+#homeView .mvl-v208-section-label::before {
+  width: 20px;
+  height: 4px;
+  background: linear-gradient(90deg, #46a4eb, #0a68c8);
+  box-shadow: 0 0 0 1px rgba(10,104,200,.08);
+}
+
+#homeView .module-card {
+  border: 1.5px solid #9fc8ec !important;
+  background: linear-gradient(135deg, #ffffff 0%, #fbfdff 60%, #eef7ff 100%) !important;
+  box-shadow: 0 6px 16px rgba(8,78,139,.06), inset 0 0 0 1px rgba(255,255,255,.75) !important;
+}
+#homeView .module-card.module-active::before {
+  width: 4px;
+  background: linear-gradient(180deg, #5ab6f2, #0a68c8);
+  box-shadow: 0 0 0 1px rgba(12,102,182,.06);
+}
+#homeView .module-card.module-active:hover {
+  border-color: #6dacdf !important;
+  box-shadow: 0 10px 20px rgba(8,78,139,.10), inset 0 0 0 1px rgba(255,255,255,.86) !important;
+}
+#homeView .module-card.mvl-v208-featured {
+  border-width: 2px !important;
+  border-color: #8fbfe8 !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(84,170,233,.18), transparent 36%),
+    linear-gradient(135deg, #ffffff 0%, #f7fbff 100%) !important;
+}
+#homeView .module-card.mvl-v208-system {
+  border-width: 1.5px !important;
+}
+
+#homeView .module-icon {
+  background: linear-gradient(145deg, #edf7ff, #d9edff) !important;
+  color: #075fb9 !important;
+  border: 1px solid #c0ddf7;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.8), 0 2px 5px rgba(8,94,177,.08);
+}
+#homeView .module-copy strong {
+  color: #072f58 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.92), 0 0 .3px rgba(7,47,88,.45);
+}
+#homeView .module-copy small {
+  color: #6d86a0 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.88);
+}
+#homeView .module-arrow {
+  color: #0a68c8 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.88);
+}
+#homeView .mvl-v208-counter {
+  background: #f2f8ff;
+  border-color: #c7def3;
+  color: #175f9f;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.78);
+  font-weight: 950;
+}
+
+/* barras lineales dashboard */
+#dashboardTotalSummaryV19 .mvl-v207-linear {
+  border: 1.5px solid rgba(255,255,255,.28) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 6px 14px rgba(7,46,83,.07) !important;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear .mvl-v207-name,
+#dashboardTotalSummaryV19 .mvl-v207-linear .mvl-v207-detail,
+#dashboardTotalSummaryV19 .mvl-v207-linear .mvl-v207-value strong,
+#dashboardTotalSummaryV19 .mvl-v207-linear .mvl-v207-value small,
+#dashboardTotalSummaryV19 .mvl-v207-linear .mvl-v207-meter b {
+  text-shadow: 0 1px 1px rgba(0,0,0,.30), 0 0 1px rgba(255,255,255,.16);
+  letter-spacing: .01em;
+}
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-name,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-detail,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-value strong,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-value small,
+#dashboardTotalSummaryV19 .mvl-v207-linear.status-yellow .mvl-v207-meter b {
+  color: #10365d !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.5), 0 0 1px rgba(16,54,93,.12);
+}
+#dashboardTotalSummaryV19 .mvl-v207-bar {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+}
+#dashboardTotalSummaryV19 .mvl-v207-state {
+  font-weight: 900 !important;
+  border: 1px solid rgba(14,72,123,.12);
+}

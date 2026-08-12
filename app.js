@@ -8787,8 +8787,14 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     catch (_) { return ''; }
   }
 
+  function normalizeName208(v) {
+    return norm208(String(v || '')).replace(/\s+/g,' ').trim();
+  }
+
   function visibleCard208(name) {
-    return document.querySelector(`#moduleList [data-module="${CSS.escape(name)}"]`);
+    const target = normalizeName208(name);
+    const cards = [...document.querySelectorAll('#moduleList [data-module]')];
+    return cards.find(card => normalizeName208(card.dataset.module || '') === target) || null;
   }
 
   function cardIsAvailable208(card) {
@@ -8877,13 +8883,13 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     clearBentoLabels208(list);
 
     const cards = [...list.querySelectorAll(':scope > .module-card, :scope > [data-module]')];
-    const byName = new Map(cards.map(card => [card.dataset.module || '', card]));
+    const byName = new Map(cards.map(card => [normalizeName208(card.dataset.module || ''), card]));
     const used = new Set();
     let order = 10;
 
     GROUPS208.forEach(group => {
       const groupCards = group.items
-        .map(name => byName.get(name))
+        .map(name => byName.get(normalizeName208(name)))
         .filter(Boolean);
 
       if (!groupCards.length) return;
