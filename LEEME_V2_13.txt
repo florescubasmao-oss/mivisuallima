@@ -1,0 +1,26 @@
+MI VISUAL LIMA V2.13 - RESOLUCIÓN HISTÓRICA GUIADA
+
+OBJETIVO
+Evitar que una carga histórica válida quede bloqueada por cuadrillas antiguas/reutilizadas o partidas nuevas.
+
+NUEVO FLUJO
+1. La APP valida la estructura y separa periodos.
+2. Si una cuadrilla no cruza de forma segura:
+   - Registrar como Histórica / Baja: cuenta en Producción, Efectividad y Recableado general del periodo.
+   - Vincular con cuadrilla existente: crea un alias histórico acotado al periodo y conserva los datos del equipo/supervisor elegido.
+3. Se reprocesa EL MISMO Excel, sin volver a seleccionarlo.
+4. Si falta catálogo:
+   - Usar coincidencia existente: copia puntaje, plataforma, grupo, monto y regla de recableado a la descripción exacta entrante.
+   - Agregar como nueva partida.
+5. Al completar todo, recién se registra la carga y recalcula cada periodo afectado.
+
+SEGURIDAD
+- No altera cuadrillas activas al registrar una Histórica/Baja.
+- No mezcla meses.
+- No borra periodos ya existentes.
+- Duplicados se resuelven por periodo + orden y versión más reciente.
+- Un histórico sin supervisor suma al total general, pero no se adjudica a Bono Supervisores hasta vincularlo.
+
+INSTALACIÓN
+- Apps Script: reemplazar Code.gs por Code_V2_13_RESOLUCION_HISTORICOS.gs y publicar NUEVA VERSIÓN manteniendo la misma URL.
+- GitHub: subir TODO el contenido del ZIP V2.13 GitHub completo.

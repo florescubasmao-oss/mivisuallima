@@ -9421,7 +9421,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   function renderHistory210(){
     const periods=S210.periods?.periods||[];
     ['performancePeriod','dashboardPeriod'].forEach(id=>{
-      const input=$210(id);if(!input)return;input.min='2026-07';
+      const input=$210(id);if(!input)return;input.min=(periods.length?periods[periods.length-1]:'');
       const box=historyContainer210(input);if(!box)return;
       box.innerHTML=periods.length?`<span>Histórico</span>${periods.map(p=>`<button type="button" data-p="${p}" class="${input.value===p?'active':''}">${esc210(monthLabel210(p))}</button>`).join('')}`:'<span>Histórico disponible al cargar meses anteriores</span>';
       box.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{input.value=b.dataset.p;input.dispatchEvent(new Event('change',{bubbles:true}));renderHistory210();});
@@ -9459,7 +9459,8 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   }
   function renderBonusHistory210(periods,current){
     const box=$210('bonusHistory210');if(!box)return;
-    box.innerHTML=`<span>Histórico</span>${(periods||[]).map(p=>`<button type="button" data-p="${p}" class="${p===current?'active':''}">${esc210(monthLabel210(p))}</button>`).join('')}`;
+    const bonusPeriods=(periods||[]).filter(p=>String(p)>='2026-07');
+    box.innerHTML=`<span>Histórico</span>${bonusPeriods.map(p=>`<button type="button" data-p="${p}" class="${p===current?'active':''}">${esc210(monthLabel210(p))}</button>`).join('')}`;
     box.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{$210('bonusPeriod210').value=b.dataset.p;loadBonus210(true);});
   }
   function compClass210(c){if(!c?.evaluable)return'muted';if(c.state==='BONO ACTIVO')return'green';return Number(c.compliance||0)>=70?'yellow':'red';}
@@ -9574,16 +9575,18 @@ console.info('[MI VISUAL LIMA] V2.11: motor universal de cargas históricas acti
     let title = 'NO REGISTRADO';
     let detail = 'La base y los indicadores no fueron modificados.';
 
-    if (result?.ok && !result?.needsCatalog) {
+    if (result?.ok && !result?.needsCatalog && !result?.needsCrewResolution) {
       state = 'REGISTRADO'; tone = 'ok'; title = 'REGISTRADO CORRECTAMENTE';
       const nuevos = Number(result?.nuevos || 0);
       const actualizados = Number(result?.actualizados || 0);
       const sinCambios = Number(result?.sinCambios || 0);
       const antiguos = Number(result?.antiguosIgnorados || 0);
       detail = `La carga terminó y quedó aplicada. Nuevos ${nuevos} · Actualizados ${actualizados} · Sin cambios ${sinCambios} · Versiones antiguas ignoradas ${antiguos}.`;
-    } else if (result?.needsCatalog) {
+    } else if (result?.needsCatalog || result?.needsCrewResolution) {
       state = 'PENDIENTE'; tone = 'warn'; title = 'PENDIENTE · NO REGISTRADO';
-      detail = 'Falta completar el catálogo. Hasta terminar esa validación no se modifica la base ni los indicadores.';
+      detail = result?.needsCrewResolution
+        ? 'Falta resolver cuadrillas históricas o ambiguas. Puedes registrarlas como Histórica/Baja o vincularlas a una cuadrilla existente. Hasta resolverlas no se modifica la base ni los indicadores.'
+        : 'Falta completar el catálogo. Puedes usar una coincidencia existente o agregar una nueva partida. Hasta terminar esa validación no se modifica la base ni los indicadores.';
     } else if (result?.error) {
       detail = 'No se guardaron cambios de esta carga. ' + String(result.error);
     }
@@ -9829,4 +9832,210 @@ console.info('[MI VISUAL LIMA] V2.11: motor universal de cargas históricas acti
   const timer=setInterval(()=>{if(install212()) renderStructure212();},500);
   setTimeout(()=>clearInterval(timer),20000);
   console.info('[MI VISUAL LIMA] V2.12: lector universal por estructura activo.');
+})();
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.13
+   RESOLUCIÓN GUIADA DE HISTÓRICOS Y CATÁLOGO
+   - Cuadrilla sin cruce: Histórica/Baja o Vincular existente.
+   - Partida sin catálogo: usar coincidencia o crear nueva.
+   - El staging del mismo Excel se conserva hasta terminar.
+   ========================================================== */
+(() => {
+  const S213={installed:false,crews:null,catalogItems:[]};
+  const $213=id=>document.getElementById(id);
+  const esc213=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const norm213=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,' ').trim().toUpperCase();
+  const key213=v=>norm213(v).replace(/\s+/g,'');
+
+  function token213(){try{return typeof token==='function'?token():localStorage.getItem('mvl_session_token')||'';}catch(_){return localStorage.getItem('mvl_session_token')||'';}}
+  function msg213(id,text='',type='error'){try{if(typeof setMessage==='function')return setMessage(id,text,type);}catch(_){}const e=$213(id);if(e){e.textContent=text;e.classList.toggle('success-message',type==='success');}}
+  function records213(){try{return performanceImportState?.records||[];}catch(_){return[];}}
+
+  function issueInfo213(issue){
+    const source=String(issue?.source||'');
+    const sourceKey=key213(source);
+    let period=String(issue?.period||'');
+    const matches=records213().filter(r=>{
+      const p=String(r.date||'').slice(0,7);
+      if(!period) period=p;
+      return key213(r.crew)===sourceKey && (!period || p===period);
+    });
+    const dates=matches.map(r=>String(r.date||'')).filter(Boolean).sort();
+    return {
+      ...issue, source, period,
+      occurrences:Number(issue?.occurrences||matches.length||1),
+      dateFrom:String(issue?.dateFrom||dates[0]||''),
+      dateTo:String(issue?.dateTo||dates[dates.length-1]||'')
+    };
+  }
+
+  function sim213(a,b){
+    const A=norm213(a).split(' ').filter(x=>x.length>1), B=norm213(b).split(' ').filter(x=>x.length>1);
+    if(!A.length||!B.length)return 0;
+    const bs=new Set(B);let hit=0;A.forEach(x=>{if(bs.has(x))hit++;});
+    let score=hit/Math.max(A.length,B.length);
+    const ka=key213(a),kb=key213(b);if(ka&&kb&&(ka.includes(kb)||kb.includes(ka)))score+=.35;
+    return Math.min(1,score);
+  }
+  function crewLabel213(c){return `${c.code||''} ${c.platform||''} · ${c.name||c.id||''}`.trim();}
+  function crewOptions213(source,crews){
+    return (crews||[]).map(c=>({...c,_score:sim213(source,`${c.code||''} ${c.platform||''} ${c.name||''}`)}))
+      .sort((a,b)=>b._score-a._score||crewLabel213(a).localeCompare(crewLabel213(b),'es',{numeric:true}));
+  }
+
+  async function loadCrewOptions213(){
+    if(S213.crews)return S213.crews;
+    const r=await api('adminCatalogs',{token:token213()});
+    if(!r?.ok)throw new Error(r?.error||'No se pudieron consultar las cuadrillas existentes.');
+    S213.crews=r.crews||[];return S213.crews;
+  }
+
+  async function showCrewResolution213(result){
+    const panel=$213('missingCrewPanel'),list=$213('missingCrewList');if(!panel||!list)return;
+    $213('missingCatalogPanel')?.classList.add('hidden');
+    const issues=(result?.crewIssues||[]).map(issueInfo213);
+    const crews=await loadCrewOptions213();
+    $213('missingCrewSummary').textContent=`Se detectaron ${issues.length} identidad(es) de cuadrilla que no pueden cruzarse con seguridad. Regístralas como Histórica/Baja para que cuenten en la producción general, o vincúlalas a una cuadrilla existente.`;
+    list.innerHTML=issues.map((it,i)=>{
+      const opts=crewOptions213(it.source,crews);
+      return `<article class="missing-catalog-item mvl213-crew-item" data-crew-index="${i}" data-source="${esc213(it.source)}" data-period="${esc213(it.period)}">
+        <div class="missing-catalog-title"><div><strong>${esc213(it.source)}</strong><small>${esc213(it.period||'Periodo no confirmado')} · ${it.occurrences} registro(s) · ${esc213(it.dateFrom||'—')} a ${esc213(it.dateTo||'—')}</small></div><span class="catalog-item-number">${i+1}</span></div>
+        <div class="mvl213-resolution-grid">
+          <label>Qué hacer<select data-field="crewAction"><option value="HISTORICO">Registrar como Histórica / Baja</option><option value="VINCULAR">Vincular con cuadrilla existente</option></select></label>
+          <label class="mvl213-target-wrap hidden">Cuadrilla existente<select data-field="targetCrewId"><option value="">Seleccionar coincidencia</option>${opts.map(c=>`<option value="${esc213(c.id)}">${esc213(crewLabel213(c))}</option>`).join('')}</select></label>
+        </div>
+        <p class="mvl213-hint">Histórica/Baja: contará en Producción, Efectividad y Recableado del periodo, pero no se atribuirá a un bono de supervisor hasta que exista una vinculación.</p>
+      </article>`;
+    }).join('');
+    list.querySelectorAll('[data-field="crewAction"]').forEach(sel=>sel.onchange=()=>{
+      const card=sel.closest('[data-crew-index]');const wrap=card.querySelector('.mvl213-target-wrap');const target=card.querySelector('[data-field="targetCrewId"]');
+      const link=sel.value==='VINCULAR';wrap.classList.toggle('hidden',!link);target.required=link;
+    });
+    panel.classList.remove('hidden');panel.scrollIntoView({behavior:'smooth',block:'start'});
+    msg213('performanceImportMessage','Carga pendiente: resuelve las cuadrillas encontradas. Todavía no se registró ningún cambio.');
+  }
+
+  function collectCrewResolutions213(){
+    return [...document.querySelectorAll('#missingCrewList [data-crew-index]')].map((card,i)=>{
+      const action=card.querySelector('[data-field="crewAction"]').value;
+      const targetCrewId=card.querySelector('[data-field="targetCrewId"]').value;
+      if(action==='VINCULAR'&&!targetCrewId)throw new Error(`Cuadrilla ${i+1}: selecciona la cuadrilla existente.`);
+      return {source:card.dataset.source,period:card.dataset.period,action,targetCrewId};
+    });
+  }
+
+  async function saveCrewAndContinue213(){
+    let state=null;try{state=performanceImportState;}catch(_){}
+    if(!state?.importId){msg213('crewSaveMessage','La carga temporal ya no está disponible. Vuelve a leer el Excel.');return;}
+    let items;try{items=collectCrewResolutions213();}catch(e){msg213('crewSaveMessage',e.message);return;}
+    const b=$213('saveCrewAndContinueButton'),loading=$213('crewSaveLoading'),progress=$213('crewSaveProgressText');
+    b.disabled=true;loading.classList.remove('hidden');progress.textContent='Guardando resoluciones…';msg213('crewSaveMessage');
+    try{
+      const r=await api('adminImportCrewResolve',{token:token213(),importId:state.importId,items:JSON.stringify(items),fileName:state.file?.name||''});
+      if(!r?.ok)throw new Error(r?.error||'No se pudieron resolver las cuadrillas.');
+      msg213('crewSaveMessage',r.message||'Cuadrillas resueltas.','success');
+      progress.textContent='Reprocesando el mismo Excel…';
+      const finish=await api('adminImportFinish',{token:token213(),importId:state.importId,fileName:state.file?.name||''});
+      await handleFinish213(finish);
+    }catch(e){msg213('crewSaveMessage',e.message||'No se pudo continuar.');}
+    finally{b.disabled=false;loading.classList.add('hidden');progress.textContent='Guardando cuadrillas…';}
+  }
+
+  async function catalogMeta213(){
+    const r=await api('adminCatalogMeta',{token:token213()});
+    if(!r?.ok)throw new Error(r?.error||'No se pudo consultar el catálogo.');
+    S213.catalogItems=r.catalogItems||[];return r;
+  }
+  function catalogOptions213(type,items){return (items||[]).map(x=>({...x,_score:sim213(type,x.type)})).sort((a,b)=>b._score-a._score||String(a.type).localeCompare(String(b.type),'es'));}
+  function fillCatalogFromMatch213(card,item){
+    const set=(f,v)=>{const el=card.querySelector(`[data-field="${f}"]`);if(!el)return;if(el.type==='checkbox')el.checked=!!v;else el.value=v??'';};
+    if(!item)return;
+    set('code',item.code);set('platform',item.platform);set('points',item.points);set('group',item.group);set('amount',item.amount);set('isRecable',item.isRecable);
+    set('observation',`Configuración tomada por coincidencia de: ${item.type}`);
+  }
+  function clearCatalogNew213(card){['code','platform','points','group','amount','observation'].forEach(f=>{const e=card.querySelector(`[data-field="${f}"]`);if(e)e.value='';});const c=card.querySelector('[data-field="isRecable"]');if(c)c.checked=false;}
+
+  async function showMissingCatalog213(result){
+    const missing=result?.missingCatalog||[];if(!missing.length)return;
+    const meta=await catalogMeta213();
+    const platforms=(meta.platforms||[]).length?meta.platforms:['POSVENTA','VISITA TECNICA','INSTALACION'];
+    $213('catalogGroupOptions').innerHTML=(meta.groups||[]).map(g=>`<option value="${esc213(g)}"></option>`).join('');
+    $213('missingCatalogSummary').textContent=`Se detectaron ${missing.length} partida(s) FINALIZADA(s) sin coincidencia exacta. Puedes reutilizar una configuración existente o crear una nueva.`;
+    $213('missingCatalogList').innerHTML=missing.map((item,index)=>{
+      const opts=catalogOptions213(item.typePartida,S213.catalogItems);const best=opts[0];const useMatch=best&&best._score>=.42;
+      return `<article class="missing-catalog-item" data-catalog-index="${index}">
+        <div class="missing-catalog-title"><div><strong>${esc213(item.typePartida||'')}</strong><small>${Number(item.occurrences||0)} orden(es) FINALIZADA(s)${item.periods?.length?` · ${esc213(item.periods.join(' · '))}`:''}</small></div><span class="catalog-item-number">${index+1}</span></div>
+        <input type="hidden" data-field="typePartida" value="${esc213(item.typePartida||'')}">
+        <div class="mvl213-catalog-choice">
+          <label>Resolución<select data-field="catalogMode"><option value="MATCH" ${useMatch?'selected':''}>Usar coincidencia existente</option><option value="NEW" ${useMatch?'':'selected'}>Agregar como nueva partida</option></select></label>
+          <label data-match-wrap>Buscar / elegir coincidencia<select data-field="matchId"><option value="">Seleccionar</option>${opts.slice(0,40).map((x,j)=>`<option value="${esc213(x.id)}" ${useMatch&&j===0?'selected':''}>${esc213(x.type)} · ${Number(x.points||0)} pts · ${esc213(x.platform||'')}</option>`).join('')}</select></label>
+        </div>
+        <div class="catalog-form-grid">
+          <label>Código referencial<input data-field="code" placeholder="Ej. TRMESH3"></label>
+          <label>Plataforma de la orden<select data-field="platform"><option value="">Seleccionar</option>${platforms.map(p=>`<option value="${esc213(p)}">${esc213(p)}</option>`).join('')}</select></label>
+          <label>Puntaje<input data-field="points" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+          <label>Grupo<input data-field="group" list="catalogGroupOptions" placeholder="Ej. TRASLADO"></label>
+          <label>Monto interno (S/)<input data-field="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+          <label class="catalog-check"><input data-field="isRecable" type="checkbox"><span>Cuenta como recableado para LOS ROJO</span></label>
+        </div>
+        <label class="catalog-observation">Observación<input data-field="observation" placeholder="Opcional"></label>
+      </article>`;
+    }).join('');
+    $213('missingCatalogList').querySelectorAll('[data-catalog-index]').forEach((card,index)=>{
+      const source=missing[index]?.typePartida||'';const opts=catalogOptions213(source,S213.catalogItems);
+      const mode=card.querySelector('[data-field="catalogMode"]'), match=card.querySelector('[data-field="matchId"]'), wrap=card.querySelector('[data-match-wrap]');
+      const apply=()=>{const isMatch=mode.value==='MATCH';wrap.classList.toggle('hidden',!isMatch);if(isMatch){const it=S213.catalogItems.find(x=>String(x.id)===String(match.value))||opts[0];if(it){match.value=it.id;fillCatalogFromMatch213(card,it);}}else clearCatalogNew213(card);};
+      mode.onchange=apply;match.onchange=()=>{const it=S213.catalogItems.find(x=>String(x.id)===String(match.value));if(it)fillCatalogFromMatch213(card,it);};apply();
+    });
+    $213('missingCrewPanel')?.classList.add('hidden');$213('missingCatalogPanel')?.classList.remove('hidden');$213('missingCatalogPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function collectMissingCatalogItems213(){
+    return [...document.querySelectorAll('.missing-catalog-item[data-catalog-index]')].map((card,index)=>{
+      const get=f=>card.querySelector(`[data-field="${f}"]`);
+      const typePartida=get('typePartida')?.value.trim()||'';const code=get('code')?.value.trim()||'';const platform=get('platform')?.value.trim()||'';
+      const points=Number(get('points')?.value);const group=get('group')?.value.trim()||'';const amountRaw=get('amount')?.value.trim()??'';const amount=Number(amountRaw);const isRecable=!!get('isRecable')?.checked;const observation=get('observation')?.value.trim()||'';
+      if(!code)throw new Error(`Partida ${index+1}: ingresa o selecciona un Código referencial.`);if(!platform)throw new Error(`Partida ${index+1}: selecciona Plataforma.`);if(!Number.isFinite(points)||points<0)throw new Error(`Partida ${index+1}: el Puntaje debe ser 0 o mayor.`);if(!group)throw new Error(`Partida ${index+1}: ingresa Grupo.`);if(amountRaw===''||!Number.isFinite(amount)||amount<0)throw new Error(`Partida ${index+1}: ingresa Monto interno.`);
+      return {typePartida,code,platform,points,group,amount,isRecable,observation};
+    });
+  }
+
+  async function handleFinish213(finish){
+    if(!finish?.ok)throw new Error(finish?.error||'No se pudo actualizar la base.');
+    if(finish.needsCrewResolution){await showCrewResolution213(finish);return;}
+    if(finish.needsCatalog){await showMissingCatalog213(finish);msg213('performanceImportMessage',`${finish.message||'Faltan partidas.'} Resuélvelas y continúa.`,'success');return;}
+    $213('missingCrewPanel')?.classList.add('hidden');$213('missingCatalogPanel')?.classList.add('hidden');
+    if(typeof completePerformanceImportSuccess==='function')completePerformanceImportSuccess(finish);
+  }
+
+  async function sendPerformanceImport213(){
+    let state=null;try{state=performanceImportState;}catch(_){}
+    if(!state?.records?.length){msg213('performanceImportMessage','Primero usa “Leer y validar”.');return;}
+    const button=$213('processPerformanceFileButton'),loading=$213('importLoading'),progress=$213('importProgressText');
+    button.disabled=true;loading.classList.remove('hidden');$213('missingCrewPanel')?.classList.add('hidden');$213('missingCatalogPanel')?.classList.add('hidden');msg213('performanceImportMessage');msg213('catalogSaveMessage');msg213('crewSaveMessage');
+    try{
+      if(!state.importId){
+        const start=await api('adminImportStart',{token:token213(),fileName:state.file.name,totalRows:state.records.length});if(!start?.ok)throw new Error(start?.error||'No se pudo iniciar la actualización.');state.importId=start.importId;
+        const chunkSize=150,total=state.records.length;
+        for(let i=0;i<total;i+=chunkSize){const chunk=state.records.slice(i,i+chunkSize);progress.textContent=`Enviando ${Math.min(i+chunk.length,total)} de ${total}…`;const r=await api('adminImportChunk',{token:token213(),importId:state.importId,chunk:JSON.stringify(chunk)});if(!r?.ok)throw new Error(r?.error||'Falló un bloque de datos.');}
+      }
+      progress.textContent='Validando cuadrillas y catálogo…';
+      const finish=await api('adminImportFinish',{token:token213(),importId:state.importId,fileName:state.file.name});
+      await handleFinish213(finish);
+    }catch(e){if(state)state.importId='';msg213('performanceImportMessage',e.message||'No se pudo actualizar. No se modificaron los indicadores.');}
+    finally{button.disabled=false;loading.classList.add('hidden');progress.textContent='Procesando…';}
+  }
+
+  function install213(){
+    let ok=false;
+    try{if(typeof sendPerformanceImport==='function'){sendPerformanceImport=sendPerformanceImport213;ok=true;}if(typeof showMissingCatalog==='function'){showMissingCatalog=showMissingCatalog213;}if(typeof collectMissingCatalogItems==='function'){collectMissingCatalogItems=collectMissingCatalogItems213;}}catch(e){console.warn('[V2.13] bindings pendientes',e);}
+    const b=$213('saveCrewAndContinueButton');if(b&&!b.dataset.v213){b.dataset.v213='1';b.addEventListener('click',saveCrewAndContinue213);}
+    S213.installed=ok;return ok;
+  }
+  document.addEventListener('mvl:core-ready',()=>setTimeout(install213,20));
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install213,700),{once:true});else setTimeout(install213,700);
+  const timer=setInterval(install213,450);setTimeout(()=>clearInterval(timer),20000);
+  console.info('[MI VISUAL LIMA] V2.13: resolución guiada de históricos y catálogo activa.');
 })();

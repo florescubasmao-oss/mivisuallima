@@ -2981,3 +2981,7 @@ body.login-mode #loginButton {
 .mvl212-structure-ok strong{font-size:.82rem;color:#0758b7;letter-spacing:.02em}
 .mvl212-structure-ok span{font-size:.82rem;font-weight:800}
 .mvl212-structure-ok small{font-size:.75rem;color:#58718d;line-height:1.35}
+
+
+/* V2.13 - Resolución guiada de históricos y catálogo */
+.mvl213-resolution-grid,.mvl213-catalog-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.mvl213-resolution-grid label,.mvl213-catalog-choice label{display:grid;gap:6px;font-weight:800;color:#254b72;font-size:.78rem}.mvl213-resolution-grid select,.mvl213-catalog-choice select{width:100%;min-height:42px;border:1.5px solid #b9d3ee;border-radius:10px;background:#fff;padding:8px 10px;color:#123d67;font-weight:700}.mvl213-hint{margin:8px 0 0;padding:9px 11px;background:#eef7ff;border-left:4px solid #1686d9;border-radius:8px;color:#41617d;font-size:.78rem;line-height:1.45}.mvl213-crew-panel .missing-catalog-item{border:1.5px solid #9fc8ec;background:#fbfdff}.mvl213-catalog-choice{padding:10px;border-radius:10px;background:#f2f8ff;border:1px solid #cfe2f6}.mvl213-catalog-choice [data-match-wrap].hidden{display:none!important}@media(max-width:720px){.mvl213-resolution-grid,.mvl213-catalog-choice{grid-template-columns:1fr}}

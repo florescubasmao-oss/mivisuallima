@@ -131,7 +131,7 @@
         <div class="performance-controls">
           <label class="filter-field">
             Periodo
-            <input type="month" id="performancePeriod" min="2026-07" value="2026-08">
+            <input type="month" id="performancePeriod" value="2026-08">
           </label>
 
           <label class="filter-field hidden" id="performanceCrewSelectWrap">
@@ -193,7 +193,7 @@
         <div class="dashboard-filter-grid">
           <label class="filter-field">
             Periodo
-            <input type="month" id="dashboardPeriod" min="2026-07" value="2026-08">
+            <input type="month" id="dashboardPeriod" value="2026-08">
           </label>
 
           <label class="filter-field hidden" id="dashboardSiteWrap">
@@ -479,6 +479,31 @@
           </div>
 
           <p class="message" id="performanceImportMessage"></p>
+
+          <div id="missingCrewPanel" class="missing-catalog-panel mvl213-crew-panel hidden">
+            <div class="missing-catalog-head">
+              <div>
+                <p class="eyebrow">CUADRILLAS HISTÓRICAS / SIN CRUCE</p>
+                <h3>Resolver cuadrillas antes de registrar</h3>
+                <p class="muted" id="missingCrewSummary"></p>
+              </div>
+              <span class="status-pill warning">Requiere resolución</span>
+            </div>
+
+            <div id="missingCrewList" class="missing-catalog-list"></div>
+
+            <div class="import-actions">
+              <button type="button" class="primary" id="saveCrewAndContinueButton">
+                Guardar cuadrillas y continuar actualización
+              </button>
+              <span class="inline-loading hidden" id="crewSaveLoading">
+                <span class="tiny-spinner"></span>
+                <span id="crewSaveProgressText">Guardando cuadrillas…</span>
+              </span>
+            </div>
+
+            <p class="message" id="crewSaveMessage"></p>
+          </div>
 
           <div id="missingCatalogPanel" class="missing-catalog-panel hidden">
             <div class="missing-catalog-head">
