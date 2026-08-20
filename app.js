@@ -6138,7 +6138,11 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
       validateClientLoad200(type, rows);
 
       const geo = rows.filter(r => Number.isFinite(r.latitud) && Number.isFinite(r.longitud)).length;
-      setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia. Registrando…`);
+      const periods = [...new Set(rows.map(r => String(r.fechaSolicitud || r.fechaFinVisita || r.fechaUltimoEstado || '').slice(0,7)).filter(p => /^\d{4}-\d{2}$/.test(p)))].sort();
+      if (!periods.length) throw new Error('No se pudo detectar el período del archivo.');
+      if (periods.length > 1) throw new Error(`El archivo mezcla períodos: ${periods.join(', ')}. Cargue un mes por archivo.`);
+      const detectedPeriod = periods[0];
+      setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia · Periodo ${detectedPeriod}. Registrando sin reemplazar otros meses…`);
 
       if (typeof showLoader === 'function') {
         showLoader(type === 'INSTALACIONES' ? 'Cargando Instalaciones…' : 'Cargando Visita Técnica…');
@@ -6153,8 +6157,12 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 
       if (!res?.ok) throw new Error(res?.error || 'No se pudo registrar la carga.');
 
+      const slaInfo = Array.isArray(res.sla) && res.sla.length ? res.sla[0] : null;
+      const slaText = slaInfo
+        ? `SLA ${res.period || ''}: ${slaInfo.cumplen || 0}/${slaInfo.evaluables || 0} dentro de SLA`
+        : 'SLA recalculado';
       setMapMessage200(
-        `${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce de cuadrilla · SLA recalculado.`,
+        `${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce · ${res.historicosCruzados || 0} cruces históricos · ${slaText}.`,
         'ok'
       );
 

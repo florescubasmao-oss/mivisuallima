@@ -1,0 +1,26 @@
+MI VISUAL LIMA V2.10.2 - HISTÓRICO SEGURO
+
+Esta corrección es PRINCIPALMENTE de Apps Script.
+El frontend permanece igual a V2.10.1.
+
+CORRIGE:
+- Reutilización histórica de K1 SGA en Julio sin mezclar identidades actuales.
+- Crea CUADRILLAS_HISTORICO separada de CUADRILLAS.
+- Sincroniza no destructivamente 8 partidas conocidas faltantes del catálogo maestro.
+- Mantiene Agosto intacto.
+- Metas de producción de cuadrillas históricas se calculan solo por su ventana activa.
+- El detalle del Dashboard puede resolver IDs históricos.
+
+NO CAMBIA:
+- PERMISOS
+- MODULOS
+- CUADRILLAS actuales
+- USUARIOS
+- Agosto 2026
+- lógica de otros módulos
+
+INSTALACIÓN:
+1) Reemplazar Code.gs por Code_V2_10_2_HISTORICO_SEGURO.gs.
+2) Guardar y crear Nueva versión de la implementación, misma URL.
+3) GitHub V2.10.1 puede permanecer; no es obligatorio volver a subirlo.
+4) Volver a cargar JULIO BBDD.xlsx UNA sola vez.

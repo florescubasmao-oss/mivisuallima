@@ -1,0 +1,32 @@
+MI VISUAL LIMA - V2.10.3
+SLA HISTÓRICO SEGURO PARA JULIO
+
+OBJETIVO
+Cargar las bases completas de Julio 2026 de:
+- Instalaciones
+- Visita Técnica
+sin modificar ni borrar Agosto 2026.
+
+CAMBIOS CLAVE
+1. MAPA_ORDENES incorpora PERIODO.
+2. Upsert por PERIODO + ORDEN_ID.
+3. Una orden de Julio no puede sobrescribir una orden de Agosto.
+4. Se completa PERIODO en filas antiguas usando sus fechas, sin alterar los demás datos.
+5. Cada Excel debe contener un solo mes. Si mezcla meses, la APP lo rechaza.
+6. Las cuadrillas se cruzan contra CUADRILLAS actuales + CUADRILLAS_HISTORICO del período.
+7. SLA_ORDENES_RESUMEN se reconstruye solo para el período afectado; otros meses se preservan.
+8. Se puede cargar primero INSTALACIONES Julio y luego VT Julio. Ambas alimentan 2026-07.
+
+ORDEN RECOMENDADO
+1. Instalar Apps Script V2.10.3.
+2. Subir GitHub completo V2.10.3.
+3. Cargar CARGA INSTALACIONES con el Excel completo Julio.
+4. Verificar que indique Periodo 2026-07.
+5. Cargar CARGA VISITA TÉCNICA con el Excel completo Julio.
+6. Verificar SLA 2026-07 en Dashboard y Bono Supervisores.
+
+IMPORTANTE
+- No borrar Agosto.
+- No limpiar MAPA_ORDENES.
+- No limpiar SLA_ORDENES_RESUMEN.
+- Si vuelve a cargar Julio, se actualiza Julio, no se duplica por período+orden.
