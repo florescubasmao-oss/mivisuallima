@@ -8732,7 +8732,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   const GROUPS208 = [
     {
       label:'Control Operativo',
-      items:['Mi Desempeño','Mapa Operativo'],
+      items:['Mi Desempeño','Mapa Operativo','Bono Supervisores'],
       featured:true
     },
     {
@@ -8752,6 +8752,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   const ICONS208 = {
     'Mi Desempeño':'↗',
     'Mapa Operativo':'⌖',
+    'Bono Supervisores':'★',
     'Validación Técnica':'✓',
     'Observaciones':'!',
     'Actividad en Campo':'◎',
@@ -8764,6 +8765,7 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   const NAV_LABELS208 = {
     'Mi Desempeño':'Dashboard',
     'Mapa Operativo':'Mapa',
+    'Bono Supervisores':'Bono',
     'Validación Técnica':'Validación',
     'Observaciones':'Observ.'
   };
@@ -8804,7 +8806,8 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
     'adminCreateUser','adminUpdateUser','adminSetUserStatus',
     'adminCreateCrew','adminUpdateCrew','adminReplaceCrewTechnician',
     'adminCreateSupervisor','adminCreateStaff',
-    'adminImportFinish'
+    'adminImportFinish',
+    'supervisorBonusConfigSave','supervisorBonusSatisfactionSave'
   ]);
 
   function session208() {
@@ -9333,3 +9336,130 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   console.info('[MI VISUAL LIMA] V2.09 DEFINITIVA: Control Operativo + Administración por tuerca + login estable.');
 })();
 
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.10
+   HISTÓRICO MENSUAL + BONO SUPERVISORES
+   ========================================================== */
+(() => {
+  const S210={bonus:null,periods:null,homeWrapped:false};
+  const $210=id=>document.getElementById(id);
+  const norm210=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  const esc210=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const pct210=v=>v==null||!Number.isFinite(Number(v))?'—':`${Number(v).toFixed(1)}%`;
+  const money210=v=>`S/ ${Number(v||0).toFixed(2)}`;
+  function token210(){try{return typeof token==='function'?token():'';}catch(_){return '';}}
+  function session210(){try{if(typeof sessionData!=='undefined'&&sessionData)return sessionData;}catch(_){}return window.sessionData||null;}
+  function monthLabel210(p){if(!/^\d{4}-\d{2}$/.test(String(p||'')))return p;const [y,m]=p.split('-').map(Number);return new Intl.DateTimeFormat('es-PE',{month:'short',year:'numeric'}).format(new Date(y,m-1,1)).replace('.','');}
+
+  function modulePermission210(name){
+    return (session210()?.modules||[]).find(m=>norm210(m?.module)===norm210(name))?.permissions||null;
+  }
+  function activateBonusCard210(){
+    const card=document.querySelector('#moduleList [data-module="Bono Supervisores"]');
+    const perm=modulePermission210('Bono Supervisores');
+    if(!card||!perm?.ver)return;
+    card.disabled=false;card.removeAttribute('disabled');card.classList.remove('disabled','module-disabled');card.classList.add('module-active');card.setAttribute('aria-disabled','false');
+    const sm=card.querySelector('small');if(sm)sm.textContent='Cumplimiento y bono mensual de supervisión';
+    const ar=card.querySelector('.module-arrow');if(ar)ar.textContent='›';
+  }
+
+  function historyContainer210(input){
+    if(!input)return null;
+    const label=input.closest('label');if(!label)return null;
+    let box=label.parentElement?.querySelector(`.mvl210-period-history[data-for="${input.id}"]`);
+    if(!box){box=document.createElement('div');box.className='mvl210-period-history';box.dataset.for=input.id;label.insertAdjacentElement('afterend',box);}
+    return box;
+  }
+  function renderHistory210(){
+    const periods=S210.periods?.periods||[];
+    ['performancePeriod','dashboardPeriod'].forEach(id=>{
+      const input=$210(id);if(!input)return;input.min='2026-07';
+      const box=historyContainer210(input);if(!box)return;
+      box.innerHTML=periods.length?`<span>Histórico</span>${periods.map(p=>`<button type="button" data-p="${p}" class="${input.value===p?'active':''}">${esc210(monthLabel210(p))}</button>`).join('')}`:'<span>Histórico disponible al cargar meses anteriores</span>';
+      box.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{input.value=b.dataset.p;input.dispatchEvent(new Event('change',{bubbles:true}));renderHistory210();});
+    });
+  }
+  async function loadPeriods210(force=false){
+    if(S210.periods&&!force){renderHistory210();return S210.periods;}
+    try{const r=await api('performancePeriods',{token:token210()});if(r?.ok){S210.periods=r;renderHistory210();return r;}}catch(_){}
+    return null;
+  }
+
+  function hideAll210(){
+    document.querySelectorAll('main.shell > section.card.app-card').forEach(v=>v.classList.add('hidden'));
+  }
+  function home210(){
+    const view=$210('bonusSupervisorsViewV210');view?.classList.add('hidden');
+    try{if(typeof renderHome==='function'&&session210())renderHome(session210());}catch(_){$210('homeView')?.classList.remove('hidden');}
+  }
+  function ensureBonusView210(){
+    let v=$210('bonusSupervisorsViewV210');if(v)return v;
+    v=document.createElement('section');v.id='bonusSupervisorsViewV210';v.className='card app-card mvl210-bonus-view hidden';
+    v.innerHTML=`
+      <div class="mvl210-topbar">
+        <div><button type="button" class="back-link" id="bonusBack210">← Inicio</button><p class="eyebrow">CONTROL OPERATIVO</p><h2>Bono Supervisores</h2><p class="muted">Seguimiento mensual basado en indicadores de MI VISUAL LIMA.</p></div>
+        <div class="mvl210-actions"><button type="button" class="ghost hidden" id="bonusSatisfaction210">SATISFACCIÓN</button><button type="button" class="ghost hidden" id="bonusConfig210">CONFIGURAR BONO</button></div>
+      </div>
+      <div class="mvl210-bonus-controls"><label>Periodo<input type="month" id="bonusPeriod210" min="2026-07" value="${new Date().toISOString().slice(0,7)}"></label><button type="button" class="primary compact" id="bonusRefresh210">Actualizar</button></div>
+      <div class="mvl210-period-history" id="bonusHistory210"></div>
+      <div class="mvl210-model-note" id="bonusModelNote210">Cargando modelo…</div>
+      <div class="mvl210-bonus-summary" id="bonusSummary210"></div>
+      <div class="mvl210-bonus-list" id="bonusList210"><div class="mvl210-empty">Cargando…</div></div>`;
+    document.querySelector('main.shell')?.appendChild(v);
+    $210('bonusBack210').onclick=home210;$210('bonusRefresh210').onclick=()=>loadBonus210(true);$210('bonusPeriod210').onchange=()=>loadBonus210(true);$210('bonusConfig210').onclick=openBonusConfig210;$210('bonusSatisfaction210').onclick=openSatisfaction210;
+    return v;
+  }
+  function renderBonusHistory210(periods,current){
+    const box=$210('bonusHistory210');if(!box)return;
+    box.innerHTML=`<span>Histórico</span>${(periods||[]).map(p=>`<button type="button" data-p="${p}" class="${p===current?'active':''}">${esc210(monthLabel210(p))}</button>`).join('')}`;
+    box.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{$210('bonusPeriod210').value=b.dataset.p;loadBonus210(true);});
+  }
+  function compClass210(c){if(!c?.evaluable)return'muted';if(c.state==='BONO ACTIVO')return'green';return Number(c.compliance||0)>=70?'yellow':'red';}
+  function componentDetail210(c){
+    const m=c.metrics||{};
+    if(c.key==='PRODUCTIVIDAD')return `${m.points??0} pts / meta al corte ${m.targetToDate??0} · Efect. ${pct210(m.effectivenessPct)}`;
+    if(c.key==='CALIDAD')return `${m.observationsWin??0} obs. WIN · S/ ${Number(m.penalizedAmount||0).toFixed(2)} penalizado · Recableado ${pct210(m.recablePct)}`;
+    if(c.key==='SLA')return `${m.cumplen??0}/${m.evaluables??0} dentro de SLA`;
+    if(c.key==='SATISFACCION')return `${m.conform??0} conformes · ${m.nonConform??0} no conformes`;
+    if(c.key==='SEGURIDAD')return `${m.audits??0} auditoría(s) evaluables`;
+    return '';
+  }
+  function renderBonus210(r){
+    const bonuses=r.bonuses||[],cfg=r.config||{};
+    $210('bonusConfig210')?.classList.toggle('hidden',!r.canConfigure);$210('bonusSatisfaction210')?.classList.toggle('hidden',!r.canRegisterSatisfaction);
+    renderBonusHistory210(r.periods||[],r.period);$210('bonusPeriod210').value=r.period;
+    $210('bonusModelNote210').innerHTML=`<strong>Modelo Lima</strong> · Productividad 25% · Calidad 25% · SLA 20% · Satisfacción 15% · Seguridad 15%. <span>VTR/GAR permanece pendiente y no penaliza Calidad.</span>${Number(cfg.totalAmount||0)<=0?' <b>Falta configurar el monto máximo mensual.</b>':''}`;
+    const totalProjected=bonuses.reduce((s,b)=>s+Number(b.amount||0),0);
+    $210('bonusSummary210').innerHTML=`<div><span>Periodo</span><b>${esc210(monthLabel210(r.period))}</b></div><div><span>Supervisores</span><b>${bonuses.length}</b></div><div><span>Monto máximo / supervisor</span><b>${money210(cfg.totalAmount||0)}</b></div><div><span>Proyección total</span><b>${money210(totalProjected)}</b></div>`;
+    const list=$210('bonusList210');
+    if(!bonuses.length){list.innerHTML='<div class="mvl210-empty">No hay supervisores evaluables para este periodo.</div>';return;}
+    list.innerHTML=bonuses.map((b,i)=>`<article class="mvl210-supervisor-card">
+      <div class="mvl210-supervisor-head"><div><span class="mvl210-rank">${i+1}</span><strong>${esc210(b.supervisor)}</strong><small>${b.crewCount} cuadrilla${b.crewCount===1?'':'s'} · cobertura evaluable ${Number(b.coverageWeight||0)}%</small></div><div class="mvl210-amount"><b>${money210(b.amount)}</b><small>de ${money210(b.maxAmount)}</small><span class="mvl210-state ${Number(b.amount||0)>0?'green':'muted'}">${esc210(b.state)}</span></div></div>
+      <div class="mvl210-components">${(b.components||[]).map(c=>`<div class="mvl210-component ${compClass210(c)}"><div><strong>${esc210(c.name)}</strong><span>Peso ${c.weight}% · activa &gt; ${c.activator}%</span></div><b>${c.evaluable?pct210(c.compliance):'SIN DATOS'}</b><small>${esc210(componentDetail210(c))}</small><em>${money210(c.amount)} / ${money210(c.max)}</em></div>`).join('')}</div>
+    </article>`).join('');
+  }
+  async function loadBonus210(force=false){
+    const list=$210('bonusList210');if(list)list.innerHTML='<div class="mvl210-empty">Calculando bono del periodo…</div>';
+    try{const p=$210('bonusPeriod210')?.value||new Date().toISOString().slice(0,7);const r=await api('supervisorBonusGet',{token:token210(),period:p});if(!r?.ok)throw new Error(r?.error||'No se pudo calcular el bono.');S210.bonus=r;S210.periods={periods:r.periods||[]};renderBonus210(r);renderHistory210();}catch(e){if(list)list.innerHTML=`<div class="mvl210-empty error">${esc210(e.message)}</div>`;}
+  }
+  async function openBonus210(){hideAll210();const v=ensureBonusView210();v.classList.remove('hidden');await loadPeriods210();const latest=S210.periods?.latest;if(latest&&!$210('bonusPeriod210').value)$210('bonusPeriod210').value=latest;await loadBonus210(true);}
+
+  function modal210(id,title,body,save,onSave){$210(id)?.remove();const o=document.createElement('div');o.id=id;o.className='mvl210-overlay';o.innerHTML=`<section class="mvl210-modal"><header><h3>${esc210(title)}</h3><button type="button" data-close>×</button></header><div class="mvl210-modal-body">${body}<div class="mvl210-msg"></div></div><footer><button type="button" class="ghost" data-cancel>Cancelar</button><button type="button" class="primary" data-save>${esc210(save)}</button></footer></section>`;document.body.appendChild(o);const close=()=>o.remove();o.querySelector('[data-close]').onclick=close;o.querySelector('[data-cancel]').onclick=close;o.onclick=e=>{if(e.target===o)close();};o.querySelector('[data-save]').onclick=async()=>{const b=o.querySelector('[data-save]'),msg=o.querySelector('.mvl210-msg');b.disabled=true;try{await onSave(o);close();}catch(e){msg.textContent=e.message||String(e);msg.className='mvl210-msg error';}finally{b.disabled=false;}};return o;}
+  function openBonusConfig210(){const r=S210.bonus;if(!r?.canConfigure)return;const c=r.config||{},a=c.activators||{};modal210('bonusConfigModal210','Configurar Bono Supervisores',`<div class="mvl210-form"><label class="full">Periodo<input id="bcPeriod210" type="month" min="2026-07" value="${esc210(r.period)}"></label><label class="full">Monto máximo mensual por supervisor · S/<input id="bcAmount210" type="number" min="0" step="10" value="${Number(c.totalAmount||0)}"></label><label>Activa Productividad &gt; %<input id="bcProd210" type="number" min="0" max="100" value="${Number(a.PRODUCTIVIDAD??85)}"></label><label>Activa Calidad &gt; %<input id="bcQuality210" type="number" min="0" max="100" value="${Number(a.CALIDAD??85)}"></label><label>Activa SLA &gt; %<input id="bcSla210" type="number" min="0" max="100" value="${Number(a.SLA??95)}"></label><label>Activa Satisfacción &gt; %<input id="bcSat210" type="number" min="0" max="100" value="${Number(a.SATISFACCION??85)}"></label><label>Activa Seguridad &gt; %<input id="bcSec210" type="number" min="0" max="100" value="${Number(a.SEGURIDAD??85)}"></label></div><p class="mvl210-help">Los pesos se mantienen como en la estructura base: 25% / 25% / 20% / 15% / 15%.</p>`,'Guardar',async m=>{const x=await api('supervisorBonusConfigSave',{token:token210(),period:m.querySelector('#bcPeriod210').value,totalAmount:m.querySelector('#bcAmount210').value,activatorProductivity:m.querySelector('#bcProd210').value,activatorQuality:m.querySelector('#bcQuality210').value,activatorSla:m.querySelector('#bcSla210').value,activatorSatisfaction:m.querySelector('#bcSat210').value,activatorSafety:m.querySelector('#bcSec210').value});if(!x?.ok)throw new Error(x?.error||'No se pudo guardar.');$210('bonusPeriod210').value=m.querySelector('#bcPeriod210').value;await loadBonus210(true);});}
+  function openSatisfaction210(){const r=S210.bonus;if(!r?.canRegisterSatisfaction)return;const options=(r.bonuses||[]).map(b=>`<option value="${esc210(b.supervisorId)}">${esc210(b.supervisor)}</option>`).join('');modal210('bonusSatModal210','Registrar satisfacción',`<div class="mvl210-form"><label class="full">Periodo<input id="bsPeriod210" type="month" min="2026-07" value="${esc210(r.period)}"></label><label class="full">Supervisor<select id="bsSup210">${options}</select></label><label>Clientes llamados<input id="bsCalled210" type="number" min="0" value="0"></label><label>Conformes<input id="bsConform210" type="number" min="0" value="0"></label><label>No conformes<input id="bsNon210" type="number" min="0" value="0"></label><label class="full">Observación<textarea id="bsObs210"></textarea></label></div>`,'Guardar',async m=>{const x=await api('supervisorBonusSatisfactionSave',{token:token210(),period:m.querySelector('#bsPeriod210').value,supervisorId:m.querySelector('#bsSup210').value,called:m.querySelector('#bsCalled210').value,conform:m.querySelector('#bsConform210').value,nonConform:m.querySelector('#bsNon210').value,observation:m.querySelector('#bsObs210').value});if(!x?.ok)throw new Error(x?.error||'No se pudo registrar.');$210('bonusPeriod210').value=m.querySelector('#bsPeriod210').value;await loadBonus210(true);});}
+
+  document.addEventListener('click',e=>{
+    const card=e.target?.closest?.('#moduleList [data-module]');if(!card)return;
+    if(card.dataset.module==='Bono Supervisores'){e.preventDefault();e.stopImmediatePropagation();openBonus210();return;}
+    $210('bonusSupervisorsViewV210')?.classList.add('hidden');
+    if(card.dataset.module==='Mi Desempeño')setTimeout(()=>loadPeriods210(false),250);
+  },true);
+
+  function wrapHome210(){if(S210.homeWrapped||typeof renderHome!=='function')return false;S210.homeWrapped=true;const prev=renderHome;renderHome=function(data){const x=prev(data);setTimeout(()=>{activateBonusCard210();loadPeriods210(false);},35);return x;};return true;}
+  function init210(){wrapHome210();activateBonusCard210();loadPeriods210(false);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init210,300),{once:true});else setTimeout(init210,300);
+  const t=setInterval(()=>{wrapHome210();activateBonusCard210();if(session210()&&$210('moduleList'))clearInterval(t);},350);setTimeout(()=>clearInterval(t),12000);
+  console.info('[MI VISUAL LIMA] V2.10: histórico mensual + Bono Supervisores Lima.');
+})();

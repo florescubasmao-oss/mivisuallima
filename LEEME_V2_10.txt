@@ -1,0 +1,44 @@
+MI VISUAL LIMA - V2.10
+HISTÓRICO MENSUAL + BONO SUPERVISORES
+
+1. HISTÓRICO
+- El Dashboard permite Julio 2026 en adelante.
+- La misma carga Excel detecta el periodo por la fecha de las FINALIZADAS.
+- Cargar Julio reemplaza/actualiza solo Julio y conserva Agosto.
+- Los meses disponibles aparecen como accesos rápidos Históricos.
+- Cruce de cuadrillas usa también cuadrillas históricas/inactivas; códigos reutilizados ambiguos no se asignan silenciosamente.
+
+2. BONO SUPERVISORES
+Visible para Supervisor, Jefatura de Calidad, Jefatura de Operaciones, Gerencia y Administrador.
+No visible para Técnico ni Back de Seguimiento.
+Supervisor ve solo su propio bono.
+
+Componentes base:
+- Productividad 25%: Producción 60% + Efectividad 40%.
+- Calidad 25%: Observaciones WIN + Recableado. VTR/GAR queda pendiente y no penaliza mientras siga en construcción.
+- SLA 20%.
+- Satisfacción 15%: registro manual autorizado.
+- Seguridad 15%: auditorías de Actividad en Campo.
+
+Gerencia y Administrador pueden configurar monto máximo y activadores por periodo.
+El monto por defecto es S/ 0 hasta que se configure expresamente.
+
+3. HOJAS AUTOMÁTICAS
+Se crean al abrir Bono Supervisores por primera vez:
+- BONO_SUPERVISORES_CONFIG
+- BONO_SUPERVISORES_SATISFACCION
+- BONO_SUPERVISORES_RESUMEN
+
+4. NO SE MODIFICA
+- Agosto existente.
+- PERMISOS existentes.
+- MODULOS existentes.
+- Login.
+- Dashboard actual ni reglas de semáforos.
+- Observaciones, Validación, Mapa, SLA, Actas, Actividad, Checklist o Descansos.
+
+5. INSTALACIÓN
+A) Apps Script: reemplazar Code.gs, guardar y crear NUEVA VERSIÓN manteniendo la URL.
+B) GitHub: subir TODO el ZIP completo.
+C) Cerrar sesión, entrar otra vez.
+D) Administración > Datos: cargar el Excel completo de Julio con la misma estructura usada en Agosto.
