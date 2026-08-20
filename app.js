@@ -175,8 +175,24 @@
       }
 
       // Una llamada API nunca debe dejar la APP bloqueada indefinidamente.
+      // V2.10.1: las cargas masivas necesitan más tiempo que una consulta normal.
+      // Se amplía SOLO el cierre de importación para no relajar el resto de la APP.
+      let actionName = '';
+      try {
+        if (init?.body instanceof URLSearchParams) {
+          actionName = String(init.body.get('action') || '');
+        } else if (typeof init?.body === 'string') {
+          actionName = String(new URLSearchParams(init.body).get('action') || '');
+        }
+      } catch (_) {}
+
+      const timeoutMs =
+        actionName === 'adminImportFinish' ? 300000 :
+        actionName === 'adminImportChunk' ? 120000 :
+        60000;
+
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 60000);
+      const timer = window.setTimeout(() => controller.abort(), timeoutMs);
       const originalSignal = init?.signal;
 
       if (originalSignal) {

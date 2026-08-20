@@ -1,0 +1,9 @@
+MI VISUAL LIMA V2.10.1 - HOTFIX CARGA HISTÓRICA
+
+- Corrige el corte del navegador durante Actualizar datos.
+- adminImportFinish: hasta 5 minutos.
+- adminImportChunk: hasta 2 minutos.
+- Resto de llamadas: mantiene 60 segundos.
+- No cambia Apps Script, hojas, permisos, cálculos ni reglas de histórico.
+- Base validada: JULIO BBDD.xlsx -> 3017 filas, 3014 válidas, 1941 finalizadas, periodo 2026-07.
+- 3 filas excluidas por Tipo de partida vacío: 672, 2944 y 2945.
