@@ -1,0 +1,10 @@
+MI VISUAL LIMA V2.11.1 - ESTADO EXPLICITO DE CARGA
+
+Cambio visual solamente en la carga de Producción/Efectividad/Recableado:
+- REGISTRADO CORRECTAMENTE: el backend terminó y aplicó la carga.
+- NO REGISTRADO: la validación rechazó la carga y no se modificaron base ni indicadores.
+- PENDIENTE - NO REGISTRADO: falta completar catálogo.
+- ESTADO NO CONFIRMADO: hubo corte de comunicación; no repetir hasta verificar.
+
+También cambia el rótulo a "Periodo(s) detectado(s)" y aclara la tarjeta inferior como "Último intento anterior".
+No cambia Apps Script, cálculos, permisos, cuadrillas ni datos existentes.

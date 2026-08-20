@@ -1,0 +1,10 @@
+MI VISUAL LIMA V2.12 - CARGA UNIVERSAL POR ESTRUCTURA
+
+1. No depende del nombre del archivo ni del mes.
+2. Producción identifica columnas por encabezado, aunque cambien de posición.
+3. Una base puede traer uno o varios periodos.
+4. Se exige: Código de Orden, Cuadrilla, Fecha, Estado y Tipo de Partida.
+5. El backend separa por periodo y actualiza por orden conservando la versión más reciente.
+6. Mapa/SLA busca una estructura válida en cualquier hoja y admite multiperiodo.
+7. No se borran otros meses.
+8. Se mantiene la validación de catálogo y cruce de cuadrilla para no asignar indicadores incorrectamente.

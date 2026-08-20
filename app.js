@@ -6036,18 +6036,41 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
     await ensureXlsx200();
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, { type:'array', cellDates:true });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
-    if (rows.length < 2) throw new Error('El archivo no contiene registros.');
 
-    let headerIndex = -1;
-    for (let i=0; i<Math.min(30, rows.length); i++) {
-      if ((rows[i] || []).map(headerKey200).includes('ORDENID')) {
-        headerIndex = i; break;
+    // V2.12: el nombre del archivo y la posición de las columnas no importan.
+    // Se busca, en cualquier hoja, una estructura SLA/Mapa compatible por encabezados.
+    let selected = null;
+    let bestMissing = [];
+    for (const sheetName of wb.SheetNames) {
+      const candidateRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:'', raw:true });
+      if (candidateRows.length < 2) continue;
+      for (let i=0; i<Math.min(40, candidateRows.length); i++) {
+        const keys = (candidateRows[i] || []).map(headerKey200);
+        const hasOrder = keys.includes('ORDENID') || keys.includes('ORDEN') || keys.includes('IDORDEN');
+        const hasType = keys.includes('TIPOTRABA') || keys.includes('TIPOTRABAJO') || keys.includes('TIPODETRABAJO');
+        const hasCrew = keys.includes('CUADRILLA') || keys.includes('NOMBREDECUADRILLA') || keys.includes('CUADRILLAEJECUTORA');
+        const hasState = keys.includes('ESTADO') || keys.includes('ESTADOORDEN');
+        const hasDate = keys.some(k => ['FSOLI','FECHASOLICITUD','FECHAINIVISI','FECHAINICIOVISITA','FECHAFINVISI','FECHAFINVISITA','FECHAULTIMOESTADO','FECHAULTIESTA'].includes(k));
+        const missing = [];
+        if (!hasOrder) missing.push('OrdenId');
+        if (!hasType) missing.push('TipoTraba');
+        if (!hasCrew) missing.push('Cuadrilla');
+        if (!hasState) missing.push('Estado');
+        if (!hasDate) missing.push('Fecha');
+        if (!missing.length) {
+          selected = { sheetName, rows:candidateRows, headerIndex:i };
+          break;
+        }
+        if (!bestMissing.length || missing.length < bestMissing.length) bestMissing = missing;
       }
+      if (selected) break;
     }
-    if (headerIndex < 0) throw new Error('No se encontró la fila de encabezados con OrdenId.');
+    if (!selected) {
+      throw new Error(`ESTRUCTURA NO RECONOCIDA. Faltan campos requeridos: ${(bestMissing.length ? bestMissing : ['OrdenId','TipoTraba','Cuadrilla','Estado','Fecha']).join(' · ')}.`);
+    }
 
+    const rows = selected.rows;
+    const headerIndex = selected.headerIndex;
     const map = {};
     (rows[headerIndex] || []).forEach((h,i) => {
       const k = headerKey200(h);
@@ -6058,10 +6081,10 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
     const result = [];
 
     rows.slice(headerIndex + 1).forEach(row => {
-      const orden = cell200(row,map,'OrdenId','ORDEN_ID');
+      const orden = cell200(row,map,'OrdenId','ORDEN_ID','Orden','ID Orden');
       if (!String(orden ?? '').trim()) return;
 
-      const solicitud = cell200(row,map,'F.Soli','FSOLI','FECHA SOLICITUD');
+      const solicitud = cell200(row,map,'F.Soli','FSOLI','FECHA SOLICITUD','FechaSolicitud');
       const georef = cell200(row,map,'Georeferencia','GEOREFERENCIA');
       const [lat,lng] = coord200(georef);
 
@@ -6078,14 +6101,14 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 
       result.push({
         ordenId:String(orden).replace(/\.0+$/,'').trim(),
-        tipoTrabajo:String(cell200(row,map,'TipoTraba','TIPO_TRABAJO') ?? '').trim(),
+        tipoTrabajo:String(cell200(row,map,'TipoTraba','TIPO_TRABAJO','Tipo Trabajo','Tipo de Trabajo') ?? '').trim(),
         fechaSolicitud:excelDateOnly200(solicitud),
         horaSolicitud:excelTimeOnly200(solicitud),
         cliente:String(cell200(row,map,'Cliente') ?? '').trim(),
         tipo:String(cell200(row,map,'Tipo') ?? '').trim(),
         productoOrigen:String(cell200(row,map,'Producto') ?? '').trim(),
-        cuadrilla:String(cell200(row,map,'Cuadrilla') ?? '').trim(),
-        estado:String(cell200(row,map,'Estado') ?? '').trim(),
+        cuadrilla:String(cell200(row,map,'Cuadrilla','Nombre de Cuadrilla','Cuadrilla Ejecutora') ?? '').trim(),
+        estado:String(cell200(row,map,'Estado','Estado Orden') ?? '').trim(),
         direccion:dir,
         direccionAdicional:dir2,
         fechaUltimoEstado:excelDateTime200(cell200(row,map,'FechaUltimoEstado','FechaUltiEsta','Fecha Ultimo Estado')),
@@ -6097,8 +6120,8 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
         telefonoMovil:String(cell200(row,map,'TeleMovilNume') ?? '').trim(),
         telefonoFijo:String(cell200(row,map,'TeleFijoNume') ?? '').trim(),
         prioridad:String(cell200(row,map,'Prioridad') ?? '').trim(),
-        fechaInicioVisita:excelDateTime200(cell200(row,map,'FechaIniVisi')),
-        fechaFinVisita:excelDateTime200(cell200(row,map,'FechaFinVisi')),
+        fechaInicioVisita:excelDateTime200(cell200(row,map,'FechaIniVisi','Fecha Inicio Visita','FechaInicioVisita')),
+        fechaFinVisita:excelDateTime200(cell200(row,map,'FechaFinVisi','Fecha Fin Visita','FechaFinVisita')),
         motivoCancelacion:String(cell200(row,map,'Motivo Cancelación','Motivo Cancelacion') ?? '').trim(),
         motivoFinalizacion:String(cell200(row,map,'Motivo Finalización','Motivo Finalizacion') ?? '').trim(),
         motivoAnulacion:String(cell200(row,map,'Motivo Anulación','Motivo Anulacion') ?? '').trim(),
@@ -6138,7 +6161,7 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
       validateClientLoad200(type, rows);
 
       const geo = rows.filter(r => Number.isFinite(r.latitud) && Number.isFinite(r.longitud)).length;
-      const periods = [...new Set(rows.map(r => String(r.fechaSolicitud || r.fechaFinVisita || r.fechaUltimoEstado || '').slice(0,7)).filter(p => /^\d{4}-\d{2}$/.test(p)))].sort();
+      const periods = [...new Set(rows.map(r => String(r.fechaSolicitud || r.fechaFinVisita || r.fechaUltimoEstado || r.fechaInicioVisita || '').slice(0,7)).filter(p => /^\d{4}-\d{2}$/.test(p)))].sort();
       if (!periods.length) throw new Error('No se pudo detectar el período del archivo.');
       const periodLabel = periods.join(', ');
       setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia · Periodos ${periodLabel}. La APP separará y actualizará cada mes de forma independiente…`);
@@ -6161,7 +6184,7 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
         ? slaItems.map(s => `SLA ${s.period || ''}: ${s.cumplen || 0}/${s.evaluables || 0}`).join(' · ')
         : 'SLA sin cambios por recalcular';
       setMapMessage200(
-        `${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce · ${res.historicosCruzados || 0} cruces históricos · ${slaText}.`,
+        `✓ REGISTRADO · ${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce · ${res.historicosCruzados || 0} cruces históricos · ${slaText}.`,
         'ok'
       );
 
@@ -6171,7 +6194,7 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 
       await loadMapData200();
     } catch (err) {
-      setMapMessage200(err.message || 'No se pudo procesar el Excel.', 'error');
+      setMapMessage200(`× NO REGISTRADO · ${err.message || 'No se pudo procesar el Excel.'}`, 'error');
     } finally {
       if ($200(inputId)) $200(inputId).value = '';
       try { if (typeof hideLoader === 'function') hideLoader(); } catch (_) {}
@@ -9494,3 +9517,316 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
    El backend realiza UPSERT por periodo + orden + versión más reciente.
    ========================================================== */
 console.info('[MI VISUAL LIMA] V2.11: motor universal de cargas históricas activo.');
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.11.1
+   ESTADO EXPLÍCITO DE CARGA DE PRODUCCIÓN
+   - REGISTRADO / NO REGISTRADO / PENDIENTE
+   - muestra periodos involucrados en la respuesta del backend
+   - no modifica la lógica de importación ni indicadores
+   ========================================================== */
+(() => {
+  const S2111 = { wrapped:false, last:null };
+  const $ = id => document.getElementById(id);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function periodsFromResult(r){
+    const arr = Array.isArray(r?.periods) ? r.periods.filter(Boolean) : [];
+    if (!arr.length && r?.period) arr.push(r.period);
+    return [...new Set(arr)];
+  }
+
+  function ensureBox(){
+    let box = $('productionImportResult2111');
+    const msg = $('performanceImportMessage');
+    if (!box && msg) {
+      box = document.createElement('div');
+      box.id = 'productionImportResult2111';
+      box.className = 'mvl2111-import-result hidden';
+      msg.insertAdjacentElement('afterend', box);
+    }
+    const oldTitle = document.querySelector('#dataPanel .data-last-load-card .eyebrow') ||
+      $('dataLastLoad')?.closest('article')?.querySelector('.eyebrow');
+    if (oldTitle && oldTitle.textContent.trim().toUpperCase() === 'ÚLTIMA ACTUALIZACIÓN') {
+      oldTitle.textContent = 'ÚLTIMO INTENTO ANTERIOR';
+    }
+    return box;
+  }
+
+  function setPill(text, tone){
+    const pill = $('dataOrdersStatus');
+    if (!pill) return;
+    pill.textContent = text;
+    pill.classList.remove('success','warning','error','danger','ok');
+    if (tone === 'ok') pill.classList.add('success');
+    else if (tone === 'warn') pill.classList.add('warning');
+    else if (tone === 'error') pill.classList.add('error');
+  }
+
+  function renderResult(result, fileName){
+    const box = ensureBox();
+    if (!box) return;
+    const periods = periodsFromResult(result);
+    const periodText = periods.length ? periods.join(' · ') : 'No confirmado';
+
+    let state = 'NO REGISTRADO';
+    let tone = 'error';
+    let title = 'NO REGISTRADO';
+    let detail = 'La base y los indicadores no fueron modificados.';
+
+    if (result?.ok && !result?.needsCatalog) {
+      state = 'REGISTRADO'; tone = 'ok'; title = 'REGISTRADO CORRECTAMENTE';
+      const nuevos = Number(result?.nuevos || 0);
+      const actualizados = Number(result?.actualizados || 0);
+      const sinCambios = Number(result?.sinCambios || 0);
+      const antiguos = Number(result?.antiguosIgnorados || 0);
+      detail = `La carga terminó y quedó aplicada. Nuevos ${nuevos} · Actualizados ${actualizados} · Sin cambios ${sinCambios} · Versiones antiguas ignoradas ${antiguos}.`;
+    } else if (result?.needsCatalog) {
+      state = 'PENDIENTE'; tone = 'warn'; title = 'PENDIENTE · NO REGISTRADO';
+      detail = 'Falta completar el catálogo. Hasta terminar esa validación no se modifica la base ni los indicadores.';
+    } else if (result?.error) {
+      detail = 'No se guardaron cambios de esta carga. ' + String(result.error);
+    }
+
+    box.className = `mvl2111-import-result ${tone}`;
+    box.innerHTML = `
+      <div class="mvl2111-result-head">
+        <span class="mvl2111-result-icon">${tone==='ok'?'✓':tone==='warn'?'!':'×'}</span>
+        <div><small>RESULTADO DE ESTA CARGA</small><strong>${esc(title)}</strong></div>
+      </div>
+      <div class="mvl2111-result-grid">
+        <div><span>Archivo</span><b>${esc(fileName || '—')}</b></div>
+        <div><span>Periodo(s)</span><b>${esc(periodText)}</b></div>
+      </div>
+      <p>${esc(detail)}</p>`;
+    setPill(state, tone);
+  }
+
+  function renderNetworkFailure(fileName, err){
+    const box = ensureBox();
+    if (!box) return;
+    box.className = 'mvl2111-import-result warn';
+    box.innerHTML = `
+      <div class="mvl2111-result-head"><span class="mvl2111-result-icon">?</span><div><small>RESULTADO DE ESTA CARGA</small><strong>ESTADO NO CONFIRMADO</strong></div></div>
+      <div class="mvl2111-result-grid"><div><span>Archivo</span><b>${esc(fileName || '—')}</b></div><div><span>Periodo(s)</span><b>—</b></div></div>
+      <p>No se recibió confirmación final del servidor. No vuelvas a cargar el archivo hasta verificar el estado. ${esc(err?.message || '')}</p>`;
+    setPill('NO CONFIRMADO','warn');
+  }
+
+  function resetCurrent(){
+    const box = ensureBox();
+    if (box) { box.className='mvl2111-import-result hidden'; box.innerHTML=''; }
+    setPill('Pendiente de carga','');
+  }
+
+  function wrapApi(){
+    if (S2111.wrapped || typeof api !== 'function') return false;
+    S2111.wrapped = true;
+    const prev = api;
+    api = async function(action, params={}){
+      if (action !== 'adminImportFinish') return prev(action, params);
+      const fileName = String(params?.fileName || $('performanceImportFile')?.files?.[0]?.name || '');
+      try {
+        const result = await prev(action, params);
+        S2111.last = result;
+        setTimeout(() => renderResult(result, fileName), 0);
+        return result;
+      } catch (err) {
+        setTimeout(() => renderNetworkFailure(fileName, err), 0);
+        throw err;
+      }
+    };
+    return true;
+  }
+
+  function install(){
+    ensureBox();
+    const input = $('performanceImportFile');
+    if (input && input.dataset.v2111 !== '1') {
+      input.dataset.v2111='1';
+      input.addEventListener('change', resetCurrent);
+    }
+    const periodLabel = $('importPeriod')?.parentElement?.querySelector('span');
+    if (periodLabel) periodLabel.textContent = 'Periodo(s) detectado(s)';
+  }
+
+  function init(){ wrapApi(); install(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init,300), {once:true});
+  else setTimeout(init,300);
+  const timer = setInterval(() => { wrapApi(); install(); }, 400);
+  setTimeout(() => clearInterval(timer), 15000);
+  console.info('[MI VISUAL LIMA] V2.11.1: resultado explícito de carga activo.');
+})();
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.12
+   CARGA UNIVERSAL POR ESTRUCTURA
+   - El nombre del Excel no interviene.
+   - Las columnas pueden cambiar de posición.
+   - Producción exige una estructura mínima por encabezados.
+   - Una base puede contener uno o varios periodos.
+   - No exige FINALIZADAS para aceptar actualizaciones parciales.
+   ========================================================== */
+(() => {
+  const S212 = { installed:false };
+  const $212 = id => document.getElementById(id);
+  const norm212 = value => String(value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,' ').trim().toUpperCase();
+
+  const PROD_ALIASES_212 = {
+    sourceOrderCode: ['CODIGO DE ORDEN','CODIGO ORDEN','ORDEN ID','ORDENID','ID ORDEN','ORDEN'],
+    crew: ['NOMBRE DE CUADRILLA','NOMBRE CUADRILLA','CUADRILLA','CUADRILLA EJECUTORA'],
+    date: ['FECHA DE ATENCION','FECHA ATENCION','FECHA','F ATENCION','F. ATENCION'],
+    state: ['ESTADO','ESTADO ORDEN'],
+    typePartida: ['TIPO DE PARTIDA','TIPO PARTIDA','TIPO_PARTIDA','PARTIDA'],
+    typeAtencion: [
+      'TIPO DE ATENCION / PAQUETE DE SERVICIO','TIPO DE ATENCION/PAQUETE DE SERVICIO',
+      'TIPO DE ATENCION','TIPO ATENCION','TIPO_ATENCION','PAQUETE DE SERVICIO'
+    ],
+    clientCode: ['COD. PEDIDO','COD PEDIDO','CODIGO DE PEDIDO','CODIGO PEDIDO','CODIGO CLIENTE','CODIGO DE CLIENTE','CODIGO DEL CLIENTE'],
+    site: ['SEDE','PROVINCIA']
+  };
+
+  function matrix212(ws){
+    if (!ws || !window.XLSX?.utils) return [];
+    return XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+  }
+  function dateIso212(value){
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;
+    }
+    if (typeof value === 'number' && window.XLSX?.SSF?.parse_date_code) {
+      const p=XLSX.SSF.parse_date_code(value);
+      if (p) return `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`;
+    }
+    const t=String(value??'').trim();
+    let m=t.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    if(m)return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+    m=t.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    if(m)return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    return '';
+  }
+  function find212(headers, aliases){
+    const wanted=(aliases||[]).map(norm212);
+    for(let i=0;i<headers.length;i++) if(wanted.includes(headers[i])) return i;
+    return -1;
+  }
+  function indexes212(headers){
+    const out={};
+    Object.keys(PROD_ALIASES_212).forEach(k=>out[k]=find212(headers,PROD_ALIASES_212[k]));
+    return out;
+  }
+  function missingRequired212(indexes){
+    const labels={sourceOrderCode:'Código de Orden',crew:'Cuadrilla',date:'Fecha',state:'Estado',typePartida:'Tipo de Partida'};
+    return Object.keys(labels).filter(k=>indexes[k]<0).map(k=>labels[k]);
+  }
+
+  function detectImportSheet212(workbook){
+    let best=null;
+    let bestMissing=['Código de Orden','Cuadrilla','Fecha','Estado','Tipo de Partida'];
+    for(const name of workbook.SheetNames||[]){
+      const rows=matrix212(workbook.Sheets[name]);
+      for(let r=0;r<Math.min(40,rows.length);r++){
+        const headers=(rows[r]||[]).map(norm212);
+        const indexes=indexes212(headers);
+        const missing=missingRequired212(indexes);
+        const optional=['typeAtencion','clientCode','site'].filter(k=>indexes[k]>=0).length;
+        const score=(5-missing.length)*10+optional;
+        if(!best || score>best.score || (score===best.score && rows.length>best.rows.length)){
+          best={name,rows,headerRow:r,headers,indexes,score,missing};
+          bestMissing=missing;
+        }
+        if(!missing.length && optional>=1) break;
+      }
+    }
+    if(!best || best.missing.length){
+      throw new Error(`ESTRUCTURA NO RECONOCIDA. Faltan: ${(bestMissing.length?bestMissing:['Código de Orden','Cuadrilla','Fecha','Estado','Tipo de Partida']).join(' · ')}. No se registró ningún dato.`);
+    }
+    return best;
+  }
+
+  function extractImportRecords212(selection){
+    const {rows,headerRow,indexes}=selection;
+    const records=[];
+    let omitted=0;
+    for(let i=headerRow+1;i<rows.length;i++){
+      const row=rows[i]||[];
+      if(!row.some(v=>String(v??'').trim()!=='')) continue;
+      const sourceOrderCode=String(row[indexes.sourceOrderCode]??'').replace(/\.0+$/,'').trim();
+      const date=dateIso212(row[indexes.date]);
+      const crew=String(row[indexes.crew]??'').trim();
+      const state=String(row[indexes.state]??'').trim();
+      const typePartida=String(row[indexes.typePartida]??'').trim();
+      if(!sourceOrderCode || !date || !crew || !state || !typePartida){ omitted++; continue; }
+      records.push({
+        rowNumber:i+1, sourceOrderCode, date, crew, state, typePartida,
+        typeAtencion:indexes.typeAtencion>=0?String(row[indexes.typeAtencion]??'').trim():'',
+        clientCode:indexes.clientCode>=0?String(row[indexes.clientCode]??'').replace(/\.0+$/,'').trim():'',
+        site:indexes.site>=0?String(row[indexes.site]??'').trim():''
+      });
+    }
+    if(!records.length) throw new Error('ESTRUCTURA CORRECTA, pero no se encontraron filas válidas con Código de Orden, Cuadrilla, Fecha, Estado y Tipo de Partida.');
+    const periods=[...new Set(records.map(r=>r.date.slice(0,7)))].filter(p=>/^\d{4}-\d{2}$/.test(p)).sort();
+    if(!periods.length) throw new Error('No se pudo detectar ningún periodo a partir de la columna Fecha.');
+    const finalized=records.filter(r=>norm212(r.state)==='FINALIZADA').length;
+    const dates=records.map(r=>r.date).sort();
+    return {
+      records, omitted, finalized,
+      cutoff:dates[dates.length-1],
+      periods,
+      latestPeriod:periods[periods.length-1],
+      // Compatibilidad con el núcleo V1.8: este valor solo se usa para pantalla/confirmación.
+      period:periods.join(' · '),
+      structure:'PRODUCCION'
+    };
+  }
+
+  function importColumnDescription212(indexes){
+    const labels=[
+      ['Código Orden','sourceOrderCode'],['Cuadrilla','crew'],['Fecha','date'],['Estado','state'],['Tipo de Partida','typePartida'],
+      ['Cod. Pedido','clientCode'],['Tipo de Atención','typeAtencion'],['Sede','site']
+    ];
+    return labels.filter(([,k])=>indexes[k]>=0).map(([l,k])=>`${l}: ${indexes[k]+1}`).join(' · ');
+  }
+
+  function renderStructure212(){
+    let state=null;
+    try { if(typeof performanceImportState!=='undefined') state=performanceImportState; } catch(_){}
+    const preview=$212('performanceImportPreview');
+    if(!preview || preview.classList.contains('hidden') || !state?.records?.length) return;
+    let box=$212('mvlUniversalStructure212');
+    if(!box){
+      box=document.createElement('div'); box.id='mvlUniversalStructure212'; box.className='mvl212-structure-ok';
+      const anchor=$212('importColumnsDetected')?.parentElement || preview.firstElementChild;
+      if(anchor) anchor.insertAdjacentElement('afterend',box); else preview.prepend(box);
+    }
+    const periods=Array.isArray(state.periods)?state.periods:[String(state.period||'')].filter(Boolean);
+    box.innerHTML=`<strong>✓ ESTRUCTURA CORRECTA · PRODUCCIÓN</strong><span>Periodo(s): ${periods.join(' · ')} · ${state.records.length} filas válidas · ${state.finalized||0} finalizadas</span><small>El nombre del archivo no interviene. La APP separará los meses y actualizará por Código de Orden + periodo.</small>`;
+  }
+
+  function install212(){
+    if(typeof detectImportSheet!=='function' || typeof extractImportRecords!=='function') return false;
+    if(S212.installed) { renderStructure212(); return true; }
+    try {
+      detectImportSheet=detectImportSheet212;
+      extractImportRecords=extractImportRecords212;
+      if(typeof importColumnDescription==='function') importColumnDescription=importColumnDescription212;
+      S212.installed=true;
+      const preview=$212('performanceImportPreview');
+      if(preview) new MutationObserver(()=>setTimeout(renderStructure212,0)).observe(preview,{attributes:true,childList:true,subtree:true});
+      const input=$212('performanceImportFile');
+      if(input) input.addEventListener('change',()=>{const b=$212('mvlUniversalStructure212'); if(b)b.remove();});
+      renderStructure212();
+      return true;
+    } catch(err){ console.warn('[V2.12] No se pudo instalar lector universal:',err); return false; }
+  }
+
+  document.addEventListener('mvl:core-ready',()=>setTimeout(install212,0));
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(install212,500),{once:true});
+  else setTimeout(install212,500);
+  const timer=setInterval(()=>{if(install212()) renderStructure212();},500);
+  setTimeout(()=>clearInterval(timer),20000);
+  console.info('[MI VISUAL LIMA] V2.12: lector universal por estructura activo.');
+})();

@@ -1,0 +1,25 @@
+MI VISUAL LIMA V2.12 - CARGA UNIVERSAL POR ESTRUCTURA
+
+CAMBIA
+- Producción: detecta encabezados, no posiciones fijas ni nombre de archivo.
+- Puede recibir un periodo o varios periodos en una sola base.
+- Deduplica por PERIODO + CÓDIGO DE ORDEN antes de validar.
+- Dentro del mismo Excel conserva la versión con FECHA más reciente.
+- Si la fecha es igual, la fila posterior completa/actualiza sin borrar datos buenos con vacíos.
+- Contra la base ya guardada aplica UPSERT: nuevos, actualizados, sin cambios y antiguos ignorados.
+- Mapa/SLA Instalaciones y VT busca estructura válida en cualquier hoja y separa periodos.
+- Se registra trazabilidad en CARGAS_HISTORICAS.
+
+NO CAMBIA
+- Dashboard y fórmulas de Producción / Efectividad / Recableado.
+- Datos existentes de otros meses.
+- Permisos y perfiles.
+- Cuadrillas actuales.
+- Bono Supervisores.
+- Observaciones, Validación Técnica, Actas, Actividad Campo, Descansos y Checklist.
+
+ESTRUCTURA MÍNIMA PRODUCCIÓN
+Código de Orden · Cuadrilla · Fecha · Estado · Tipo de Partida
+
+IMPORTANTE
+La validación de catálogo y cruce de cuadrillas se mantiene. La APP no asigna producción a una cuadrilla incorrecta solo para aceptar una carga.
