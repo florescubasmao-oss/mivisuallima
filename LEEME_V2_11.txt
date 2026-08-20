@@ -1,0 +1,50 @@
+MI VISUAL LIMA - V2.11
+MOTOR UNIVERSAL DE CARGAS HISTÓRICAS
+
+REGLA ÚNICA
+1. Un Excel puede contener uno o varios periodos.
+2. La APP separa cada fila por PERIODO.
+3. La llave siempre incluye PERIODO + identificador estable.
+4. Registro nuevo: se agrega.
+5. Registro duplicado: se compara la fecha de versión/origen.
+6. Si el entrante es más reciente: actualiza solo valores no vacíos.
+7. Si tiene la misma fecha: la carga más reciente puede completar/corregir datos, sin borrar valores existentes con vacíos.
+8. Si el entrante es más antiguo: se ignora.
+9. Nunca se borran ni reemplazan otros periodos.
+10. Toda carga queda auditada en CARGAS_HISTORICAS.
+
+APLICADO AHORA A:
+- Producción / Efectividad / Recableado.
+- Mapa Operativo / SLA Instalaciones.
+- Mapa Operativo / SLA Visita Técnica.
+
+PRODUCCIÓN
+- Llave preferida: PERIODO + Código de Orden.
+- Fecha de versión: Fecha de atención.
+- Si no existe Código de Orden, mantiene fallback histórico compatible.
+- ORDENES_DETALLE agrega sin destruir columnas: CLAVE_HISTORICA, FECHA_VERSION_ORIGEN, ARCHIVO_ULTIMA_CARGA, TIPO_BASE.
+
+MAPA / SLA
+- Llave: PERIODO + ORDEN_ID.
+- Fecha de versión priorizada: FechaUltimoEstado > FechaFinVisi > FechaIniVisi > F.Soli.
+- MAPA_ORDENES agrega CLAVE_HISTORICA y FECHA_VERSION_ORIGEN.
+- Un mismo Excel puede traer Julio + Agosto.
+- SLA se recalcula solo para periodos realmente nuevos/actualizados.
+
+SEGURIDAD
+- No modifica PERMISOS.
+- No modifica CUADRILLAS actuales.
+- No elimina Agosto al cargar Julio.
+- No elimina Julio al actualizar Julio.
+- No reemplaza un dato no vacío por uno vacío.
+- Versiones antiguas se ignoran.
+
+TRAZABILIDAD
+Hoja oculta CARGAS_HISTORICAS:
+ID_CARGA, FECHA_CARGA, TIPO_BASE, ARCHIVO, PERIODOS, FILAS_RECIBIDAS, NUEVOS, ACTUALIZADOS, SIN_CAMBIOS, ANTIGUOS_IGNORADOS, DUPLICADOS_ARCHIVO, USUARIO, ESTADO, NOTA.
+
+INSTALACIÓN
+1. Apps Script: reemplazar Code.gs por Code_V2_11_MOTOR_CARGAS_HISTORICAS.gs.
+2. Guardar > Administrar implementaciones > Editar > Nueva versión. Mantener URL.
+3. GitHub: subir TODO MI_VISUAL_LIMA_V2_11_GITHUB_COMPLETO.zip.
+4. Esperar Pages Éxito y volver a iniciar sesión.

@@ -6140,9 +6140,8 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
       const geo = rows.filter(r => Number.isFinite(r.latitud) && Number.isFinite(r.longitud)).length;
       const periods = [...new Set(rows.map(r => String(r.fechaSolicitud || r.fechaFinVisita || r.fechaUltimoEstado || '').slice(0,7)).filter(p => /^\d{4}-\d{2}$/.test(p)))].sort();
       if (!periods.length) throw new Error('No se pudo detectar el período del archivo.');
-      if (periods.length > 1) throw new Error(`El archivo mezcla períodos: ${periods.join(', ')}. Cargue un mes por archivo.`);
-      const detectedPeriod = periods[0];
-      setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia · Periodo ${detectedPeriod}. Registrando sin reemplazar otros meses…`);
+      const periodLabel = periods.join(', ');
+      setMapMessage200(`${rows.length} órdenes leídas · ${geo} con georreferencia · Periodos ${periodLabel}. La APP separará y actualizará cada mes de forma independiente…`);
 
       if (typeof showLoader === 'function') {
         showLoader(type === 'INSTALACIONES' ? 'Cargando Instalaciones…' : 'Cargando Visita Técnica…');
@@ -6157,10 +6156,10 @@ console.info('[MI VISUAL LIMA] V1.27: filtros debajo de Fecha de corte con Despl
 
       if (!res?.ok) throw new Error(res?.error || 'No se pudo registrar la carga.');
 
-      const slaInfo = Array.isArray(res.sla) && res.sla.length ? res.sla[0] : null;
-      const slaText = slaInfo
-        ? `SLA ${res.period || ''}: ${slaInfo.cumplen || 0}/${slaInfo.evaluables || 0} dentro de SLA`
-        : 'SLA recalculado';
+      const slaItems = Array.isArray(res.sla) ? res.sla : [];
+      const slaText = slaItems.length
+        ? slaItems.map(s => `SLA ${s.period || ''}: ${s.cumplen || 0}/${s.evaluables || 0}`).join(' · ')
+        : 'SLA sin cambios por recalcular';
       setMapMessage200(
         `${res.message} · ${res.sinCruceCuadrilla || 0} sin cruce · ${res.historicosCruzados || 0} cruces históricos · ${slaText}.`,
         'ok'
@@ -9487,3 +9486,11 @@ console.info('[MI VISUAL LIMA] V2.05.1: activación corregida de Observaciones y
   const t=setInterval(()=>{wrapHome210();activateBonusCard210();if(session210()&&$210('moduleList'))clearInterval(t);},350);setTimeout(()=>clearInterval(t),12000);
   console.info('[MI VISUAL LIMA] V2.10: histórico mensual + Bono Supervisores Lima.');
 })();
+
+
+/* ==========================================================
+   V2.11 - MOTOR UNIVERSAL DE CARGAS HISTÓRICAS
+   Frontend: Mapa/SLA acepta uno o varios periodos en el mismo Excel.
+   El backend realiza UPSERT por periodo + orden + versión más reciente.
+   ========================================================== */
+console.info('[MI VISUAL LIMA] V2.11: motor universal de cargas históricas activo.');
