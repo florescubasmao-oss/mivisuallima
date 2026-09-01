@@ -1,0 +1,63 @@
+MI VISUAL LIMA - V2.14.1 VTR/GAR + ANTECEDENTE WIN
+Fecha: 01/09/2026
+
+OBJETIVO
+Implementar VTR/GAR Lima usando como fuente WIN oficial la hoja MAPA_ORDENES alimentada por Mapa Operativo.
+
+REGLA OPERATIVA
+1. MAPA_ORDENES es la fuente WIN.
+2. Ticket VTR/GAR se consolida una sola vez aunque tenga varias ORDEN_ID.
+3. Si alguna orden asociada esta FINALIZADA, el ticket queda FINALIZADO.
+4. El antecedente es solo apoyo para Jefatura:
+   - DNI exacto
+   - antecedente FINALIZADO
+   - entre 1 y 30 dias previos
+   - GAR -> INSTALACION
+   - VTR -> servicio reconocido
+5. Jefatura toma la decision final:
+   - CORRESPONDE -> CONFIRMADO / responsable = cuadrilla ejecutora
+   - REASIGNAR -> REASIGNADO / responsable = cuadrilla seleccionada
+   - NO_ES_GAR_VTR -> no penaliza
+   - ANULADO -> no penaliza
+6. Solo CONFIRMADO/REASIGNADO + WIN FINALIZADA cuentan en el indicador.
+7. % VTR/GAR = GAR + VTR atribuidas / FINALIZADAS de la cuadrilla.
+8. Menor porcentaje es mejor.
+9. BONO/NO BONO de Validacion Tecnica permanece separado de responsabilidad.
+
+ARCHIVOS
+- Backend completo base V2.14: Code_V2_14_VTR_GAR_LIMA.gs (Apps Script / archivo preparado previamente).
+- Parche posterior obligatorio: apps_script/PATCH_V2_14_1_ANTECEDENTE_WIN.gs
+- Frontend: vtr-gar-lima-v2141.js
+- Cargador: app.js
+- Nucleo protegido: app-core-v2131.js (NO MODIFICADO)
+
+ORDEN DE ACTIVACION EN APPS SCRIPT
+1. Partir del backend completo Code_V2_14_VTR_GAR_LIMA.gs, que ya incluye V2.13.2 + V2.14.
+2. Al FINAL del Code.gs pegar el contenido de apps_script/PATCH_V2_14_1_ANTECEDENTE_WIN.gs.
+3. Guardar.
+4. Implementar / Administrar implementaciones.
+5. Editar la implementacion Web App vigente.
+6. Seleccionar Nueva version y desplegar.
+7. Actualizar MI VISUAL LIMA.
+
+COMPORTAMIENTO DE SEGURIDAD
+- Si el backend V2.14 no esta desplegado, el frontend detecta que vtrGarManagementList no existe y NO muestra el boton Gestionar VTR / GAR.
+- La APP actual sigue funcionando normalmente.
+- No se cambia Produccion, Efectividad, Recableado ni SLA.
+- app-core-v2131.js se conserva intacto.
+
+PRUEBA DESPUES DE DESPLEGAR
+1. Abrir Validacion Tecnica.
+2. Debe aparecer el boton: Gestionar VTR / GAR.
+3. Abrirlo y seleccionar periodo.
+4. Presionar Actualizar WIN.
+5. Validar un caso PENDIENTE:
+   - debe mostrar Estado WIN
+   - ordenes asociadas
+   - cuadrilla ejecutora
+   - antecedente WIN candidato o REVISION MANUAL
+   - Jefatura decide responsabilidad.
+
+VERSIONES
+Frontend loader commit V2.14.1: app.js mantiene V2.13.6 + carga opcional VTR/GAR.
+Antecedente: V2.14.1_ANTECEDENTE_WIN_30D.
