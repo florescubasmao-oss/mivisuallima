@@ -2,6 +2,11 @@
  * MI VISUAL LIMA - V2.13.6 MAPA/SLA CARGA ESTABLE
  * Cargador mínimo: conserva intacto el app.js anterior en app-core-v2131.js
  * y amplía únicamente la espera de mapImport/mapRebuildSla.
+ *
+ * V2.14.1 incremental:
+ * - Después del núcleo carga la capa VTR/GAR Lima.
+ * - La capa VTR/GAR se auto-desactiva si el backend V2.14 aún no está desplegado.
+ * - No modifica app-core-v2131.js.
  */
 (() => {
   'use strict';
@@ -36,10 +41,24 @@
       .finally(() => window.clearTimeout(timer));
   };
 
+  function cargarVtrGarV2141() {
+    if (document.querySelector('script[data-mvl-vtrgar-v2141]')) return;
+    const vg = document.createElement('script');
+    vg.src = './vtr-gar-lima-v2141.js?v=2141';
+    vg.async = false;
+    vg.dataset.mvlVtrgarV2141 = '1';
+    vg.onload = () => console.info('[MI VISUAL LIMA] V2.14.1: capa VTR/GAR preparada.');
+    vg.onerror = () => console.warn('[MI VISUAL LIMA] V2.14.1: no se pudo cargar la capa VTR/GAR; la APP continúa sin cambios.');
+    document.head.appendChild(vg);
+  }
+
   const script = document.createElement('script');
   script.src = './app-core-v2131.js?v=2136';
   script.async = false;
-  script.onload = () => console.info('[MI VISUAL LIMA] V2.13.6: timeout estable Mapa/SLA activo.');
+  script.onload = () => {
+    console.info('[MI VISUAL LIMA] V2.13.6: timeout estable Mapa/SLA activo.');
+    cargarVtrGarV2141();
+  };
   script.onerror = () => {
     console.error('[MI VISUAL LIMA] No se pudo cargar app-core-v2131.js');
     const el = document.getElementById('loginMessage');
