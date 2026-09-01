@@ -1,17 +1,25 @@
 /**
- * MI VISUAL LIMA - V2.13.6 MAPA/SLA CARGA ESTABLE
+ * MI VISUAL LIMA - V2.14.3 TIMEOUT ESTABLE MAPA / VTR-GAR
  * Cargador mínimo: conserva intacto el app.js anterior en app-core-v2131.js
- * y amplía únicamente la espera de mapImport/mapRebuildSla.
+ * y amplía únicamente la espera de acciones pesadas sobre Apps Script.
  *
- * V2.14.1 incremental:
- * - Después del núcleo carga la capa VTR/GAR Lima.
- * - La capa VTR/GAR se auto-desactiva si el backend V2.14 aún no está desplegado.
- * - No modifica app-core-v2131.js.
+ * V2.14.3 incremental:
+ * - Mantiene mapImport/mapRebuildSla con espera extendida.
+ * - Añade mapData y lecturas/sincronización VTR/GAR para evitar el aborto
+ *   de 60 s del núcleo cuando MAPA_ORDENES tiene muchas filas.
+ * - No modifica app-core-v2131.js ni la lógica de negocio.
  */
 (() => {
   'use strict';
 
   const nativeFetch = window.fetch.bind(window);
+  const LONG_ACTIONS = new Set([
+    'mapImport',
+    'mapRebuildSla',
+    'mapData',
+    'vtrGarManagementList',
+    'vtrGarSync'
+  ]);
 
   window.fetch = function(input, init = {}) {
     const url = typeof input === 'string' ? input : String(input?.url || input || '');
@@ -27,13 +35,13 @@
       } catch (_) {}
     }
 
-    if (actionName !== 'mapImport' && actionName !== 'mapRebuildSla') {
+    if (!LONG_ACTIONS.has(actionName)) {
       return nativeFetch(input, init);
     }
 
-    // Mapa/SLA procesa Excel + MAPA_ORDENES + CTO + reconstrucción SLA.
-    // El app anterior cortaba la conexión a los 60 s. Para estas dos acciones
-    // usamos hasta 7 minutos e ignoramos el signal corto creado por esa capa.
+    // Estas acciones pueden leer/procesar miles de filas en Google Sheets.
+    // El núcleo anterior corta la conexión aproximadamente a los 60 s.
+    // Para ellas usamos hasta 7 minutos e ignoramos ese signal corto.
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 420000);
 
@@ -44,11 +52,11 @@
   function cargarVtrGarV2141() {
     if (document.querySelector('script[data-mvl-vtrgar-v2141]')) return;
     const vg = document.createElement('script');
-    vg.src = './vtr-gar-lima-v2141.js?v=2141';
+    vg.src = './vtr-gar-lima-v2141.js?v=2142';
     vg.async = false;
     vg.dataset.mvlVtrgarV2141 = '1';
-    vg.onload = () => console.info('[MI VISUAL LIMA] V2.14.1: capa VTR/GAR preparada.');
-    vg.onerror = () => console.warn('[MI VISUAL LIMA] V2.14.1: no se pudo cargar la capa VTR/GAR; la APP continúa sin cambios.');
+    vg.onload = () => console.info('[MI VISUAL LIMA] V2.14.3: capa VTR/GAR preparada.');
+    vg.onerror = () => console.warn('[MI VISUAL LIMA] V2.14.3: no se pudo cargar la capa VTR/GAR; la APP continúa sin cambios.');
     document.head.appendChild(vg);
   }
 
@@ -56,7 +64,7 @@
   script.src = './app-core-v2131.js?v=2136';
   script.async = false;
   script.onload = () => {
-    console.info('[MI VISUAL LIMA] V2.13.6: timeout estable Mapa/SLA activo.');
+    console.info('[MI VISUAL LIMA] V2.14.3: timeout estable Mapa/VTR-GAR activo.');
     cargarVtrGarV2141();
   };
   script.onerror = () => {
