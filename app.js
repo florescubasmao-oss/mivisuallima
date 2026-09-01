@@ -187,7 +187,10 @@
       } catch (_) {}
 
       const timeoutMs =
-        actionName === 'adminImportFinish' ? 300000 :
+        // V2.13.1: Apps Script puede requerir hasta ~6 min para consolidar
+        // una base completa. El cliente espera 7 min para no abortar antes
+        // que el propio servidor.
+        actionName === 'adminImportFinish' ? 420000 :
         actionName === 'adminImportChunk' ? 120000 :
         60000;
 
@@ -10038,4 +10041,136 @@ console.info('[MI VISUAL LIMA] V2.11: motor universal de cargas históricas acti
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install213,700),{once:true});else setTimeout(install213,700);
   const timer=setInterval(install213,450);setTimeout(()=>clearInterval(timer),20000);
   console.info('[MI VISUAL LIMA] V2.13: resolución guiada de históricos y catálogo activa.');
+})();
+
+
+/* ==========================================================
+   MI VISUAL LIMA - V2.13.1
+   CARGA ESTABLE + CONFIRMACION AUTOMATICA
+   - adminImportFinish puede esperar hasta 7 min (ver wrapper de fetch).
+   - Si la conexion falla al final, consulta adminImportStatus con el mismo
+     importId antes de declarar el estado como no confirmado.
+   - No reenvia el Excel ni crea una segunda carga.
+   ========================================================== */
+(function(){
+  'use strict';
+  const S2131={wrapped:false};
+  const $2131=id=>document.getElementById(id);
+  const sleep2131=ms=>new Promise(r=>setTimeout(r,ms));
+  const esc2131=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+
+  function resultBox2131(){
+    let box=document.querySelector('.mvl2111-import-result');
+    if(box)return box;
+    const preview=$2131('performanceImportPreview');
+    if(!preview?.parentNode)return null;
+    box=document.createElement('section');
+    box.className='mvl2111-import-result hidden';
+    preview.parentNode.insertBefore(box,preview.nextSibling);
+    return box;
+  }
+
+  function showChecking2131(fileName){
+    const box=resultBox2131(); if(!box)return;
+    box.className='mvl2111-import-result warn';
+    box.innerHTML=`
+      <div class="mvl2111-result-head">
+        <span class="mvl2111-result-icon">…</span>
+        <div><small>RESULTADO DE ESTA CARGA</small><strong>VERIFICANDO SERVIDOR</strong></div>
+      </div>
+      <div class="mvl2111-result-grid">
+        <div><span>Archivo</span><b>${esc2131(fileName||'—')}</b></div>
+        <div><span>Estado</span><b>Comprobando si la carga terminó</b></div>
+      </div>
+      <p>La respuesta principal se interrumpió. La APP está verificando el mismo ID de carga; no vuelvas a seleccionar el archivo.</p>`;
+  }
+
+  function showRecovered2131(st,fileName){
+    const box=resultBox2131(); if(!box)return;
+    const periods=Array.isArray(st?.periods)?st.periods.join(' · '):(st?.period||'—');
+    const ok=st?.state==='COMPLETADO';
+    box.className=`mvl2111-import-result ${ok?'ok':'warn'}`;
+    box.innerHTML=`
+      <div class="mvl2111-result-head">
+        <span class="mvl2111-result-icon">${ok?'✓':'!'}</span>
+        <div><small>RESULTADO DE ESTA CARGA</small><strong>${ok?'REGISTRADO CORRECTAMENTE':'REQUIERE REVISION'}</strong></div>
+      </div>
+      <div class="mvl2111-result-grid">
+        <div><span>Archivo</span><b>${esc2131(fileName||st?.file||'—')}</b></div>
+        <div><span>Periodo(s)</span><b>${esc2131(periods)}</b></div>
+      </div>
+      <p>${esc2131(st?.message || (ok?'El servidor confirmó la carga.':'El servidor confirmó que la carga no terminó correctamente.'))}</p>`;
+  }
+
+  async function recoverStatus2131(prev,params,fileName){
+    showChecking2131(fileName);
+    // El servidor puede continuar unos segundos después de que el navegador
+    // pierda la respuesta. Consultar sin reenviar la base.
+    for(let i=0;i<10;i++){
+      if(i) await sleep2131(8000);
+      let st=null;
+      try{
+        st=await prev('adminImportStatus',{
+          token:params?.token || (typeof token==='function'?token():''),
+          importId:params?.importId||'',
+          fileName:fileName||''
+        });
+      }catch(_){ continue; }
+      if(!st?.ok)continue;
+      if(st.state==='COMPLETADO'){
+        showRecovered2131(st,fileName);
+        return {
+          ok:true,
+          recovered:true,
+          period:st.period||'',
+          periods:st.periods||[],
+          cutoff:st.cutoff||'confirmado',
+          processedRows:Number(st.processedRows||st.validRows||0),
+          nuevos:Number(st.nuevos||0),
+          actualizados:Number(st.actualizados||0),
+          sinCambios:Number(st.sinCambios||0),
+          antiguosIgnorados:Number(st.antiguosIgnorados||0),
+          duplicadosArchivo:Number(st.duplicadosArchivo||0),
+          message:st.message||'Carga confirmada por el servidor.'
+        };
+      }
+      if(st.state==='OBSERVADO' || st.state==='ERROR'){
+        showRecovered2131(st,fileName);
+        const err=new Error(st.message||'El servidor confirmó que la carga no fue registrada.');
+        err.mvlConfirmed=true;
+        throw err;
+      }
+      // STAGED/PROCESANDO: seguir consultando el mismo ID.
+    }
+    return null;
+  }
+
+  function wrapApi2131(){
+    if(S2131.wrapped || typeof api!=='function')return false;
+    S2131.wrapped=true;
+    const prev=api;
+    api=async function(action,params={}){
+      if(action!=='adminImportFinish')return prev(action,params);
+      const fileName=String(params?.fileName||$2131('performanceImportFile')?.files?.[0]?.name||'');
+      try{
+        return await prev(action,params);
+      }catch(err){
+        const text=String(err?.message||err||'');
+        const networkish=err?.name==='AbortError' || /abort|signal|network|failed to fetch|load failed|conexi/i.test(text);
+        if(networkish){
+          const recovered=await recoverStatus2131(prev,params,fileName);
+          if(recovered)return recovered;
+        }
+        throw err;
+      }
+    };
+    return true;
+  }
+
+  function install2131(){wrapApi2131();}
+  document.addEventListener('mvl:core-ready',()=>setTimeout(install2131,40));
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install2131,900),{once:true});
+  else setTimeout(install2131,900);
+  const t=setInterval(install2131,500);setTimeout(()=>clearInterval(t),22000);
+  console.info('[MI VISUAL LIMA] V2.13.1: carga estable y confirmacion automatica activa.');
 })();

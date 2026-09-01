@@ -1,0 +1,16 @@
+MI VISUAL LIMA V2.13.1 - CARGA ESTABLE
+
+Cambios puntuales sobre V2.13:
+- adminImportFinish espera hasta 7 minutos en el navegador (antes 5).
+- Si la respuesta final se corta, la APP consulta el mismo importId antes de declarar estado no confirmado.
+- No reenvía ni duplica el Excel durante esa verificación.
+- Apps Script elimina una preparación completa duplicada en el procesamiento mensual para reducir tiempo.
+- Nuevo endpoint adminImportStatus de solo lectura para confirmar OK / OBSERVADO / PROCESANDO.
+
+No cambia:
+- reglas de Producción, Efectividad o Recableado;
+- histórico por periodos;
+- cuadrillas activas/históricas;
+- catálogo;
+- permisos;
+- SLA, Mapa, Observaciones, Actas, Checklist, Descansos ni Actividad Campo.
