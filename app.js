@@ -1,10 +1,11 @@
 /**
- * MI VISUAL LIMA - V2.20.0
- * Dashboard detalle + Validación Técnica amigable persistente + VTR/GAR directo WIN + gestión directa.
+ * MI VISUAL LIMA - V2.20.1
+ * Dashboard estable + Validación Técnica amigable persistente + VTR/GAR directo WIN + gestión directa.
  *
  * Cargador incremental:
  * - Conserva intacto app-core-v2131.js.
  * - Mantiene timeout extendido para acciones pesadas.
+ * - V2.20.1 amplía también Dashboard/Desempeño para evitar cortes al integrar VTR/GAR.
  * - Activa observador permanente para Validación Técnica.
  * - Fija contador VTR/GAR con pendientes WIN reales.
  * - Gestiona responsabilidad VTR/GAR sin depender del modal antiguo.
@@ -21,6 +22,10 @@
     'vtrGarSync',
     'vtrGarRepair',
     'vtrGarDecision',
+    'performanceDashboard',
+    'performanceSummary',
+    'performancePeriods',
+    'performanceDayDetail',
     'performanceIndicatorDetail'
   ]);
 
@@ -45,6 +50,9 @@
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 420000);
 
+    // Para acciones pesadas usamos nuestro propio signal. Esto evita que el
+    // timeout histórico de 60 s del núcleo aborte Dashboard/VTR antes de que
+    // Apps Script termine de responder.
     return nativeFetch(input, { ...init, signal: controller.signal })
       .finally(() => window.clearTimeout(timer));
   };
@@ -52,18 +60,18 @@
   function cargarAccionesV220() {
     if (document.querySelector('script[data-mvl-validation-vtrgar-actions-v220]')) return;
     const s = document.createElement('script');
-    s.src = './validation-vtrgar-actions-v220.js?v=2200';
+    s.src = './validation-vtrgar-actions-v220.js?v=2201';
     s.async = false;
     s.dataset.mvlValidationVtrgarActionsV220 = '1';
-    s.onload = () => console.info('[MI VISUAL LIMA] V2.20.0: contador y gestión directa VTR/GAR activos.');
-    s.onerror = () => console.warn('[MI VISUAL LIMA] V2.20.0: no se pudo cargar la gestión directa VTR/GAR.');
+    s.onload = () => console.info('[MI VISUAL LIMA] V2.20.1: contador y gestión directa VTR/GAR activos.');
+    s.onerror = () => console.warn('[MI VISUAL LIMA] V2.20.1: no se pudo cargar la gestión directa VTR/GAR.');
     document.head.appendChild(s);
   }
 
   function cargarLifecycleV219() {
     if (document.querySelector('script[data-mvl-validation-lifecycle-v219]')) return;
     const life = document.createElement('script');
-    life.src = './validation-lifecycle-v219.js?v=2190';
+    life.src = './validation-lifecycle-v219.js?v=2191';
     life.async = false;
     life.dataset.mvlValidationLifecycleV219 = '1';
     life.onload = () => console.info('[MI VISUAL LIMA] V2.19.0: ciclo persistente de Validación Técnica activo.');
@@ -74,7 +82,7 @@
   function cargarVtrGarEstableV218() {
     if (document.querySelector('script[data-mvl-validation-vtrgar-stable-v218]')) return;
     const stable = document.createElement('script');
-    stable.src = './validation-vtrgar-stable-v218.js?v=2180';
+    stable.src = './validation-vtrgar-stable-v218.js?v=2181';
     stable.async = false;
     stable.dataset.mvlValidationVtrgarStableV218 = '1';
     stable.onload = () => console.info('[MI VISUAL LIMA] V2.18.0: VTR/GAR estable directo WIN activo.');
@@ -88,7 +96,7 @@
       return;
     }
     const ext = document.createElement('script');
-    ext.src = './validation-vtrgar-direct-v217.js?v=2171';
+    ext.src = './validation-vtrgar-direct-v217.js?v=2172';
     ext.async = false;
     ext.dataset.mvlValidationVtrgarDirectV217 = '1';
     ext.onload = () => {
@@ -108,7 +116,7 @@
       return;
     }
     const val = document.createElement('script');
-    val.src = './validation-friendly-v216.js?v=2161';
+    val.src = './validation-friendly-v216.js?v=2162';
     val.async = false;
     val.dataset.mvlValidationFriendlyV216 = '1';
     val.onload = () => {
@@ -126,7 +134,7 @@
     }
 
     const detail = document.createElement('script');
-    detail.src = './dashboard-indicator-detail-v215.js?v=2150';
+    detail.src = './dashboard-indicator-detail-v215.js?v=2151';
     detail.async = false;
     detail.dataset.mvlDashboardDetailV215 = '1';
     detail.onload = () => {
@@ -147,15 +155,15 @@
     }
 
     const vg = document.createElement('script');
-    vg.src = './vtr-gar-lima-v2141.js?v=2143';
+    vg.src = './vtr-gar-lima-v2141.js?v=2144';
     vg.async = false;
     vg.dataset.mvlVtrgarV2141 = '1';
     vg.onload = () => {
-      console.info('[MI VISUAL LIMA] V2.20.0: capa VTR/GAR preparada.');
+      console.info('[MI VISUAL LIMA] V2.20.1: capa VTR/GAR preparada.');
       cargarDashboardDetallesV215();
     };
     vg.onerror = () => {
-      console.warn('[MI VISUAL LIMA] V2.20.0: no se pudo cargar la capa VTR/GAR; la APP continúa.');
+      console.warn('[MI VISUAL LIMA] V2.20.1: no se pudo cargar la capa VTR/GAR; la APP continúa.');
       cargarDashboardDetallesV215();
     };
     document.head.appendChild(vg);
@@ -166,10 +174,10 @@
   cargarAccionesV220();
 
   const script = document.createElement('script');
-  script.src = './app-core-v2131.js?v=2136';
+  script.src = './app-core-v2131.js?v=2137';
   script.async = false;
   script.onload = () => {
-    console.info('[MI VISUAL LIMA] V2.20.0: núcleo estable cargado.');
+    console.info('[MI VISUAL LIMA] V2.20.1: núcleo estable cargado.');
     cargarVtrGarV2141();
   };
   script.onerror = () => {
