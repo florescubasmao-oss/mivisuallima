@@ -1,14 +1,12 @@
 /**
- * MI VISUAL LIMA - V2.18.0
- * Dashboard detalle + Validación Técnica amigable + VTR/GAR estable directo WIN + Mapa estable.
+ * MI VISUAL LIMA - V2.19.0
+ * Dashboard detalle + Validación Técnica amigable persistente + VTR/GAR directo WIN + Mapa estable.
  *
  * Cargador incremental:
  * - Conserva intacto app-core-v2131.js.
  * - Mantiene timeout extendido para acciones pesadas.
- * - Carga VTR/GAR.
- * - Carga detalle uniforme del Dashboard.
- * - Carga Validación Técnica amigable.
- * - V2.18 da prioridad a VTR/GAR directo WIN y evita el repintado de technicalValidationList.
+ * - Activa un observador permanente para Validación Técnica.
+ * - Mantiene VTR/GAR, Dashboard detalle y las capas existentes.
  */
 (() => {
   'use strict';
@@ -48,6 +46,17 @@
     return nativeFetch(input, { ...init, signal: controller.signal })
       .finally(() => window.clearTimeout(timer));
   };
+
+  function cargarLifecycleV219() {
+    if (document.querySelector('script[data-mvl-validation-lifecycle-v219]')) return;
+    const life = document.createElement('script');
+    life.src = './validation-lifecycle-v219.js?v=2190';
+    life.async = false;
+    life.dataset.mvlValidationLifecycleV219 = '1';
+    life.onload = () => console.info('[MI VISUAL LIMA] V2.19.0: ciclo persistente de Validación Técnica activo.');
+    life.onerror = () => console.warn('[MI VISUAL LIMA] V2.19.0: no se pudo cargar el ciclo persistente de Validación Técnica.');
+    document.head.appendChild(life);
+  }
 
   function cargarVtrGarEstableV218() {
     if (document.querySelector('script[data-mvl-validation-vtrgar-stable-v218]')) return;
@@ -129,21 +138,24 @@
     vg.async = false;
     vg.dataset.mvlVtrgarV2141 = '1';
     vg.onload = () => {
-      console.info('[MI VISUAL LIMA] V2.18.0: capa VTR/GAR preparada.');
+      console.info('[MI VISUAL LIMA] V2.19.0: capa VTR/GAR preparada.');
       cargarDashboardDetallesV215();
     };
     vg.onerror = () => {
-      console.warn('[MI VISUAL LIMA] V2.18.0: no se pudo cargar la capa VTR/GAR; la APP continúa.');
+      console.warn('[MI VISUAL LIMA] V2.19.0: no se pudo cargar la capa VTR/GAR; la APP continúa.');
       cargarDashboardDetallesV215();
     };
     document.head.appendChild(vg);
   }
 
+  // V2.19 empieza a observar antes de que el usuario navegue al módulo.
+  cargarLifecycleV219();
+
   const script = document.createElement('script');
   script.src = './app-core-v2131.js?v=2136';
   script.async = false;
   script.onload = () => {
-    console.info('[MI VISUAL LIMA] V2.18.0: núcleo estable cargado.');
+    console.info('[MI VISUAL LIMA] V2.19.0: núcleo estable cargado.');
     cargarVtrGarV2141();
   };
   script.onerror = () => {
