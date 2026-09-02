@@ -1,13 +1,13 @@
 /**
- * MI VISUAL LIMA - V2.15.0 DASHBOARD DETALLE + MAPA / VTR-GAR ESTABLE
- * Cargador mínimo: conserva intacto app-core-v2131.js.
+ * MI VISUAL LIMA - V2.16.0
+ * Dashboard detalle + Validación Técnica amigable + Mapa/VTR-GAR estable.
  *
- * V2.15.0 incremental:
- * - Mantiene timeout extendido para Mapa y VTR/GAR.
- * - Añade timeout extendido para performanceIndicatorDetail.
- * - Carga detalle unificado del Dashboard:
- *   Dashboard -> cuadrilla -> día/orden/caso.
- * - No modifica app-core-v2131.js ni la lógica de negocio existente.
+ * Cargador incremental:
+ * - Conserva intacto app-core-v2131.js.
+ * - Mantiene timeout extendido para acciones pesadas.
+ * - Carga VTR/GAR.
+ * - Carga detalle uniforme del Dashboard.
+ * - Carga la vista simplificada de Validación Técnica.
  */
 (() => {
   'use strict';
@@ -40,8 +40,6 @@
       return nativeFetch(input, init);
     }
 
-    // Estas acciones pueden leer/procesar miles de filas en Google Sheets.
-    // Para ellas usamos hasta 7 minutos e ignoramos el signal corto del núcleo.
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 420000);
 
@@ -49,14 +47,35 @@
       .finally(() => window.clearTimeout(timer));
   };
 
+  function cargarValidacionAmigableV216() {
+    if (document.querySelector('script[data-mvl-validation-friendly-v216]')) return;
+    const val = document.createElement('script');
+    val.src = './validation-friendly-v216.js?v=2160';
+    val.async = false;
+    val.dataset.mvlValidationFriendlyV216 = '1';
+    val.onload = () => console.info('[MI VISUAL LIMA] V2.16.0: Validación Técnica amigable activa.');
+    val.onerror = () => console.warn('[MI VISUAL LIMA] V2.16.0: no se pudo cargar la mejora visual de Validación Técnica; la APP continúa con la vista anterior.');
+    document.head.appendChild(val);
+  }
+
   function cargarDashboardDetallesV215() {
-    if (document.querySelector('script[data-mvl-dashboard-detail-v215]')) return;
+    if (document.querySelector('script[data-mvl-dashboard-detail-v215]')) {
+      cargarValidacionAmigableV216();
+      return;
+    }
+
     const detail = document.createElement('script');
     detail.src = './dashboard-indicator-detail-v215.js?v=2150';
     detail.async = false;
     detail.dataset.mvlDashboardDetailV215 = '1';
-    detail.onload = () => console.info('[MI VISUAL LIMA] V2.15.0: detalle uniforme del Dashboard activo.');
-    detail.onerror = () => console.warn('[MI VISUAL LIMA] V2.15.0: no se pudo cargar detalle Dashboard; la APP continúa sin cambios.');
+    detail.onload = () => {
+      console.info('[MI VISUAL LIMA] V2.15.0: detalle uniforme del Dashboard activo.');
+      cargarValidacionAmigableV216();
+    };
+    detail.onerror = () => {
+      console.warn('[MI VISUAL LIMA] V2.15.0: no se pudo cargar detalle Dashboard; la APP continúa.');
+      cargarValidacionAmigableV216();
+    };
     document.head.appendChild(detail);
   }
 
@@ -65,16 +84,17 @@
       cargarDashboardDetallesV215();
       return;
     }
+
     const vg = document.createElement('script');
     vg.src = './vtr-gar-lima-v2141.js?v=2142';
     vg.async = false;
     vg.dataset.mvlVtrgarV2141 = '1';
     vg.onload = () => {
-      console.info('[MI VISUAL LIMA] V2.15.0: capa VTR/GAR preparada.');
+      console.info('[MI VISUAL LIMA] V2.16.0: capa VTR/GAR preparada.');
       cargarDashboardDetallesV215();
     };
     vg.onerror = () => {
-      console.warn('[MI VISUAL LIMA] V2.15.0: no se pudo cargar la capa VTR/GAR; la APP continúa.');
+      console.warn('[MI VISUAL LIMA] V2.16.0: no se pudo cargar la capa VTR/GAR; la APP continúa.');
       cargarDashboardDetallesV215();
     };
     document.head.appendChild(vg);
@@ -84,7 +104,7 @@
   script.src = './app-core-v2131.js?v=2136';
   script.async = false;
   script.onload = () => {
-    console.info('[MI VISUAL LIMA] V2.15.0: núcleo estable cargado.');
+    console.info('[MI VISUAL LIMA] V2.16.0: núcleo estable cargado.');
     cargarVtrGarV2141();
   };
   script.onerror = () => {
